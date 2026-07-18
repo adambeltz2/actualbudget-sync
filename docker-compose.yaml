@@ -1,7 +1,7 @@
 services:
   actual-smart-sync:
     # Instead of building locally, they just pull your pre-built image
-    image: ghcr.io/YOUR_GITHUB_USERNAME/actual-smart-sync:latest
+    image: ghcr.io/adambeltz2/actual-smart-sync:latest
     container_name: actual_smart_sync
     restart: unless-stopped
     ports:
