@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Actual Budget Sync Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 p-6 font-sans">
+  <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-md">
+    <div class="flex justify-between items-center border-b pb-4 mb-6">
+      <h1 class="text-2xl font-bold text-gray-700">Actual Budget Smart Sync</h1>
+      <button id="triggerSyncBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow transition">Trigger Manual Sync</button>
+    </div>
+
+    <form id="configForm" class="space-y-6">
+      <!-- Actual Budget Section -->
+      <div class="bg-gray-50 p-4 rounded border">
+        <h2 class="text-lg font-semibold mb-4 text-gray-700">Actual Budget Configuration</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label class="block text-sm font-bold text-gray-700">Server URL</label>
+            <input type="text" id="actualUrl" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500" placeholder="https://your-budget.pikapod.net">
+            <p class="text-xs text-gray-500 mt-1">The web address of your Actual Budget instance.</p>
+          </div>
+          <div>
+            <label class="block text-sm font-bold text-gray-700">Password</label>
+            <input type="password" id="actualPassword" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500">
+            <p class="text-xs text-gray-500 mt-1">Your master login password.</p>
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-sm font-bold text-gray-700">Sync ID</label>
+            <input type="text" id="syncId" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500">
+            <p class="text-xs text-blue-600 mt-1 bg-blue-50 p-2 rounded border border-blue-100">
+              <strong>How to find this:</strong> Open Actual Budget in your browser -> Go to <strong>Settings</strong> -> Click <strong>Show advanced settings</strong> -> Copy the long <strong>Sync ID</strong> string.
+            </p>
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-sm font-bold text-gray-700">Cron Schedule</label>
+            <input type="text" id="cronSchedule" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border font-mono" placeholder="0 6,12 * * *">
+            <p class="text-xs text-gray-500 mt-1">Cron format: <code>0 6,12 * * *</code> syncs at 6:00 AM and 12:00 PM (Noon) daily.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Email Section -->
+      <div class="bg-gray-50 p-4 rounded border">
+        <div class="flex items-center justify-between mb-4 border-b pb-4">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-700">Email Notifications</h2>
+            <p class="text-sm text-gray-500">Send an HTML summary of new transactions.</p>
+          </div>
+          
+          <!-- Explicit Toggle Switch -->
+          <label class="flex items-center cursor-pointer select-none">
+            <div class="relative">
+              <input type="checkbox" id="enableEmail" class="sr-only">
+              <div class="block bg-gray-300 w-16 h-8 rounded-full transition-colors duration-300" id="toggleBg"></div>
+              <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform duration-300 flex items-center justify-center shadow"></div>
+            </div>
+            <div class="ml-3 font-bold text-gray-500 w-8" id="toggleText">OFF</div>
+          </label>
+          <style>
+            input:checked ~ .dot { transform: translateX(100%); }
+            input:checked ~ #toggleBg { background-color: #10b981; }
+          </style>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-50 transition-opacity duration-300 pointer-events-none" id="emailSettingsDiv">
+          <div>
+            <label class="block text-sm font-bold text-gray-700">SMTP Host</label>
+            <input type="text" id="smtpHost" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" placeholder="smtp.gmail.com">
+          </div>
+          <div>
+            <label class="block text-sm font-bold text-gray-700">SMTP Port</label>
+            <input type="number" id="smtpPort" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" placeholder="465">
+          </div>
+          <div>
+            <label class="block text-sm font-bold text-gray-700">Email Username</label>
+            <input type="email" id="emailUser" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" placeholder="youremail@gmail.com">
+          </div>
+          <div>
+            <label class="block text-sm font-bold text-gray-700">App Password</label>
+            <input type="password" id="emailPass" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+            <p class="text-xs text-gray-500 mt-1">If using Gmail, use a 16-digit App Password.</p>
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-sm font-bold text-gray-700">Send Reports To:</label>
+            <input type="email" id="emailTo" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" placeholder="receiving_email@example.com">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end items-center gap-4 mt-4">
+        <button type="button" id="postSaveSyncBtn" class="hidden bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 px-6 rounded shadow border border-blue-300 transition">Test Connection & Sync Now</button>
+        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-8 rounded shadow transition">Save Configuration</button>
+      </div>
+    </form>
+
+    <div class="mt-8 border-t pt-6">
+      <h2 class="text-lg font-semibold text-gray-700 mb-2">Live System Logs</h2>
+      <textarea id="logViewer" class="w-full h-80 bg-gray-900 text-green-400 font-mono text-xs p-4 rounded border-gray-700 leading-relaxed" readonly></textarea>
+    </div>
+  </div>
+
+  <script>
+    // --- UI Logic ---
+    const emailToggle = document.getElementById('enableEmail');
+    const emailSettingsDiv = document.getElementById('emailSettingsDiv');
+    const toggleText = document.getElementById('toggleText');
+
+    function updateToggleUI(isEnabled) {
+      if (isEnabled) {
+        emailSettingsDiv.classList.remove('opacity-50', 'pointer-events-none');
+        toggleText.innerText = 'ON';
+        toggleText.classList.replace('text-gray-500', 'text-green-600');
+      } else {
+        emailSettingsDiv.classList.add('opacity-50', 'pointer-events-none');
+        toggleText.innerText = 'OFF';
+        toggleText.classList.replace('text-green-600', 'text-gray-500');
+      }
+    }
+    emailToggle.addEventListener('change', (e) => updateToggleUI(e.target.checked));
+
+    // --- Config Save/Load ---
+    async function loadConfig() {
+      const res = await fetch('/api/config');
+      const config = await res.json();
+      document.getElementById('actualUrl').value = config.actualUrl || '';
+      document.getElementById('actualPassword').value = config.actualPassword || '';
+      document.getElementById('syncId').value = config.syncId || '';
+      document.getElementById('cronSchedule').value = config.cronSchedule || '0 6,12 * * *';
+      const isEmailEnabled = config.enableEmail || false;
+      document.getElementById('enableEmail').checked = isEmailEnabled;
+      updateToggleUI(isEmailEnabled);
+      document.getElementById('smtpHost').value = config.smtpHost || '';
+      document.getElementById('smtpPort').value = config.smtpPort || '465';
+      document.getElementById('emailUser').value = config.emailUser || '';
+      document.getElementById('emailPass').value = config.emailPass || '';
+      document.getElementById('emailTo').value = config.emailTo || '';
+    }
+
+    document.getElementById('configForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const config = {
+        actualUrl: document.getElementById('actualUrl').value,
+        actualPassword: document.getElementById('actualPassword').value,
+        syncId: document.getElementById('syncId').value,
+        cronSchedule: document.getElementById('cronSchedule').value,
+        enableEmail: document.getElementById('enableEmail').checked,
+        smtpHost: document.getElementById('smtpHost').value,
+        smtpPort: document.getElementById('smtpPort').value,
+        emailUser: document.getElementById('emailUser').value,
+        emailPass: document.getElementById('emailPass').value,
+        emailTo: document.getElementById('emailTo').value,
+      };
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+      document.getElementById('postSaveSyncBtn').classList.remove('hidden');
+    });
+
+    // --- Sync Trigger ---
+    async function triggerSync(btnElement) {
+      btnElement.innerText = "Syncing...";
+      await fetch('/api/sync', { method: 'POST' });
+      setTimeout(() => { btnElement.innerText = "Trigger Manual Sync"; }, 2000);
+    }
+    document.getElementById('triggerSyncBtn').addEventListener('click', function() { triggerSync(this); });
+    document.getElementById('postSaveSyncBtn').addEventListener('click', function() { triggerSync(this); });
+
+    // --- LIVE LOG STREAMING ---
+    const viewer = document.getElementById('logViewer');
+    const evtSource = new EventSource("/api/logs/stream");
+
+    evtSource.onmessage = (event) => {
+      const logs = JSON.parse(event.data);
+      if (viewer.value !== logs) {
+        viewer.value = logs;
+        viewer.scrollTop = viewer.scrollHeight;
+      }
+    };
+
+    loadConfig();
+  </script>
+</body>
+</html>

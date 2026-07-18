@@ -1,0 +1,12 @@
+services:
+  actual-smart-sync:
+    build: .
+    container_name: actual_smart_sync
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data        # Maps host ./data folder to container /data
+      - ./logs:/app/logs    # Maps host ./logs folder to container /app/logs
+    environment:
+      - TIMEZONE=America/New_York
