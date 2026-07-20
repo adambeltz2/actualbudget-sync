@@ -1,5 +1,9 @@
 # Actual Budget Auto-Sync
 
+![Last Commit](https://img.shields.io/github/last-commit/adambeltz2/actualbudget-sync)
+![Docker Pulls](https://img.shields.io/docker/pulls/adambeltz/actualbudget-sync)
+![License](https://img.shields.io/github/license/adambeltz2/actualbudget-sync)
+
 A standalone, Dockerized automation tool that automatically syncs bank accounts in Actual Budget and emails you a summary of new transactions.
 
 This service is designed to run independently of your main Actual Budget server. It wakes up on a defined schedule (e.g., 6 AM and Noon daily), triggers the sync, and uses a "Snapshot Comparison" logic to identify exactly what changed.
