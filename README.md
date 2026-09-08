@@ -48,7 +48,9 @@ You don't need to clone this repo — the image is prebuilt and published to bot
 
 3. **Open the dashboard:** [http://localhost:3000](http://localhost:3000)
 
-   On first load, fill in:
+   You'll land on a login screen first. Since no dashboard password exists yet, whatever you enter there becomes the password — pick something you'll remember. Every visit after that requires it, and sessions last 7 days.
+
+   Once logged in, fill in:
    * **Actual Budget URL** — your server's address (e.g., `https://your-pikapod.pikapod.net`)
    * **Password** — your Actual Budget password
    * **Sync ID** — from *Settings > Show advanced settings > Sync ID*
