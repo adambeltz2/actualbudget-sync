@@ -83,3 +83,7 @@ Affected files: `test/*.test.js`, `package.json`, `src/actualService.js`
 ### [FEATURE] Docker health check — DONE
 Added an unauthenticated `GET /healthz` (mounted before the auth middleware in `index.js`) and a `HEALTHCHECK` instruction in the `Dockerfile` that probes it via Node's built-in `http` module — no `curl`/`wget` dependency needed in the slim image.
 Affected files: `index.js`, `Dockerfile`
+
+### [FEATURE] Run tests on every PR — DONE
+The repo's only workflow (`publish.yml`) builds/publishes on push to `main`; nothing checked pull requests before merge. Added `.github/workflows/test.yml` running `npm test` on every pull request (plus pushes to `main`, matching `publish.yml`'s trigger) on Node 20 to match the Docker image.
+Affected files: `.github/workflows/test.yml`
