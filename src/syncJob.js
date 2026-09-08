@@ -65,7 +65,7 @@ async function syncAndReport() {
 
     if (config.enableEmail && (added.length > 0 || bankSyncIssue)) {
       logger.info('Compiling HTML email report...');
-      const { subject, html } = buildReportHtml({ accounts, accountBalances, accountMap, added, bankSyncIssue });
+      const { subject, html } = buildReportHtml({ accounts, accountBalances, accountMap, added, bankSyncIssue, sections: config.emailSections });
       await sendReport(config, { subject, html });
       logger.info('Email report successfully dispatched.');
     } else {

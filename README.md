@@ -85,5 +85,12 @@ docker compose up -d
 
 ## Notes
 * `TIMEZONE` (env var in `docker-compose.yaml`) controls the cron schedule's timezone — defaults to `America/New_York`.
+* `CONFIG_ENCRYPTION_KEY` (optional env var in `docker-compose.yaml`) encrypts your Actual Budget and SMTP passwords at rest in `data/config.json`. Without it, those two fields are stored in plaintext (as they always have been). If you set it, keep the value somewhere safe — changing or losing it makes previously saved secrets unreadable and you'll need to re-enter them.
 * The container listens on port `3000`; change the left side of the `ports` mapping in `docker-compose.yaml` if that's taken on your host.
 * Both registries are updated together on every push to `main`, so tags stay in sync — no need to worry about one being stale relative to the other.
+
+## Data Explorer & Dashboard
+
+The dashboard (`/`) shows a Net Worth stat tile plus Spend-by-Category and Balance Trend charts for the last 30 days, once Actual Budget is configured. Toggle which widgets appear under **Dashboard Widgets** in the config form.
+
+The **Data Explorer** (linked from the dashboard) lists account balances and lets you filter transactions by account, category, date range, and payee, with pagination and a CSV export of the current filter.

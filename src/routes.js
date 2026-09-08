@@ -123,6 +123,72 @@ router.get('/api/data/transactions', async (req, res) => {
   }
 });
 
+router.get('/api/data/summary', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
+    const [netWorth, spendByCategory, balanceTrend] = await Promise.all([
+      actualService.getNetWorth(),
+      actualService.getSpendByCategory({ days }),
+      actualService.getBalanceTrend({ days })
+    ]);
+    res.json({ netWorth, spendByCategory, balanceTrend });
+  } catch (err) {
+    logger.error('Dashboard summary request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to load dashboard summary.' });
+  }
+});
+
+function csvEscape(value) {
+  const str = String(value ?? '');
+  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
+router.get('/api/data/transactions/export', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+
+    const filters = {
+      accountId: req.query.accountId || undefined,
+      categoryId: req.query.categoryId || undefined,
+      startDate: req.query.startDate || undefined,
+      endDate: req.query.endDate || undefined,
+      search: req.query.search || undefined
+    };
+
+    const [transactions, accounts, categories] = await Promise.all([
+      actualService.queryTransactions({ ...filters, limit: 5000, offset: 0 }),
+      actualService.getAccounts({ includeClosed: true }),
+      actualService.getCategories()
+    ]);
+    const accountName = Object.fromEntries(accounts.map(a => [a.id, a.name]));
+    const categoryName = Object.fromEntries(categories.map(c => [c.id, c.name]));
+
+    const rows = [['Date', 'Account', 'Category', 'Payee', 'Amount']];
+    for (const t of transactions) {
+      rows.push([
+        t.date,
+        accountName[t.account] || 'Unknown',
+        categoryName[t.category] || '',
+        t.payee_name || '',
+        (t.amount / 100).toFixed(2)
+      ]);
+    }
+    const csv = rows.map(row => row.map(csvEscape).join(',')).join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="transactions.csv"');
+    res.send(csv);
+  } catch (err) {
+    logger.error('CSV export failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to export transactions.' });
+  }
+});
+
 // --- Auth ---
 router.get('/api/auth/status', (req, res) => {
   const config = getConfig();

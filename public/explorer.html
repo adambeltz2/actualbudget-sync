@@ -68,7 +68,10 @@
       <div>
         <div class="flex justify-between items-center mb-3">
           <h2 class="text-lg font-semibold text-gray-700">Transactions</h2>
-          <span id="resultSummary" class="text-sm text-gray-500"></span>
+          <div class="flex items-center gap-3">
+            <span id="resultSummary" class="text-sm text-gray-500"></span>
+            <button id="exportCsvBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1.5 px-3 rounded shadow text-xs transition">Export CSV</button>
+          </div>
         </div>
         <div class="overflow-x-auto border rounded">
           <table class="w-full text-sm">
@@ -186,6 +189,12 @@
       document.getElementById('nextPageBtn').disabled = offset + PAGE_SIZE >= total;
     }
 
+    document.getElementById('exportCsvBtn').addEventListener('click', () => {
+      const params = currentFilters();
+      params.delete('limit');
+      params.delete('offset');
+      window.location.href = '/api/data/transactions/export?' + params.toString();
+    });
     document.getElementById('applyFiltersBtn').addEventListener('click', () => { offset = 0; loadTransactions(); });
     document.getElementById('clearFiltersBtn').addEventListener('click', () => {
       document.getElementById('filterAccount').value = '';

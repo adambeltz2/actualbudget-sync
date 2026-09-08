@@ -1,15 +1,21 @@
 const fs = require('fs');
 const crypto = require('crypto');
+const { encrypt, decrypt } = require('./secretCrypto');
 
 // Path inside the container that maps to the host's ./data folder
 const CONFIG_PATH = '/data/config.json';
+
+// Encrypted at rest when CONFIG_ENCRYPTION_KEY is set (see secretCrypto.js).
+const SECRET_FIELDS = ['actualPassword', 'emailPass'];
 
 function defaultConfig() {
   return {
     actualUrl: '', actualPassword: '', syncId: '',
     cronSchedule: '0 6,12 * * *', enableEmail: false,
     smtpHost: '', smtpPort: '465', emailUser: '', emailPass: '', emailTo: '',
-    dashboardPasswordHash: '', sessionSecret: crypto.randomBytes(32).toString('hex')
+    dashboardPasswordHash: '', sessionSecret: crypto.randomBytes(32).toString('hex'),
+    dashboardWidgets: { netWorth: true, spendByCategory: true, balanceTrend: true },
+    emailSections: { balances: true, transactions: true }
   };
 }
 
@@ -25,11 +31,20 @@ function getConfig() {
     stored.sessionSecret = crypto.randomBytes(32).toString('hex');
     saveConfig(stored);
   }
-  return { ...defaultConfig(), ...stored };
+
+  const merged = { ...defaultConfig(), ...stored };
+  for (const field of SECRET_FIELDS) {
+    merged[field] = decrypt(merged[field]);
+  }
+  return merged;
 }
 
 function saveConfig(newConfig) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(newConfig, null, 2));
+  const toWrite = { ...newConfig };
+  for (const field of SECRET_FIELDS) {
+    toWrite[field] = encrypt(toWrite[field]);
+  }
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(toWrite, null, 2));
 }
 
 module.exports = { CONFIG_PATH, getConfig, saveConfig, defaultConfig };
