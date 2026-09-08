@@ -60,12 +60,19 @@ function buildTransactionFilters({ accountId, categoryId, startDate, endDate, se
   return filters;
 }
 
-async function queryTransactions({ limit = 50, offset = 0, ...filterArgs } = {}) {
-  let query = q('transactions').options({ splits: 'none' }).select('*').orderBy({ date: 'desc' });
+const SORT_ORDERS = {
+  date_desc: { date: 'desc' },
+  date_asc: { date: 'asc' },
+  amount_desc: { amount: 'desc' },
+  amount_asc: { amount: 'asc' }
+};
+
+async function queryTransactions({ limit = 50, offset = 0, sort = 'date_desc', ...filterArgs } = {}) {
+  let query = q('transactions').options({ splits: 'none' }).select('*');
   for (const filter of buildTransactionFilters(filterArgs)) {
     query = query.filter(filter);
   }
-  query = query.limit(limit).offset(offset);
+  query = query.orderBy(SORT_ORDERS[sort] || SORT_ORDERS.date_desc).limit(limit).offset(offset);
   const { data } = await api.runQuery(query);
   return data;
 }

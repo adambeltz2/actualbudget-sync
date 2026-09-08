@@ -46,30 +46,30 @@ Affected files: `src/emailReport.js`, `src/syncJob.js`, `src/config.js`, `public
 ## P4 — UI/UX polish
 Found during a UI/UX pass over the dashboard/explorer built in P1-P3. Ordered by priority (correctness/safety first, cosmetic last).
 
-### [BUG] Fetch errors are silently swallowed in the UI
-`public/index.html` and `public/explorer.html` mostly `if (result.error) return;` on a failed fetch — a bad request or backend error just leaves a blank widget/table with no explanation to the user.
+### [BUG] Fetch errors are silently swallowed in the UI — DONE
+Added a dismissable error banner (`#errorBanner`) to `index.html` and `explorer.html`; every fetch path (config, sync, dashboard summary, accounts/categories/transactions, the SSE log stream) now shows a message on failure instead of silently returning. The log-stream banner clears itself on reconnect rather than nagging on every transient EventSource retry.
 Affected files: `public/index.html`, `public/explorer.html`
 
-### [BUG] First-run dashboard password has no confirmation field
-`public/login.html` sets the dashboard password from whatever's typed on first login, with a single password field. A typo locks the user out with no recovery path short of editing `config.json` directly.
+### [BUG] First-run dashboard password has no confirmation field — DONE
+`login.html` now shows a "Confirm Password" field whenever `/api/auth/status` reports no password is configured yet, and blocks submission client-side if the two don't match.
 Affected files: `public/login.html`
 
-### [FEATURE] Mask the Actual Budget password field instead of showing plaintext
-`public/index.html` pre-fills `actualPassword` with the real stored value on every load. Should follow a "change password" pattern (masked placeholder, only sent if the user retypes it) instead of round-tripping the plaintext into the DOM.
-Affected files: `public/index.html`, `src/routes.js`
+### [FEATURE] Mask the Actual Budget password field instead of showing plaintext — DONE
+`GET /api/config` no longer returns `actualPassword`/`emailPass` at all — it returns `actualPasswordSet`/`emailPassSet` booleans instead. The form now shows a "•••••••• (unchanged)" placeholder and leaves the field blank; `POST /api/config` keeps the existing stored password when the field is submitted blank, only changing it when the user types a new value. (Also fixed `explorer.html`'s "not configured" check, which was reading the now-removed `config.actualPassword` field.)
+Affected files: `src/routes.js`, `public/index.html`, `public/explorer.html`
 
-### [BUG] Manual sync button resets after a fixed 2s regardless of actual completion
-`triggerSync()` in `public/index.html` sets the button back to its default label after `setTimeout(..., 2000)`, but a real sync takes 20+ seconds (the SimpleFIN wait) — the button is misleading before the sync is anywhere near done.
+### [BUG] Manual sync button resets after a fixed 2s regardless of actual completion — DONE
+Added `GET /api/sync/status` (backed by the existing `syncJob.isSyncRunning()`). The sync buttons now disable themselves and poll this endpoint every 1.5s (capped at ~5 minutes) until the sync actually finishes, instead of guessing with a fixed timeout.
+Affected files: `src/routes.js`, `public/index.html`
+
+### [FEATURE] Sortable transaction columns and adjustable dashboard time range — DONE
+Added a `sort` param (`date_desc`/`date_asc`/`amount_desc`/`amount_asc`) to `actualService.queryTransactions()` and both `/api/data/transactions` and `/api/data/transactions/export`, with a Sort dropdown in the explorer. Added a time-range dropdown (7/30/90/365 days) to the dashboard, driving the existing `?days=` param on `/api/data/summary`.
+Affected files: `src/actualService.js`, `src/routes.js`, `public/explorer.html`, `public/index.html`
+
+### [FEATURE] Move dashboard widget visibility controls next to the widgets — DONE
+Added a "⚙ Customize" toggle in the Dashboard section header that reveals the widget-visibility checkboxes directly above the widgets; the config-form copy of the same checkboxes was removed in favor of this one (they're read by element ID on save regardless of DOM location, so moving them was a pure relocation, not a new state mechanism).
 Affected files: `public/index.html`
 
-### [FEATURE] Sortable transaction columns and adjustable dashboard time range
-Explorer transactions are fixed to date-descending with no way to sort by other columns; dashboard widgets are hardcoded to 30 days even though `/api/data/summary` already accepts `?days=`.
-Affected files: `public/explorer.html`, `public/index.html`, `src/actualService.js`, `src/routes.js`
-
-### [FEATURE] Move dashboard widget visibility controls next to the widgets
-Widget show/hide checkboxes live in the config form, well below the widgets themselves — not discoverable without scrolling. A settings affordance directly on the Dashboard section header would be more usable.
-Affected files: `public/index.html`
-
-### [FEATURE] Dark mode
-No dark mode; Tailwind CDN default light theme only. Low priority, but a reasonable fit for a personal-finance dashboard often checked in the evening.
+### [FEATURE] Dark mode — DONE
+Added a dark mode toggle (🌙/☀️ button) on all three pages using Tailwind's `class`-based dark mode strategy, with the preference saved to `localStorage` and falling back to `prefers-color-scheme` on first visit.
 Affected files: `public/index.html`, `public/explorer.html`, `public/login.html`

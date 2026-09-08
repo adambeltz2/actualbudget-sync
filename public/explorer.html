@@ -5,61 +5,74 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Data Explorer — Actual Budget Smart Sync</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
 </head>
-<body class="bg-gray-100 text-gray-800 p-6 font-sans">
-  <div class="max-w-6xl mx-auto bg-white p-8 rounded-lg shadow-md">
-    <div class="flex justify-between items-center border-b pb-4 mb-6">
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-6 font-sans transition-colors">
+  <div class="max-w-6xl mx-auto bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md">
+    <div class="flex justify-between items-center border-b dark:border-gray-700 pb-4 mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-700">Data Explorer</h1>
-        <p class="text-sm text-gray-500">Browse the accounts, categories, and transactions from your last sync.</p>
+        <h1 class="text-2xl font-bold text-gray-700 dark:text-gray-100">Data Explorer</h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Browse the accounts, categories, and transactions from your last sync.</p>
       </div>
       <div class="flex gap-2">
-        <a href="/" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded shadow transition">Dashboard</a>
-        <button id="logoutBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded shadow transition">Logout</button>
+        <button id="themeToggleBtn" title="Toggle dark mode" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-2 px-3 rounded shadow transition">🌙</button>
+        <a href="/" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded shadow transition">Dashboard</a>
+        <button id="logoutBtn" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded shadow transition">Logout</button>
       </div>
     </div>
 
-    <p id="notConfiguredMsg" class="hidden bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm p-4 rounded mb-6">
+    <div id="errorBanner" class="hidden bg-red-50 dark:bg-red-900/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm p-3 rounded mb-6"></div>
+
+    <p id="notConfiguredMsg" class="hidden bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300 text-sm p-4 rounded mb-6">
       Actual Budget isn't configured yet. Set it up on the <a href="/" class="underline font-bold">Dashboard</a> first.
     </p>
 
     <div id="explorerBody" class="hidden">
       <!-- Accounts -->
       <div class="mb-8">
-        <h2 class="text-lg font-semibold text-gray-700 mb-3">Accounts</h2>
+        <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-100 mb-3">Accounts</h2>
         <div id="accountsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"></div>
       </div>
 
       <!-- Filters -->
-      <div class="bg-gray-50 p-4 rounded border mb-6">
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded border dark:border-gray-700 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
           <div>
-            <label class="block text-xs font-bold text-gray-700 mb-1">Account</label>
-            <select id="filterAccount" class="w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm">
+            <label class="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">Account</label>
+            <select id="filterAccount" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border text-sm">
               <option value="">All accounts</option>
             </select>
           </div>
           <div>
-            <label class="block text-xs font-bold text-gray-700 mb-1">Category</label>
-            <select id="filterCategory" class="w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm">
+            <label class="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">Category</label>
+            <select id="filterCategory" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border text-sm">
               <option value="">All categories</option>
             </select>
           </div>
           <div>
-            <label class="block text-xs font-bold text-gray-700 mb-1">From</label>
-            <input type="date" id="filterStart" class="w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm">
+            <label class="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">From</label>
+            <input type="date" id="filterStart" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border text-sm">
           </div>
           <div>
-            <label class="block text-xs font-bold text-gray-700 mb-1">To</label>
-            <input type="date" id="filterEnd" class="w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm">
+            <label class="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">To</label>
+            <input type="date" id="filterEnd" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border text-sm">
           </div>
           <div>
-            <label class="block text-xs font-bold text-gray-700 mb-1">Search payee</label>
-            <input type="text" id="filterSearch" placeholder="e.g. Amazon" class="w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm">
+            <label class="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">Search payee</label>
+            <input type="text" id="filterSearch" placeholder="e.g. Amazon" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">Sort</label>
+            <select id="filterSort" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border text-sm">
+              <option value="date_desc">Date (newest)</option>
+              <option value="date_asc">Date (oldest)</option>
+              <option value="amount_desc">Amount (high to low)</option>
+              <option value="amount_asc">Amount (low to high)</option>
+            </select>
           </div>
         </div>
         <div class="flex justify-end gap-2 mt-4">
-          <button id="clearFiltersBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded shadow text-sm transition">Clear</button>
+          <button id="clearFiltersBtn" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded shadow text-sm transition">Clear</button>
           <button id="applyFiltersBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow text-sm transition">Apply Filters</button>
         </div>
       </div>
@@ -67,15 +80,15 @@
       <!-- Transactions -->
       <div>
         <div class="flex justify-between items-center mb-3">
-          <h2 class="text-lg font-semibold text-gray-700">Transactions</h2>
+          <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-100">Transactions</h2>
           <div class="flex items-center gap-3">
-            <span id="resultSummary" class="text-sm text-gray-500"></span>
-            <button id="exportCsvBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1.5 px-3 rounded shadow text-xs transition">Export CSV</button>
+            <span id="resultSummary" class="text-sm text-gray-500 dark:text-gray-400"></span>
+            <button id="exportCsvBtn" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-1.5 px-3 rounded shadow text-xs transition">Export CSV</button>
           </div>
         </div>
-        <div class="overflow-x-auto border rounded">
+        <div class="overflow-x-auto border dark:border-gray-700 rounded">
           <table class="w-full text-sm">
-            <thead class="bg-gray-50 border-b">
+            <thead class="bg-gray-50 dark:bg-gray-900/50 border-b dark:border-gray-700">
               <tr class="text-left">
                 <th class="p-3">Date</th>
                 <th class="p-3">Account</th>
@@ -88,15 +101,41 @@
           </table>
         </div>
         <div class="flex justify-between items-center mt-4">
-          <button id="prevPageBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded shadow text-sm transition disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
-          <span id="pageLabel" class="text-sm text-gray-500"></span>
-          <button id="nextPageBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded shadow text-sm transition disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
+          <button id="prevPageBtn" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded shadow text-sm transition disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
+          <span id="pageLabel" class="text-sm text-gray-500 dark:text-gray-400"></span>
+          <button id="nextPageBtn" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded shadow text-sm transition disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
         </div>
       </div>
     </div>
   </div>
 
   <script>
+    // --- Theme ---
+    function applyTheme(isDark) {
+      document.documentElement.classList.toggle('dark', isDark);
+      document.getElementById('themeToggleBtn').innerText = isDark ? '☀️' : '🌙';
+    }
+    try {
+      const stored = localStorage.getItem('theme');
+      const isDark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      applyTheme(isDark);
+    } catch (e) { /* localStorage may be unavailable; default light theme is fine */ }
+    document.getElementById('themeToggleBtn').addEventListener('click', () => {
+      const isDark = !document.documentElement.classList.contains('dark');
+      applyTheme(isDark);
+      try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch (e) { /* ignore */ }
+    });
+
+    // --- Error banner ---
+    const errorBanner = document.getElementById('errorBanner');
+    function showError(message) {
+      errorBanner.innerText = message;
+      errorBanner.classList.remove('hidden');
+    }
+    function hideError() {
+      errorBanner.classList.add('hidden');
+    }
+
     const PAGE_SIZE = 50;
     let accountsById = {};
     let categoriesById = {};
@@ -110,22 +149,28 @@
     }
 
     async function fetchJson(url) {
-      const res = await fetch(url);
+      let res;
+      try {
+        res = await fetch(url);
+      } catch (err) {
+        showError('Could not reach the server.');
+        throw err;
+      }
       if (res.status === 401) { window.location.href = '/login.html'; throw new Error('unauthorized'); }
       return res.json();
     }
 
     async function loadAccounts() {
       const accounts = await fetchJson('/api/data/accounts');
-      if (accounts.error) return false;
+      if (accounts.error) { showError(accounts.error); return false; }
 
       accountsById = Object.fromEntries(accounts.map(a => [a.id, a]));
 
       const grid = document.getElementById('accountsGrid');
       grid.innerHTML = accounts.map(a => `
-        <div class="border rounded p-3 flex justify-between items-center">
-          <span class="font-medium text-gray-700">${a.name}</span>
-          <span class="${a.balance < 0 ? 'text-red-600' : 'text-green-700'} font-mono text-sm">
+        <div class="border dark:border-gray-700 rounded p-3 flex justify-between items-center">
+          <span class="font-medium text-gray-700 dark:text-gray-200">${a.name}</span>
+          <span class="${a.balance < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-400'} font-mono text-sm">
             ${a.balance < 0 ? '-$' + Math.abs(a.balance).toFixed(2) : '$' + a.balance.toFixed(2)}
           </span>
         </div>`).join('');
@@ -138,7 +183,7 @@
 
     async function loadCategories() {
       const categories = await fetchJson('/api/data/categories');
-      if (categories.error) return;
+      if (categories.error) { showError(categories.error); return; }
 
       categoriesById = Object.fromEntries(categories.map(c => [c.id, c]));
 
@@ -154,12 +199,14 @@
       const startDate = document.getElementById('filterStart').value;
       const endDate = document.getElementById('filterEnd').value;
       const search = document.getElementById('filterSearch').value.trim();
+      const sort = document.getElementById('filterSort').value;
 
       if (accountId) params.set('accountId', accountId);
       if (categoryId) params.set('categoryId', categoryId);
       if (startDate) params.set('startDate', startDate);
       if (endDate) params.set('endDate', endDate);
       if (search) params.set('search', search);
+      if (sort) params.set('sort', sort);
       params.set('limit', PAGE_SIZE);
       params.set('offset', offset);
       return params;
@@ -168,18 +215,19 @@
     async function loadTransactions() {
       const params = currentFilters();
       const result = await fetchJson('/api/data/transactions?' + params.toString());
-      if (result.error) return;
+      if (result.error) { showError(result.error); return; }
+      hideError();
 
       total = result.total;
       const tbody = document.getElementById('transactionsBody');
       tbody.innerHTML = result.transactions.map(t => `
-        <tr class="border-b last:border-0">
+        <tr class="border-b dark:border-gray-700 last:border-0">
           <td class="p-3">${t.date}</td>
           <td class="p-3">${accountsById[t.account]?.name || 'Unknown'}</td>
           <td class="p-3">${categoriesById[t.category]?.name || '—'}</td>
           <td class="p-3">${t.payee_name || 'Unknown'}</td>
-          <td class="p-3 text-right ${t.amount < 0 ? 'text-red-600' : 'text-green-700'}">${formatAmount(t.amount)}</td>
-        </tr>`).join('') || '<tr><td class="p-3 text-gray-500" colspan="5">No transactions match these filters.</td></tr>';
+          <td class="p-3 text-right ${t.amount < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-400'}">${formatAmount(t.amount)}</td>
+        </tr>`).join('') || '<tr><td class="p-3 text-gray-500 dark:text-gray-400" colspan="5">No transactions match these filters.</td></tr>';
 
       const from = total === 0 ? 0 : offset + 1;
       const to = Math.min(offset + PAGE_SIZE, total);
@@ -202,6 +250,7 @@
       document.getElementById('filterStart').value = '';
       document.getElementById('filterEnd').value = '';
       document.getElementById('filterSearch').value = '';
+      document.getElementById('filterSort').value = 'date_desc';
       offset = 0;
       loadTransactions();
     });
@@ -219,10 +268,16 @@
     });
 
     (async function init() {
-      const configRes = await fetch('/api/config');
+      let configRes;
+      try {
+        configRes = await fetch('/api/config');
+      } catch (err) {
+        showError('Could not reach the server. Check your connection and reload.');
+        return;
+      }
       if (configRes.status === 401) { window.location.href = '/login.html'; return; }
       const config = await configRes.json();
-      if (!config.actualUrl || !config.actualPassword || !config.syncId) {
+      if (!config.actualUrl || !config.actualPasswordSet || !config.syncId) {
         document.getElementById('notConfiguredMsg').classList.remove('hidden');
         return;
       }

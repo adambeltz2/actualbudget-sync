@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { logger, LOG_DIR } = require('./logger');
 const { getConfig, saveConfig } = require('./config');
-const { syncAndReport } = require('./syncJob');
+const { syncAndReport, isSyncRunning } = require('./syncJob');
 const { applySchedule } = require('./scheduler');
 const auth = require('./auth');
 const actualService = require('./actualService');
@@ -11,9 +11,12 @@ const actualService = require('./actualService');
 const router = express.Router();
 
 // --- Config ---
+// actualPassword/emailPass are never sent to the client as plaintext; the
+// client only learns whether one is set, and a save only changes it when a
+// new non-empty value is submitted (see POST handler below).
 router.get('/api/config', (req, res) => {
-  const { dashboardPasswordHash, sessionSecret, ...safeConfig } = getConfig();
-  res.json(safeConfig);
+  const { dashboardPasswordHash, sessionSecret, actualPassword, emailPass, ...safeConfig } = getConfig();
+  res.json({ ...safeConfig, actualPasswordSet: !!actualPassword, emailPassSet: !!emailPass });
 });
 
 router.post('/api/config', (req, res) => {
@@ -21,6 +24,8 @@ router.post('/api/config', (req, res) => {
   const updated = {
     ...current,
     ...req.body,
+    actualPassword: req.body.actualPassword ? req.body.actualPassword : current.actualPassword,
+    emailPass: req.body.emailPass ? req.body.emailPass : current.emailPass,
     dashboardPasswordHash: current.dashboardPasswordHash,
     sessionSecret: current.sessionSecret
   };
@@ -35,6 +40,10 @@ router.post('/api/sync', (req, res) => {
   logger.info('Manual sync triggered via Web Dashboard.');
   syncAndReport();
   res.json({ success: true, message: 'Sync started' });
+});
+
+router.get('/api/sync/status', (req, res) => {
+  res.json({ syncing: isSyncRunning() });
 });
 
 // --- Live log streaming (SSE) ---
@@ -55,6 +64,11 @@ router.get('/api/logs/stream', (req, res) => {
   const interval = setInterval(sendLogs, 2000);
   req.on('close', () => { clearInterval(interval); res.end(); });
 });
+
+const VALID_SORTS = new Set(['date_desc', 'date_asc', 'amount_desc', 'amount_asc']);
+function parseSort(value) {
+  return VALID_SORTS.has(value) ? value : 'date_desc';
+}
 
 // --- Data explorer (read-only) ---
 function requireActualConfigured(req, res) {
@@ -111,8 +125,9 @@ router.get('/api/data/transactions', async (req, res) => {
       search: req.query.search || undefined
     };
 
+    const sort = parseSort(req.query.sort);
     const [transactions, total] = await Promise.all([
-      actualService.queryTransactions({ ...filters, limit, offset }),
+      actualService.queryTransactions({ ...filters, limit, offset, sort }),
       actualService.countTransactions(filters)
     ]);
 
@@ -160,8 +175,9 @@ router.get('/api/data/transactions/export', async (req, res) => {
       search: req.query.search || undefined
     };
 
+    const sort = parseSort(req.query.sort);
     const [transactions, accounts, categories] = await Promise.all([
-      actualService.queryTransactions({ ...filters, limit: 5000, offset: 0 }),
+      actualService.queryTransactions({ ...filters, limit: 5000, offset: 0, sort }),
       actualService.getAccounts({ includeClosed: true }),
       actualService.getCategories()
     ]);
