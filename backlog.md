@@ -23,9 +23,17 @@ Affected files: `src/auth.js`, `src/routes.js`, `src/config.js`, `index.js`, `pu
 `actualPassword` and `emailPass` (SMTP app password) are still stored unencrypted in `/data/config.json`, readable by anything with host/container filesystem access. (The new `dashboardPasswordHash` is hashed, not plaintext — this item is only about the Actual/SMTP credentials.) Consider encrypting at rest with a key derived from an env-provided secret, or documenting the risk clearly if left as-is.
 Affected files: `src/config.js`
 
-## P1 — Data explorer UI
-Add a searchable/filterable table view (accounts, categories, transactions) in the web dashboard, backed by new read-only `GET` endpoints wrapping the `ActualDataService` query methods. Inspired by https://github.com/actualbudget/browser-app-demo, but server-side against already-synced data instead of client-side WASM/IndexedDB.
-Affected files: `index.js`, `public/index.html`
+## P1 — Data explorer UI — DONE
+Added `public/explorer.html`: account balance cards, and a filterable (account/category/date range/payee search), paginated transactions table. Backed by new read-only endpoints in `src/routes.js` (`GET /api/data/accounts`, `/api/data/categories`, `/api/data/transactions`) built on new `actualService` query methods (`getCategories`, `queryTransactions`, `countTransactions`) using `@actual-app/api`'s query builder (`$gte`/`$lte`/`$like`/`$count`). Reused `api.getAccountBalance()` instead of the hand-rolled balance query the sync job had been using. Inspired by https://github.com/actualbudget/browser-app-demo, but server-side against the already-synced data instead of client-side WASM/IndexedDB. Protected by the same session auth as the rest of the dashboard (no new auth work needed).
+Affected files: `src/actualService.js`, `src/routes.js`, `public/explorer.html`, `public/index.html`
+
+### [FEATURE] CSV export from the data explorer
+Let users export the currently filtered transaction list as a CSV download. Noticed while building the explorer table; out of scope for the initial read-only view.
+Affected files: `src/routes.js`, `public/explorer.html`
+
+### [DEBT] Data explorer transaction count runs a separate query per request
+`GET /api/data/transactions` issues both a paged query and a `$count` query against the same filters on every request. Fine at current scale; revisit if budgets with very large transaction histories make this noticeably slow.
+Affected files: `src/actualService.js`, `src/routes.js`
 
 ## P2 — Templated, customizable dashboard
 Add reusable dashboard widgets (net worth, spend-by-category, balance trend) rendered with a lightweight charting library, with a simple layout/template config so users can choose which widgets are shown. Depends on the data explorer's read-only endpoints.

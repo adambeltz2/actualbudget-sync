@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Explorer — Actual Budget Smart Sync</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 p-6 font-sans">
+  <div class="max-w-6xl mx-auto bg-white p-8 rounded-lg shadow-md">
+    <div class="flex justify-between items-center border-b pb-4 mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-700">Data Explorer</h1>
+        <p class="text-sm text-gray-500">Browse the accounts, categories, and transactions from your last sync.</p>
+      </div>
+      <div class="flex gap-2">
+        <a href="/" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded shadow transition">Dashboard</a>
+        <button id="logoutBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded shadow transition">Logout</button>
+      </div>
+    </div>
+
+    <p id="notConfiguredMsg" class="hidden bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm p-4 rounded mb-6">
+      Actual Budget isn't configured yet. Set it up on the <a href="/" class="underline font-bold">Dashboard</a> first.
+    </p>
+
+    <div id="explorerBody" class="hidden">
+      <!-- Accounts -->
+      <div class="mb-8">
+        <h2 class="text-lg font-semibold text-gray-700 mb-3">Accounts</h2>
+        <div id="accountsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"></div>
+      </div>
+
+      <!-- Filters -->
+      <div class="bg-gray-50 p-4 rounded border mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">Account</label>
+            <select id="filterAccount" class="w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm">
+              <option value="">All accounts</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">Category</label>
+            <select id="filterCategory" class="w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm">
+              <option value="">All categories</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">From</label>
+            <input type="date" id="filterStart" class="w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">To</label>
+            <input type="date" id="filterEnd" class="w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">Search payee</label>
+            <input type="text" id="filterSearch" placeholder="e.g. Amazon" class="w-full rounded-md border-gray-300 shadow-sm p-2 border text-sm">
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 mt-4">
+          <button id="clearFiltersBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded shadow text-sm transition">Clear</button>
+          <button id="applyFiltersBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow text-sm transition">Apply Filters</button>
+        </div>
+      </div>
+
+      <!-- Transactions -->
+      <div>
+        <div class="flex justify-between items-center mb-3">
+          <h2 class="text-lg font-semibold text-gray-700">Transactions</h2>
+          <span id="resultSummary" class="text-sm text-gray-500"></span>
+        </div>
+        <div class="overflow-x-auto border rounded">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b">
+              <tr class="text-left">
+                <th class="p-3">Date</th>
+                <th class="p-3">Account</th>
+                <th class="p-3">Category</th>
+                <th class="p-3">Payee</th>
+                <th class="p-3 text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody id="transactionsBody"></tbody>
+          </table>
+        </div>
+        <div class="flex justify-between items-center mt-4">
+          <button id="prevPageBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded shadow text-sm transition disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
+          <span id="pageLabel" class="text-sm text-gray-500"></span>
+          <button id="nextPageBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded shadow text-sm transition disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PAGE_SIZE = 50;
+    let accountsById = {};
+    let categoriesById = {};
+    let offset = 0;
+    let total = 0;
+
+    function formatAmount(cents) {
+      const amt = cents / 100;
+      const text = Math.abs(amt).toFixed(2);
+      return amt < 0 ? `-$${text}` : `+$${text}`;
+    }
+
+    async function fetchJson(url) {
+      const res = await fetch(url);
+      if (res.status === 401) { window.location.href = '/login.html'; throw new Error('unauthorized'); }
+      return res.json();
+    }
+
+    async function loadAccounts() {
+      const accounts = await fetchJson('/api/data/accounts');
+      if (accounts.error) return false;
+
+      accountsById = Object.fromEntries(accounts.map(a => [a.id, a]));
+
+      const grid = document.getElementById('accountsGrid');
+      grid.innerHTML = accounts.map(a => `
+        <div class="border rounded p-3 flex justify-between items-center">
+          <span class="font-medium text-gray-700">${a.name}</span>
+          <span class="${a.balance < 0 ? 'text-red-600' : 'text-green-700'} font-mono text-sm">
+            ${a.balance < 0 ? '-$' + Math.abs(a.balance).toFixed(2) : '$' + a.balance.toFixed(2)}
+          </span>
+        </div>`).join('');
+
+      const select = document.getElementById('filterAccount');
+      select.innerHTML = '<option value="">All accounts</option>' +
+        accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+      return true;
+    }
+
+    async function loadCategories() {
+      const categories = await fetchJson('/api/data/categories');
+      if (categories.error) return;
+
+      categoriesById = Object.fromEntries(categories.map(c => [c.id, c]));
+
+      const select = document.getElementById('filterCategory');
+      select.innerHTML = '<option value="">All categories</option>' +
+        categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    }
+
+    function currentFilters() {
+      const params = new URLSearchParams();
+      const accountId = document.getElementById('filterAccount').value;
+      const categoryId = document.getElementById('filterCategory').value;
+      const startDate = document.getElementById('filterStart').value;
+      const endDate = document.getElementById('filterEnd').value;
+      const search = document.getElementById('filterSearch').value.trim();
+
+      if (accountId) params.set('accountId', accountId);
+      if (categoryId) params.set('categoryId', categoryId);
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+      if (search) params.set('search', search);
+      params.set('limit', PAGE_SIZE);
+      params.set('offset', offset);
+      return params;
+    }
+
+    async function loadTransactions() {
+      const params = currentFilters();
+      const result = await fetchJson('/api/data/transactions?' + params.toString());
+      if (result.error) return;
+
+      total = result.total;
+      const tbody = document.getElementById('transactionsBody');
+      tbody.innerHTML = result.transactions.map(t => `
+        <tr class="border-b last:border-0">
+          <td class="p-3">${t.date}</td>
+          <td class="p-3">${accountsById[t.account]?.name || 'Unknown'}</td>
+          <td class="p-3">${categoriesById[t.category]?.name || '—'}</td>
+          <td class="p-3">${t.payee_name || 'Unknown'}</td>
+          <td class="p-3 text-right ${t.amount < 0 ? 'text-red-600' : 'text-green-700'}">${formatAmount(t.amount)}</td>
+        </tr>`).join('') || '<tr><td class="p-3 text-gray-500" colspan="5">No transactions match these filters.</td></tr>';
+
+      const from = total === 0 ? 0 : offset + 1;
+      const to = Math.min(offset + PAGE_SIZE, total);
+      document.getElementById('resultSummary').innerText = `${total} transaction${total === 1 ? '' : 's'}`;
+      document.getElementById('pageLabel').innerText = `${from}–${to} of ${total}`;
+      document.getElementById('prevPageBtn').disabled = offset === 0;
+      document.getElementById('nextPageBtn').disabled = offset + PAGE_SIZE >= total;
+    }
+
+    document.getElementById('applyFiltersBtn').addEventListener('click', () => { offset = 0; loadTransactions(); });
+    document.getElementById('clearFiltersBtn').addEventListener('click', () => {
+      document.getElementById('filterAccount').value = '';
+      document.getElementById('filterCategory').value = '';
+      document.getElementById('filterStart').value = '';
+      document.getElementById('filterEnd').value = '';
+      document.getElementById('filterSearch').value = '';
+      offset = 0;
+      loadTransactions();
+    });
+    document.getElementById('prevPageBtn').addEventListener('click', () => {
+      offset = Math.max(0, offset - PAGE_SIZE);
+      loadTransactions();
+    });
+    document.getElementById('nextPageBtn').addEventListener('click', () => {
+      offset = offset + PAGE_SIZE;
+      loadTransactions();
+    });
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    });
+
+    (async function init() {
+      const configRes = await fetch('/api/config');
+      if (configRes.status === 401) { window.location.href = '/login.html'; return; }
+      const config = await configRes.json();
+      if (!config.actualUrl || !config.actualPassword || !config.syncId) {
+        document.getElementById('notConfiguredMsg').classList.remove('hidden');
+        return;
+      }
+
+      document.getElementById('explorerBody').classList.remove('hidden');
+      const ok = await loadAccounts();
+      if (!ok) return;
+      await loadCategories();
+      await loadTransactions();
+    })();
+  </script>
+</body>
+</html>

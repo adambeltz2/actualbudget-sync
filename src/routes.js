@@ -6,6 +6,7 @@ const { getConfig, saveConfig } = require('./config');
 const { syncAndReport } = require('./syncJob');
 const { applySchedule } = require('./scheduler');
 const auth = require('./auth');
+const actualService = require('./actualService');
 
 const router = express.Router();
 
@@ -53,6 +54,73 @@ router.get('/api/logs/stream', (req, res) => {
   sendLogs();
   const interval = setInterval(sendLogs, 2000);
   req.on('close', () => { clearInterval(interval); res.end(); });
+});
+
+// --- Data explorer (read-only) ---
+function requireActualConfigured(req, res) {
+  const config = getConfig();
+  if (!config.actualUrl || !config.actualPassword || !config.syncId) {
+    res.status(400).json({ error: 'Actual Budget is not configured yet.' });
+    return null;
+  }
+  return config;
+}
+
+router.get('/api/data/accounts', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const accounts = await actualService.getAccounts({ includeClosed: req.query.includeClosed === 'true' });
+    const withBalances = await Promise.all(accounts.map(async acc => ({
+      ...acc,
+      balance: await actualService.getAccountBalance(acc.id)
+    })));
+    res.json(withBalances);
+  } catch (err) {
+    logger.error('Data explorer accounts request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to load accounts.' });
+  }
+});
+
+router.get('/api/data/categories', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    res.json(await actualService.getCategories());
+  } catch (err) {
+    logger.error('Data explorer categories request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to load categories.' });
+  }
+});
+
+router.get('/api/data/transactions', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const filters = {
+      accountId: req.query.accountId || undefined,
+      categoryId: req.query.categoryId || undefined,
+      startDate: req.query.startDate || undefined,
+      endDate: req.query.endDate || undefined,
+      search: req.query.search || undefined
+    };
+
+    const [transactions, total] = await Promise.all([
+      actualService.queryTransactions({ ...filters, limit, offset }),
+      actualService.countTransactions(filters)
+    ]);
+
+    res.json({ transactions, total, limit, offset });
+  } catch (err) {
+    logger.error('Data explorer transactions request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to load transactions.' });
+  }
 });
 
 // --- Auth ---

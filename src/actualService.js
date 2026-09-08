@@ -38,12 +38,45 @@ async function getAccounts({ includeClosed = false } = {}) {
 }
 
 async function getAccountBalance(accountId) {
-  const result = await api.runQuery(q('transactions').filter({ account: accountId }).calculate({ $sum: '$amount' }));
-  return (result.data || 0) / 100;
+  const cents = await api.getAccountBalance(accountId);
+  return cents / 100;
 }
 
 async function getTransactionsForAccount(accountId, startDate, endDate) {
   return api.getTransactions(accountId, startDate, endDate);
+}
+
+async function getCategories() {
+  return api.getCategories();
+}
+
+function buildTransactionFilters({ accountId, categoryId, startDate, endDate, search } = {}) {
+  const filters = [];
+  if (accountId) filters.push({ account: accountId });
+  if (categoryId) filters.push({ category: categoryId });
+  if (startDate) filters.push({ date: { $gte: startDate } });
+  if (endDate) filters.push({ date: { $lte: endDate } });
+  if (search) filters.push({ payee_name: { $like: `%${search}%` } });
+  return filters;
+}
+
+async function queryTransactions({ limit = 50, offset = 0, ...filterArgs } = {}) {
+  let query = q('transactions').options({ splits: 'none' }).select('*').orderBy({ date: 'desc' });
+  for (const filter of buildTransactionFilters(filterArgs)) {
+    query = query.filter(filter);
+  }
+  query = query.limit(limit).offset(offset);
+  const { data } = await api.runQuery(query);
+  return data;
+}
+
+async function countTransactions(filterArgs = {}) {
+  let query = q('transactions').options({ splits: 'none' });
+  for (const filter of buildTransactionFilters(filterArgs)) {
+    query = query.filter(filter);
+  }
+  const { data } = await api.runQuery(query.calculate({ $count: '*' }));
+  return data || 0;
 }
 
 async function runBankSync() {
@@ -63,5 +96,6 @@ function isReady() {
 
 module.exports = {
   ensureReady, refreshBudget, getAccounts, getAccountBalance,
-  getTransactionsForAccount, runBankSync, shutdown, isReady
+  getTransactionsForAccount, getCategories, queryTransactions,
+  countTransactions, runBankSync, shutdown, isReady
 };
