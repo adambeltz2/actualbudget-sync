@@ -10,7 +10,10 @@
   <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-md">
     <div class="flex justify-between items-center border-b pb-4 mb-6">
       <h1 class="text-2xl font-bold text-gray-700">Actual Budget Smart Sync</h1>
-      <button id="triggerSyncBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow transition">Trigger Manual Sync</button>
+      <div class="flex gap-2">
+        <button id="triggerSyncBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow transition">Trigger Manual Sync</button>
+        <button id="logoutBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded shadow transition">Logout</button>
+      </div>
     </div>
 
     <form id="configForm" class="space-y-6">
@@ -125,6 +128,7 @@
     // --- Config Save/Load ---
     async function loadConfig() {
       const res = await fetch('/api/config');
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
       const config = await res.json();
       document.getElementById('actualUrl').value = config.actualUrl || '';
       document.getElementById('actualPassword').value = config.actualPassword || '';
@@ -170,6 +174,11 @@
     }
     document.getElementById('triggerSyncBtn').addEventListener('click', function() { triggerSync(this); });
     document.getElementById('postSaveSyncBtn').addEventListener('click', function() { triggerSync(this); });
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    });
 
     // --- LIVE LOG STREAMING ---
     const viewer = document.getElementById('logViewer');

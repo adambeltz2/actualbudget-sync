@@ -7,21 +7,21 @@ explorer/dashboard/email features safely; do them first.
 
 ## P0 — Foundation
 
-### [REFACTOR] Split monolithic index.js into modules
-Break `index.js` (config I/O, Express routes, cron, sync logic, email HTML) into `config.js`, `actualService.js`, `syncJob.js`, `emailReport.js`, `routes/`, `server.js`. Mechanical, no behavior change; de-risks all following work.
-Affected files: `index.js` (split into new files)
+### [REFACTOR] Split monolithic index.js into modules — DONE
+Broke `index.js` into `src/config.js`, `src/logger.js`, `src/actualService.js`, `src/emailReport.js`, `src/syncJob.js`, `src/scheduler.js`, `src/auth.js`, `src/routes.js`; `index.js` is now a slim bootstrap. No behavior change.
+Affected files: `index.js`, `src/*.js`
 
-### [REFACTOR] Long-lived ActualDataService instead of init/shutdown per sync
-Replace the per-sync `api.init()` / `api.shutdown()` lifecycle with a service that initializes once, refreshes via `downloadBudget()` on schedule/demand, and exposes query methods (accounts, categories, transactions, balances). This is the shared data-access foundation the data explorer, dashboard, and email templating below depend on — no separate replication layer needed.
-Affected files: `index.js`
+### [REFACTOR] Long-lived ActualDataService instead of init/shutdown per sync — DONE
+`src/actualService.js` now initializes `@actual-app/api` once and keeps it open across sync cycles (re-initializing only if the Actual URL/syncId/password change), refreshing via `downloadBudget()` per sync instead of `init()`/`shutdown()` per run. `index.js` shuts it down on SIGTERM/SIGINT. This is the shared data-access foundation the data explorer, dashboard, and email templating below will build on.
+Affected files: `src/actualService.js`, `src/syncJob.js`, `index.js`
+
+### [BUG] No authentication on dashboard/API — DONE
+Added session-cookie auth (`src/auth.js`, `src/routes.js`, `public/login.html`): dashboard password is scrypt-hashed and set on first login, sessions are signed with a per-install HMAC secret and expire after 7 days, and `requireAuth` middleware gates all routes except the login page/endpoints. `dashboardPasswordHash`/`sessionSecret` are excluded from the `/api/config` response.
+Affected files: `src/auth.js`, `src/routes.js`, `src/config.js`, `index.js`, `public/login.html`, `public/index.html`
 
 ### [DEBT] Plaintext secrets in config.json
-`actualPassword` and `emailPass` (SMTP app password) are stored unencrypted in `/data/config.json`, readable by anything with host/container filesystem access. Consider encrypting at rest with a key derived from an env-provided secret, or documenting the risk clearly if left as-is.
-Affected files: `index.js`
-
-### [BUG] No authentication on dashboard/API
-`/api/config`, `/api/sync`, and the dashboard UI have no auth — anyone with network access to port 3000 can read the config (incl. secrets), change settings, or trigger syncs. Needs at minimum a shared-password/session gate before the data explorer or dashboard (which expose real financial data) ship.
-Affected files: `index.js`, `public/index.html`
+`actualPassword` and `emailPass` (SMTP app password) are still stored unencrypted in `/data/config.json`, readable by anything with host/container filesystem access. (The new `dashboardPasswordHash` is hashed, not plaintext — this item is only about the Actual/SMTP credentials.) Consider encrypting at rest with a key derived from an env-provided secret, or documenting the risk clearly if left as-is.
+Affected files: `src/config.js`
 
 ## P1 — Data explorer UI
 Add a searchable/filterable table view (accounts, categories, transactions) in the web dashboard, backed by new read-only `GET` endpoints wrapping the `ActualDataService` query methods. Inspired by https://github.com/actualbudget/browser-app-demo, but server-side against already-synced data instead of client-side WASM/IndexedDB.
