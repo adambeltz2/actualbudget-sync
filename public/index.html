@@ -5,60 +5,113 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Actual Budget Sync Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' };</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 </head>
-<body class="bg-gray-100 text-gray-800 p-6 font-sans">
-  <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-md">
-    <div class="flex justify-between items-center border-b pb-4 mb-6">
-      <h1 class="text-2xl font-bold text-gray-700">Actual Budget Smart Sync</h1>
-      <button id="triggerSyncBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow transition">Trigger Manual Sync</button>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-6 font-sans transition-colors">
+  <div class="max-w-4xl mx-auto bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md">
+    <div class="flex justify-between items-center border-b dark:border-gray-700 pb-4 mb-6">
+      <h1 class="text-2xl font-bold text-gray-700 dark:text-gray-100">Actual Budget Smart Sync</h1>
+      <div class="flex gap-2 items-center">
+        <button id="themeToggleBtn" title="Toggle dark mode" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-2 px-3 rounded shadow transition">🌙</button>
+        <a href="/explorer.html" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded shadow transition">Data Explorer</a>
+        <button id="triggerSyncBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow transition disabled:opacity-60 disabled:cursor-not-allowed">Trigger Manual Sync</button>
+        <button id="logoutBtn" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded shadow transition">Logout</button>
+      </div>
+    </div>
+
+    <div id="errorBanner" class="hidden bg-red-50 dark:bg-red-900/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm p-3 rounded mb-6"></div>
+
+    <!-- Dashboard Widgets -->
+    <div id="dashboardWidgetsSection" class="hidden mb-8">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-100">Dashboard</h2>
+        <div class="flex items-center gap-3">
+          <select id="summaryDays" class="text-sm rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 p-1.5 border">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="365">Last year</option>
+          </select>
+          <button id="customizeWidgetsBtn" title="Choose which widgets are shown" class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">⚙ Customize</button>
+          <a href="/explorer.html" class="text-sm text-blue-600 dark:text-blue-400 hover:underline">View all transactions →</a>
+        </div>
+      </div>
+
+      <div id="widgetVisibilityRow" class="hidden flex flex-wrap gap-6 mb-4 p-3 bg-gray-50 dark:bg-gray-900/50 border dark:border-gray-700 rounded text-sm">
+        <label class="flex items-center gap-2 font-medium text-gray-700 dark:text-gray-200">
+          <input type="checkbox" id="widgetNetWorth" class="rounded border-gray-300"> Net Worth
+        </label>
+        <label class="flex items-center gap-2 font-medium text-gray-700 dark:text-gray-200">
+          <input type="checkbox" id="widgetSpendByCategory" class="rounded border-gray-300"> Spend by Category
+        </label>
+        <label class="flex items-center gap-2 font-medium text-gray-700 dark:text-gray-200">
+          <input type="checkbox" id="widgetBalanceTrend" class="rounded border-gray-300"> Balance Trend
+        </label>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div id="netWorthWidget" class="hidden border dark:border-gray-700 rounded p-4 bg-gray-50 dark:bg-gray-900/50">
+          <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Net Worth</p>
+          <p id="netWorthValue" class="text-2xl font-bold text-gray-800 dark:text-gray-100">—</p>
+        </div>
+        <div id="spendByCategoryWidget" class="hidden border dark:border-gray-700 rounded p-4 bg-gray-50 dark:bg-gray-900/50 md:col-span-1">
+          <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Spend by Category</p>
+          <canvas id="spendByCategoryChart" height="140"></canvas>
+        </div>
+        <div id="balanceTrendWidget" class="hidden border dark:border-gray-700 rounded p-4 bg-gray-50 dark:bg-gray-900/50 md:col-span-1">
+          <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Balance Trend</p>
+          <canvas id="balanceTrendChart" height="140"></canvas>
+        </div>
+      </div>
     </div>
 
     <form id="configForm" class="space-y-6">
       <!-- Actual Budget Section -->
-      <div class="bg-gray-50 p-4 rounded border">
-        <h2 class="text-lg font-semibold mb-4 text-gray-700">Actual Budget Configuration</h2>
+      <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded border dark:border-gray-700">
+        <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-gray-100">Actual Budget Configuration</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label class="block text-sm font-bold text-gray-700">Server URL</label>
-            <input type="text" id="actualUrl" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500" placeholder="https://your-budget.pikapod.net">
-            <p class="text-xs text-gray-500 mt-1">The web address of your Actual Budget instance.</p>
+            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">Server URL</label>
+            <input type="text" id="actualUrl" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500" placeholder="https://your-budget.pikapod.net">
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">The web address of your Actual Budget instance.</p>
           </div>
           <div>
-            <label class="block text-sm font-bold text-gray-700">Password</label>
-            <input type="password" id="actualPassword" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500">
-            <p class="text-xs text-gray-500 mt-1">Your master login password.</p>
+            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">Password</label>
+            <input type="password" id="actualPassword" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500" autocomplete="new-password">
+            <p id="actualPasswordHint" class="text-xs text-gray-500 dark:text-gray-400 mt-1">Your master login password.</p>
           </div>
           <div class="md:col-span-2">
-            <label class="block text-sm font-bold text-gray-700">Sync ID</label>
-            <input type="text" id="syncId" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500">
-            <p class="text-xs text-blue-600 mt-1 bg-blue-50 p-2 rounded border border-blue-100">
+            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">Sync ID</label>
+            <input type="text" id="syncId" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500">
+            <p class="text-xs text-blue-600 dark:text-blue-300 mt-1 bg-blue-50 dark:bg-blue-900/30 p-2 rounded border border-blue-100 dark:border-blue-800">
               <strong>How to find this:</strong> Open Actual Budget in your browser -> Go to <strong>Settings</strong> -> Click <strong>Show advanced settings</strong> -> Copy the long <strong>Sync ID</strong> string.
             </p>
           </div>
           <div class="md:col-span-2">
-            <label class="block text-sm font-bold text-gray-700">Cron Schedule</label>
-            <input type="text" id="cronSchedule" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border font-mono" placeholder="0 6,12 * * *">
-            <p class="text-xs text-gray-500 mt-1">Cron format: <code>0 6,12 * * *</code> syncs at 6:00 AM and 12:00 PM (Noon) daily.</p>
+            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">Cron Schedule</label>
+            <input type="text" id="cronSchedule" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border font-mono" placeholder="0 6,12 * * *">
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Cron format: <code>0 6,12 * * *</code> syncs at 6:00 AM and 12:00 PM (Noon) daily.</p>
           </div>
         </div>
       </div>
 
       <!-- Email Section -->
-      <div class="bg-gray-50 p-4 rounded border">
-        <div class="flex items-center justify-between mb-4 border-b pb-4">
+      <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded border dark:border-gray-700">
+        <div class="flex items-center justify-between mb-4 border-b dark:border-gray-700 pb-4">
           <div>
-            <h2 class="text-lg font-semibold text-gray-700">Email Notifications</h2>
-            <p class="text-sm text-gray-500">Send an HTML summary of new transactions.</p>
+            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-100">Email Notifications</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Send an HTML summary of new transactions.</p>
           </div>
-          
+
           <!-- Explicit Toggle Switch -->
           <label class="flex items-center cursor-pointer select-none">
             <div class="relative">
               <input type="checkbox" id="enableEmail" class="sr-only">
-              <div class="block bg-gray-300 w-16 h-8 rounded-full transition-colors duration-300" id="toggleBg"></div>
+              <div class="block bg-gray-300 dark:bg-gray-600 w-16 h-8 rounded-full transition-colors duration-300" id="toggleBg"></div>
               <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform duration-300 flex items-center justify-center shadow"></div>
             </div>
-            <div class="ml-3 font-bold text-gray-500 w-8" id="toggleText">OFF</div>
+            <div class="ml-3 font-bold text-gray-500 dark:text-gray-400 w-8" id="toggleText">OFF</div>
           </label>
           <style>
             input:checked ~ .dot { transform: translateX(100%); }
@@ -68,42 +121,81 @@
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-50 transition-opacity duration-300 pointer-events-none" id="emailSettingsDiv">
           <div>
-            <label class="block text-sm font-bold text-gray-700">SMTP Host</label>
-            <input type="text" id="smtpHost" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" placeholder="smtp.gmail.com">
+            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">SMTP Host</label>
+            <input type="text" id="smtpHost" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border" placeholder="smtp.gmail.com">
           </div>
           <div>
-            <label class="block text-sm font-bold text-gray-700">SMTP Port</label>
-            <input type="number" id="smtpPort" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" placeholder="465">
+            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">SMTP Port</label>
+            <input type="number" id="smtpPort" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border" placeholder="465">
           </div>
           <div>
-            <label class="block text-sm font-bold text-gray-700">Email Username</label>
-            <input type="email" id="emailUser" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" placeholder="youremail@gmail.com">
+            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">Email Username</label>
+            <input type="email" id="emailUser" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border" placeholder="youremail@gmail.com">
           </div>
           <div>
-            <label class="block text-sm font-bold text-gray-700">App Password</label>
-            <input type="password" id="emailPass" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
-            <p class="text-xs text-gray-500 mt-1">If using Gmail, use a 16-digit App Password.</p>
+            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">App Password</label>
+            <input type="password" id="emailPass" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border" autocomplete="new-password">
+            <p id="emailPassHint" class="text-xs text-gray-500 dark:text-gray-400 mt-1">If using Gmail, use a 16-digit App Password.</p>
           </div>
           <div class="md:col-span-2">
-            <label class="block text-sm font-bold text-gray-700">Send Reports To:</label>
-            <input type="email" id="emailTo" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" placeholder="receiving_email@example.com">
+            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">Send Reports To:</label>
+            <input type="email" id="emailTo" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border" placeholder="receiving_email@example.com">
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">Include in report:</label>
+            <div class="flex flex-wrap gap-6">
+              <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                <input type="checkbox" id="emailSectionBalances" class="rounded border-gray-300"> Account balances
+              </label>
+              <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                <input type="checkbox" id="emailSectionTransactions" class="rounded border-gray-300"> New transactions
+              </label>
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Connection issue alerts are always included regardless of these settings.</p>
           </div>
         </div>
       </div>
 
       <div class="flex justify-end items-center gap-4 mt-4">
-        <button type="button" id="postSaveSyncBtn" class="hidden bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 px-6 rounded shadow border border-blue-300 transition">Test Connection & Sync Now</button>
+        <button type="button" id="postSaveSyncBtn" class="hidden bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold py-2 px-6 rounded shadow border border-blue-300 dark:border-blue-700 transition">Test Connection & Sync Now</button>
         <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-8 rounded shadow transition">Save Configuration</button>
       </div>
     </form>
 
-    <div class="mt-8 border-t pt-6">
-      <h2 class="text-lg font-semibold text-gray-700 mb-2">Live System Logs</h2>
+    <div class="mt-8 border-t dark:border-gray-700 pt-6">
+      <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-100 mb-2">Live System Logs</h2>
       <textarea id="logViewer" class="w-full h-80 bg-gray-900 text-green-400 font-mono text-xs p-4 rounded border-gray-700 leading-relaxed" readonly></textarea>
     </div>
   </div>
 
   <script>
+    // --- Theme ---
+    function applyTheme(isDark) {
+      document.documentElement.classList.toggle('dark', isDark);
+      document.getElementById('themeToggleBtn').innerText = isDark ? '☀️' : '🌙';
+    }
+    function initTheme() {
+      const stored = localStorage.getItem('theme');
+      const isDark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      applyTheme(isDark);
+    }
+    document.getElementById('themeToggleBtn').addEventListener('click', () => {
+      const isDark = !document.documentElement.classList.contains('dark');
+      applyTheme(isDark);
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    });
+    try { initTheme(); } catch (e) { /* localStorage may be unavailable (private mode); default light theme is fine */ }
+
+    // --- Error banner ---
+    const errorBanner = document.getElementById('errorBanner');
+    function showError(message) {
+      errorBanner.innerText = message;
+      errorBanner.classList.remove('hidden');
+    }
+    function hideError() {
+      errorBanner.classList.add('hidden');
+    }
+
     // --- UI Logic ---
     const emailToggle = document.getElementById('enableEmail');
     const emailSettingsDiv = document.getElementById('emailSettingsDiv');
@@ -122,12 +214,30 @@
     }
     emailToggle.addEventListener('change', (e) => updateToggleUI(e.target.checked));
 
+    document.getElementById('customizeWidgetsBtn').addEventListener('click', () => {
+      document.getElementById('widgetVisibilityRow').classList.toggle('hidden');
+    });
+
     // --- Config Save/Load ---
     async function loadConfig() {
-      const res = await fetch('/api/config');
+      let res;
+      try {
+        res = await fetch('/api/config');
+      } catch (err) {
+        showError('Could not reach the server. Check your connection and reload.');
+        return;
+      }
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      if (!res.ok) { showError('Failed to load configuration.'); return; }
       const config = await res.json();
+      hideError();
+
       document.getElementById('actualUrl').value = config.actualUrl || '';
-      document.getElementById('actualPassword').value = config.actualPassword || '';
+      document.getElementById('actualPassword').value = '';
+      document.getElementById('actualPassword').placeholder = config.actualPasswordSet ? '•••••••• (unchanged)' : '';
+      document.getElementById('actualPasswordHint').innerText = config.actualPasswordSet
+        ? 'Your master login password is saved. Leave blank to keep it, or type a new one to change it.'
+        : 'Your master login password.';
       document.getElementById('syncId').value = config.syncId || '';
       document.getElementById('cronSchedule').value = config.cronSchedule || '0 6,12 * * *';
       const isEmailEnabled = config.enableEmail || false;
@@ -136,9 +246,102 @@
       document.getElementById('smtpHost').value = config.smtpHost || '';
       document.getElementById('smtpPort').value = config.smtpPort || '465';
       document.getElementById('emailUser').value = config.emailUser || '';
-      document.getElementById('emailPass').value = config.emailPass || '';
+      document.getElementById('emailPass').value = '';
+      document.getElementById('emailPass').placeholder = config.emailPassSet ? '•••••••• (unchanged)' : '';
+      document.getElementById('emailPassHint').innerText = config.emailPassSet
+        ? 'App password is saved. Leave blank to keep it, or type a new one to change it.'
+        : 'If using Gmail, use a 16-digit App Password.';
       document.getElementById('emailTo').value = config.emailTo || '';
+
+      const widgets = config.dashboardWidgets || {};
+      document.getElementById('widgetNetWorth').checked = widgets.netWorth !== false;
+      document.getElementById('widgetSpendByCategory').checked = widgets.spendByCategory !== false;
+      document.getElementById('widgetBalanceTrend').checked = widgets.balanceTrend !== false;
+
+      const sections = config.emailSections || {};
+      document.getElementById('emailSectionBalances').checked = sections.balances !== false;
+      document.getElementById('emailSectionTransactions').checked = sections.transactions !== false;
+
+      const isConfigured = !!(config.actualUrl && config.actualPasswordSet && config.syncId);
+      if (isConfigured) {
+        document.getElementById('dashboardWidgetsSection').classList.remove('hidden');
+        loadDashboardWidgets(widgets, document.getElementById('summaryDays').value);
+      }
     }
+
+    // --- Dashboard Widgets ---
+    let spendChart = null;
+    let trendChart = null;
+
+    function formatCurrency(amount) {
+      const text = Math.abs(amount).toFixed(2);
+      return amount < 0 ? `-$${text}` : `$${text}`;
+    }
+
+    async function loadDashboardWidgets(widgets, days) {
+      let res;
+      try {
+        res = await fetch(`/api/data/summary?days=${encodeURIComponent(days)}`);
+      } catch (err) {
+        showError('Could not reach the server while loading the dashboard.');
+        return;
+      }
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      const summary = await res.json();
+      if (summary.error) { showError(summary.error); return; }
+
+      if (widgets.netWorth !== false) {
+        document.getElementById('netWorthWidget').classList.remove('hidden');
+        const el = document.getElementById('netWorthValue');
+        el.innerText = formatCurrency(summary.netWorth);
+        el.classList.toggle('text-red-600', summary.netWorth < 0);
+      }
+
+      if (widgets.spendByCategory !== false && summary.spendByCategory.length > 0) {
+        document.getElementById('spendByCategoryWidget').classList.remove('hidden');
+        const ctx = document.getElementById('spendByCategoryChart');
+        const top = summary.spendByCategory.slice(0, 6);
+        if (spendChart) spendChart.destroy();
+        spendChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: top.map(c => c.name),
+            datasets: [{ data: top.map(c => c.total), backgroundColor: '#3b82f6' }]
+          },
+          options: {
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: { x: { ticks: { callback: v => '$' + v } } }
+          }
+        });
+      }
+
+      if (widgets.balanceTrend !== false && summary.balanceTrend.length > 0) {
+        document.getElementById('balanceTrendWidget').classList.remove('hidden');
+        const ctx = document.getElementById('balanceTrendChart');
+        if (trendChart) trendChart.destroy();
+        trendChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: summary.balanceTrend.map(p => p.date),
+            datasets: [{ data: summary.balanceTrend.map(p => p.balance), borderColor: '#10b981', tension: 0.2, pointRadius: 0 }]
+          },
+          options: {
+            plugins: { legend: { display: false } },
+            scales: { x: { ticks: { maxTicksLimit: 6 } }, y: { ticks: { callback: v => '$' + v } } }
+          }
+        });
+      }
+    }
+
+    document.getElementById('summaryDays').addEventListener('change', (e) => {
+      const widgets = {
+        netWorth: document.getElementById('widgetNetWorth').checked,
+        spendByCategory: document.getElementById('widgetSpendByCategory').checked,
+        balanceTrend: document.getElementById('widgetBalanceTrend').checked,
+      };
+      loadDashboardWidgets(widgets, e.target.value);
+    });
 
     document.getElementById('configForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -153,23 +356,79 @@
         emailUser: document.getElementById('emailUser').value,
         emailPass: document.getElementById('emailPass').value,
         emailTo: document.getElementById('emailTo').value,
+        dashboardWidgets: {
+          netWorth: document.getElementById('widgetNetWorth').checked,
+          spendByCategory: document.getElementById('widgetSpendByCategory').checked,
+          balanceTrend: document.getElementById('widgetBalanceTrend').checked,
+        },
+        emailSections: {
+          balances: document.getElementById('emailSectionBalances').checked,
+          transactions: document.getElementById('emailSectionTransactions').checked,
+        },
       };
-      await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-      });
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(config)
+        });
+        if (!res.ok) { showError('Failed to save configuration.'); return; }
+      } catch (err) {
+        showError('Could not reach the server. Configuration was not saved.');
+        return;
+      }
       document.getElementById('postSaveSyncBtn').classList.remove('hidden');
+      loadConfig();
     });
 
     // --- Sync Trigger ---
+    let syncPollInterval = null;
+
+    function setSyncButtonBusy(btnElement, busy) {
+      btnElement.disabled = busy;
+      btnElement.innerText = busy ? 'Syncing…' : (btnElement.id === 'postSaveSyncBtn' ? 'Test Connection & Sync Now' : 'Trigger Manual Sync');
+    }
+
+    async function pollSyncStatus(btnElement) {
+      const MAX_POLLS = 200; // ~5 minutes at 1.5s intervals, in case something hangs
+      let polls = 0;
+      clearInterval(syncPollInterval);
+      syncPollInterval = setInterval(async () => {
+        polls++;
+        try {
+          const res = await fetch('/api/sync/status');
+          if (res.status === 401) { clearInterval(syncPollInterval); window.location.href = '/login.html'; return; }
+          const status = await res.json();
+          if (!status.syncing || polls >= MAX_POLLS) {
+            clearInterval(syncPollInterval);
+            setSyncButtonBusy(btnElement, false);
+          }
+        } catch (err) {
+          clearInterval(syncPollInterval);
+          setSyncButtonBusy(btnElement, false);
+        }
+      }, 1500);
+    }
+
     async function triggerSync(btnElement) {
-      btnElement.innerText = "Syncing...";
-      await fetch('/api/sync', { method: 'POST' });
-      setTimeout(() => { btnElement.innerText = "Trigger Manual Sync"; }, 2000);
+      setSyncButtonBusy(btnElement, true);
+      try {
+        const res = await fetch('/api/sync', { method: 'POST' });
+        if (!res.ok) { showError('Failed to start sync.'); setSyncButtonBusy(btnElement, false); return; }
+      } catch (err) {
+        showError('Could not reach the server. Sync was not started.');
+        setSyncButtonBusy(btnElement, false);
+        return;
+      }
+      pollSyncStatus(btnElement);
     }
     document.getElementById('triggerSyncBtn').addEventListener('click', function() { triggerSync(this); });
     document.getElementById('postSaveSyncBtn').addEventListener('click', function() { triggerSync(this); });
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    });
 
     // --- LIVE LOG STREAMING ---
     const viewer = document.getElementById('logViewer');
@@ -181,6 +440,13 @@
         viewer.value = logs;
         viewer.scrollTop = viewer.scrollHeight;
       }
+    };
+    let logStreamErrorShown = false;
+    evtSource.onerror = () => {
+      if (!logStreamErrorShown) { showError('Live log stream disconnected. Reconnecting…'); logStreamErrorShown = true; }
+    };
+    evtSource.onopen = () => {
+      if (logStreamErrorShown) { hideError(); logStreamErrorShown = false; }
     };
 
     loadConfig();

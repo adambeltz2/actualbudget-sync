@@ -11,3 +11,7 @@ services:
       - ./logs:/app/logs
     environment:
       - TIMEZONE=America/New_York
+      # Optional: set this to encrypt actualPassword/emailPass at rest in
+      # data/config.json. Pick your own value and keep it outside version
+      # control; changing it later makes existing saved secrets unreadable.
+      # - CONFIG_ENCRYPTION_KEY=change-me-to-a-long-random-value

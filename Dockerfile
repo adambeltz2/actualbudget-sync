@@ -21,5 +21,10 @@ RUN mkdir -p /data /app/logs
 # Expose the dashboard port
 EXPOSE 3000
 
+# Verifies the Express server is actually accepting requests, not just that
+# the process is running (npm install failures etc. would still exit early).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/healthz', res => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+
 # Start the application
 CMD ["node", "index.js"]
