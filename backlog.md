@@ -42,3 +42,34 @@ Affected files: `src/actualService.js`, `src/routes.js`, `src/config.js`, `publi
 ## P3 — Customized email report templating — DONE
 `src/emailReport.js` now takes a `sections` config (`config.emailSections.balances` / `.transactions`) and conditionally includes the balances table and/or the new-transactions list; the bank-connection-issue alert always shows regardless, since that's not something users should be able to silence. Added checkboxes for both sections in the Email Notifications block of `public/index.html`. Used `lodash`'s `_.escape()` for user-provided text (account/payee names) instead of adding a template engine — `lodash` is already a dependency and covers the escaping need, so no new dependency (e.g. Handlebars) was introduced.
 Affected files: `src/emailReport.js`, `src/syncJob.js`, `src/config.js`, `public/index.html`
+
+## P4 — UI/UX polish
+Found during a UI/UX pass over the dashboard/explorer built in P1-P3. Ordered by priority (correctness/safety first, cosmetic last).
+
+### [BUG] Fetch errors are silently swallowed in the UI
+`public/index.html` and `public/explorer.html` mostly `if (result.error) return;` on a failed fetch — a bad request or backend error just leaves a blank widget/table with no explanation to the user.
+Affected files: `public/index.html`, `public/explorer.html`
+
+### [BUG] First-run dashboard password has no confirmation field
+`public/login.html` sets the dashboard password from whatever's typed on first login, with a single password field. A typo locks the user out with no recovery path short of editing `config.json` directly.
+Affected files: `public/login.html`
+
+### [FEATURE] Mask the Actual Budget password field instead of showing plaintext
+`public/index.html` pre-fills `actualPassword` with the real stored value on every load. Should follow a "change password" pattern (masked placeholder, only sent if the user retypes it) instead of round-tripping the plaintext into the DOM.
+Affected files: `public/index.html`, `src/routes.js`
+
+### [BUG] Manual sync button resets after a fixed 2s regardless of actual completion
+`triggerSync()` in `public/index.html` sets the button back to its default label after `setTimeout(..., 2000)`, but a real sync takes 20+ seconds (the SimpleFIN wait) — the button is misleading before the sync is anywhere near done.
+Affected files: `public/index.html`
+
+### [FEATURE] Sortable transaction columns and adjustable dashboard time range
+Explorer transactions are fixed to date-descending with no way to sort by other columns; dashboard widgets are hardcoded to 30 days even though `/api/data/summary` already accepts `?days=`.
+Affected files: `public/explorer.html`, `public/index.html`, `src/actualService.js`, `src/routes.js`
+
+### [FEATURE] Move dashboard widget visibility controls next to the widgets
+Widget show/hide checkboxes live in the config form, well below the widgets themselves — not discoverable without scrolling. A settings affordance directly on the Dashboard section header would be more usable.
+Affected files: `public/index.html`
+
+### [FEATURE] Dark mode
+No dark mode; Tailwind CDN default light theme only. Low priority, but a reasonable fit for a personal-finance dashboard often checked in the evening.
+Affected files: `public/index.html`, `public/explorer.html`, `public/login.html`
