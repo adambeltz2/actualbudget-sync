@@ -73,3 +73,13 @@ Affected files: `public/index.html`
 ### [FEATURE] Dark mode — DONE
 Added a dark mode toggle (🌙/☀️ button) on all three pages using Tailwind's `class`-based dark mode strategy, with the preference saved to `localStorage` and falling back to `prefers-color-scheme` on first visit.
 Affected files: `public/index.html`, `public/explorer.html`, `public/login.html`
+
+## P5 — Test coverage & container health check
+
+### [DEBT] No automated tests — DONE
+Added a unit test layer under `test/` using Node's built-in `node:test`/`node:assert` (no new dependency) with 32 tests covering: `auth.js` (hash/verify, session sign/verify incl. tampered/expired/wrong-secret tokens, cookie parsing), `secretCrypto.js` (encrypt/decrypt round trip, idempotent re-encryption, no-op when `CONFIG_ENCRYPTION_KEY` is unset), `emailReport.js` (subject/section toggles, HTML escaping of user-provided text), and `actualService.js`'s transaction filter/sort building (exported for testability). Run via `npm test`. Route-level integration tests and anything requiring a live Actual Budget connection are still out of scope for this pass.
+Affected files: `test/*.test.js`, `package.json`, `src/actualService.js`
+
+### [FEATURE] Docker health check — DONE
+Added an unauthenticated `GET /healthz` (mounted before the auth middleware in `index.js`) and a `HEALTHCHECK` instruction in the `Dockerfile` that probes it via Node's built-in `http` module — no `curl`/`wget` dependency needed in the slim image.
+Affected files: `index.js`, `Dockerfile`

@@ -12,6 +12,10 @@ const actualService = require('./src/actualService');
 
 const app = express();
 app.use(express.json());
+
+// Unauthenticated so Docker/Compose can probe it without credentials.
+app.get('/healthz', (req, res) => res.status(200).json({ status: 'ok' }));
+
 app.use(requireAuth);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(routes);

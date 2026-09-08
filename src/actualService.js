@@ -163,5 +163,7 @@ module.exports = {
   ensureReady, refreshBudget, getAccounts, getAccountBalance,
   getTransactionsForAccount, getCategories, queryTransactions,
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
-  runBankSync, shutdown, isReady
+  runBankSync, shutdown, isReady,
+  // Exported for unit testing (pure functions, no @actual-app/api calls).
+  buildTransactionFilters, SORT_ORDERS
 };
