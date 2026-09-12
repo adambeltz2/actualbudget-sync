@@ -187,13 +187,17 @@
         </div>
       </div>
 
-      <!-- Three-up row -->
-      <div class="grid-3" style="margin-bottom:20px;">
-        <div class="card" style="padding:22px;">
-          <div class="label-caps" style="margin-bottom:12px;">Accounts</div>
-          <div id="accountsList" style="display:flex; flex-direction:column;"></div>
-        </div>
+      <!-- Accounts: full width, since a real budget's account list can run to
+           dozens of entries — a compact multi-column tile grid with a height
+           cap reads far better than a single tall column squeezed next to
+           two much shorter chart cards. -->
+      <div class="card" style="padding:22px; margin-bottom:20px;">
+        <div class="label-caps" style="margin-bottom:12px;">Accounts</div>
+        <div id="accountsList" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:10px; max-height:420px; overflow-y:auto; padding-right:4px;"></div>
+      </div>
 
+      <!-- Two-up row -->
+      <div class="grid-2" style="margin-bottom:20px;">
         <div id="spendByCategoryWidget" hidden class="card" style="padding:22px; display:flex; flex-direction:column;">
           <div class="label-caps" style="margin-bottom:12px;">Spend by Category</div>
           <div style="position:relative; flex:1; display:flex; align-items:center; justify-content:center; min-height:150px;">
@@ -451,8 +455,8 @@
   </div>
 
   <script>
-    fetch('/api/version').then(r => r.json()).then(({ version }) => {
-      document.getElementById('appVersion').innerText = version ? `v${version}` : '';
+    fetch('/api/version').then(r => r.json()).then(({ version, commit }) => {
+      document.getElementById('appVersion').innerText = version ? `v${version}${commit ? ` (${commit})` : ''}` : '';
     }).catch(() => {});
 
     const ACCENT = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0EA894';
@@ -627,12 +631,12 @@
     function renderAccounts(accounts) {
       const list = document.getElementById('accountsList');
       list.innerHTML = accounts.map((a, i) => `
-        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
-          <div style="display:flex; align-items:center; gap:10px; min-width:0;">
-            <span style="width:9px; height:9px; border-radius:50%; background:${ACCOUNT_PALETTE[i % ACCOUNT_PALETTE.length]}; flex-shrink:0;"></span>
-            <span style="font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</span>
+        <div class="card-soft" style="padding:11px 13px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <div style="display:flex; align-items:center; gap:9px; min-width:0;">
+            <span style="width:8px; height:8px; border-radius:50%; background:${ACCOUNT_PALETTE[i % ACCOUNT_PALETTE.length]}; flex-shrink:0;"></span>
+            <span title="${a.name}" style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</span>
           </div>
-          <span class="num" style="font-weight:700; font-size:14px; color:${a.balance < 0 ? 'var(--negative)' : 'var(--text)'}; flex-shrink:0; margin-left:10px;">${formatCurrency(a.balance)}</span>
+          <span class="num" style="font-weight:700; font-size:13.5px; color:${a.balance < 0 ? 'var(--negative)' : 'var(--text)'}; flex-shrink:0;">${formatCurrency(a.balance)}</span>
         </div>`).join('') || `<p style="color:var(--text-muted); font-size:13px;">No accounts yet.</p>`;
     }
 

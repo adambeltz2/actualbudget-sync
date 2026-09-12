@@ -172,8 +172,8 @@
   </div>
 
   <script>
-    fetch('/api/version').then(r => r.json()).then(({ version }) => {
-      document.getElementById('appVersion').innerText = version ? `v${version}` : '';
+    fetch('/api/version').then(r => r.json()).then(({ version, commit }) => {
+      document.getElementById('appVersion').innerText = version ? `v${version}${commit ? ` (${commit})` : ''}` : '';
     }).catch(() => {});
 
     const ACCOUNT_PALETTE = ['#0EA894', '#4C8DAE', '#8B7FD1', '#E8A33D', '#9C7A54'];

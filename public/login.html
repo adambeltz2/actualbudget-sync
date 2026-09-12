@@ -63,8 +63,8 @@
   </footer>
 
   <script>
-    fetch('/api/version').then(r => r.json()).then(({ version }) => {
-      document.getElementById('appVersion').innerText = version ? `v${version}` : '';
+    fetch('/api/version').then(r => r.json()).then(({ version, commit }) => {
+      document.getElementById('appVersion').innerText = version ? `v${version}${commit ? ` (${commit})` : ''}` : '';
     }).catch(() => {});
 
     try {

@@ -14,9 +14,13 @@ const { requireAdmin } = auth;
 const { version } = require('../package.json');
 
 // Public (see PUBLIC_PATHS in auth.js) so the version shows in the footer
-// even on the login page, before a session exists.
+// even on the login page, before a session exists. `commit` is the short git
+// SHA baked in at image build time (see Dockerfile/publish.yml) — package.json's
+// version rarely changes, so it alone can't tell a user whether they've
+// actually pulled the latest image; the commit can.
 router.get('/api/version', (req, res) => {
-  res.json({ version });
+  const commit = process.env.GIT_COMMIT ? process.env.GIT_COMMIT.slice(0, 7) : null;
+  res.json({ version, commit });
 });
 
 // --- Config ---
