@@ -20,7 +20,7 @@ function defaultConfig() {
     viewerPasswordHash: '',
     dashboardWidgets: { incomeVsSpend: true, incomeVsSpendYTD: true, spendByCategory: true, balanceTrend: true, budgetVsActual: true, insights: true, financialHealth: true },
     insightsAnnualReturnPct: 7,
-    emergencyFundAccountIds: [], financialHealthTargetMonths: 6, financialHealthTargetSavingsPct: 20,
+    emergencyFundAccountIds: [], investmentAccountIds: [], financialHealthTargetMonths: 6, financialHealthTargetSavingsPct: 20,
     emailSections: { balances: true, transactions: true, budgetVsActual: true },
     lastSyncAt: null, lastSyncStatus: null, lastSyncError: null,
     webhookEnabled: false, webhookPlatform: 'discord', webhookUrl: ''

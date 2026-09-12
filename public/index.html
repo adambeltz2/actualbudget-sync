@@ -303,10 +303,25 @@
           </div>
         </div>
 
+        <div class="label-caps" style="margin-bottom:8px;">Net Worth Breakdown</div>
+        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px;">
+          <div id="fhNetWorthValue" class="num" style="font-size:20px; font-weight:800;">—</div>
+        </div>
+        <div style="display:flex; height:14px; border-radius:999px; overflow:hidden; margin-bottom:12px; background:var(--track);">
+          <div id="fhNwLiquidBar" style="background:var(--accent);"></div>
+          <div id="fhNwInvestmentBar" style="background:#6C8EF5;"></div>
+          <div id="fhNwDebtBar" style="background:var(--negative);"></div>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:16px; font-size:12px; color:var(--text-muted); margin-bottom:22px;">
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:var(--accent); display:inline-block;"></span>Liquid <span id="fhNwLiquidValue" class="num" style="color:var(--text); font-weight:700;"></span></span>
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:#6C8EF5; display:inline-block;"></span>Investments <span id="fhNwInvestmentValue" class="num" style="color:var(--text); font-weight:700;"></span></span>
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:var(--negative); display:inline-block;"></span>Debt <span id="fhNwDebtValue" class="num" style="color:var(--text); font-weight:700;"></span></span>
+        </div>
+
         <div class="label-caps" style="margin-bottom:8px;">What This Means</div>
         <div id="fhRecommendations" style="display:flex; flex-direction:column;"></div>
 
-        <p class="field-hint" style="margin-top:14px; margin-bottom:0;">Emergency Fund and Debt Load use simplified proxies — average recent spend stands in for "essential" expenses, and Debt Load measures account balances rather than actual monthly payments. Set which accounts count as liquid savings under <strong>Emergency Fund Accounts</strong> below. These are a starting point for your own judgment, not financial advice.</p>
+        <p class="field-hint" style="margin-top:14px; margin-bottom:0;">Emergency Fund and Debt Load use simplified proxies — average recent spend stands in for "essential" expenses, and Debt Load measures account balances rather than actual monthly payments. Set which accounts count as liquid savings or investments under <strong>Emergency Fund Accounts</strong> and <strong>Investment Accounts</strong> below. These are a starting point for your own judgment, not financial advice.</p>
       </div>
 
       <!-- Financial Insights -->
@@ -514,6 +529,15 @@
         </div>
       </div>
 
+      <!-- Investment Accounts -->
+      <div class="card" style="padding:22px;">
+        <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Investment Accounts</div>
+        <p class="field-hint" style="margin-top:0; margin-bottom:14px;">Same limitation as above — check which accounts (brokerage, 401k, IRA, etc.) should count as investments for the Net Worth Breakdown on the Financial Health Check widget. An account can't be both liquid and investment.</p>
+        <div id="investmentAccountList" style="display:flex; flex-direction:column;">
+          <p class="field-hint" style="margin:0;">Configure Actual Budget above and save to see your accounts here.</p>
+        </div>
+      </div>
+
       <!-- Backup & Restore -->
       <div class="card" style="padding:22px;">
         <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Backup &amp; Restore</div>
@@ -702,6 +726,7 @@
       document.getElementById('fhEfTarget').value = config.financialHealthTargetMonths ?? 6;
       document.getElementById('fhSrTarget').value = config.financialHealthTargetSavingsPct ?? 20;
       emergencyFundAccountIds = config.emergencyFundAccountIds || [];
+      investmentAccountIds = config.investmentAccountIds || [];
 
       const sections = config.emailSections || {};
       document.getElementById('emailSectionBalances').checked = sections.balances !== false;
@@ -714,6 +739,7 @@
         renderLastSyncPill(config.lastSyncAt, config.lastSyncStatus, config.lastSyncError);
         loadDashboardWidgets(widgets, document.getElementById('summaryMonth').value);
         loadEmergencyFundAccountList();
+        loadInvestmentAccountList();
       }
     }
 
@@ -750,6 +776,7 @@
     let spendChart = null;
     let trendChart = null;
     let emergencyFundAccountIds = [];
+    let investmentAccountIds = [];
 
     function renderAccounts(accounts) {
       const list = document.getElementById('accountsList');
@@ -788,8 +815,46 @@
           const id = e.target.dataset.accountId;
           if (e.target.checked) {
             if (!emergencyFundAccountIds.includes(id)) emergencyFundAccountIds.push(id);
+            investmentAccountIds = investmentAccountIds.filter(existing => existing !== id);
+            const investmentCb = document.querySelector(`.investmentCheckbox[data-account-id="${id}"]`);
+            if (investmentCb) investmentCb.checked = false;
           } else {
             emergencyFundAccountIds = emergencyFundAccountIds.filter(existing => existing !== id);
+          }
+        });
+      });
+    }
+
+    async function loadInvestmentAccountList() {
+      let accounts;
+      try {
+        const res = await fetch('/api/data/accounts');
+        accounts = await res.json();
+        if (accounts.error) return;
+      } catch (err) {
+        return;
+      }
+
+      const container = document.getElementById('investmentAccountList');
+      container.innerHTML = accounts.map(a => `
+        <label style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid var(--border); cursor:pointer;">
+          <span style="display:flex; align-items:center; gap:10px; min-width:0;">
+            <input type="checkbox" class="investmentCheckbox" data-account-id="${a.id}" ${investmentAccountIds.includes(a.id) ? 'checked' : ''}>
+            <span title="${a.name}" style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</span>
+          </span>
+          <span class="num" style="font-weight:700; font-size:13.5px; color:${a.balance < 0 ? 'var(--negative)' : 'var(--text)'}; flex-shrink:0;">${formatCurrency(a.balance)}</span>
+        </label>`).join('') || `<p class="field-hint" style="margin:0;">No accounts yet.</p>`;
+
+      document.querySelectorAll('.investmentCheckbox').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+          const id = e.target.dataset.accountId;
+          if (e.target.checked) {
+            if (!investmentAccountIds.includes(id)) investmentAccountIds.push(id);
+            emergencyFundAccountIds = emergencyFundAccountIds.filter(existing => existing !== id);
+            const efCb = document.querySelector(`.emergencyFundCheckbox[data-account-id="${id}"]`);
+            if (efCb) efCb.checked = false;
+          } else {
+            investmentAccountIds = investmentAccountIds.filter(existing => existing !== id);
           }
         });
       });
@@ -1109,6 +1174,16 @@
         : 'No outstanding debt';
       document.getElementById('fhDlPill').innerHTML = pillHtml(data.debtLoad.status);
 
+      const nw = data.netWorthBreakdown || { liquid: 0, investment: 0, debt: 0, netWorth: 0 };
+      const nwTotal = nw.liquid + nw.investment + nw.debt;
+      document.getElementById('fhNetWorthValue').innerText = formatCurrency(nw.netWorth);
+      document.getElementById('fhNwLiquidBar').style.width = (nwTotal > 0 ? (nw.liquid / nwTotal) * 100 : 0) + '%';
+      document.getElementById('fhNwInvestmentBar').style.width = (nwTotal > 0 ? (nw.investment / nwTotal) * 100 : 0) + '%';
+      document.getElementById('fhNwDebtBar').style.width = (nwTotal > 0 ? (nw.debt / nwTotal) * 100 : 0) + '%';
+      document.getElementById('fhNwLiquidValue').innerText = formatCurrency(nw.liquid);
+      document.getElementById('fhNwInvestmentValue').innerText = formatCurrency(nw.investment);
+      document.getElementById('fhNwDebtValue').innerText = formatCurrency(nw.debt);
+
       document.getElementById('fhRecommendations').innerHTML = data.recommendations.map(r => `
         <div style="display:flex; align-items:flex-start; gap:10px; padding:11px 0; border-bottom:1px solid var(--border);">
           <span style="width:9px; height:9px; border-radius:50%; flex-shrink:0; margin-top:4px; background:${fillColor(r.status)};"></span>
@@ -1203,6 +1278,7 @@
         },
         insightsAnnualReturnPct: parseFloat(document.getElementById('insightsReturnRate').value),
         emergencyFundAccountIds: emergencyFundAccountIds,
+        investmentAccountIds: investmentAccountIds,
         financialHealthTargetMonths: parseInt(document.getElementById('fhEfTarget').value, 10),
         financialHealthTargetSavingsPct: parseFloat(document.getElementById('fhSrTarget').value),
         emailSections: {

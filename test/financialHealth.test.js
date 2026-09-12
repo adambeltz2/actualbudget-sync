@@ -2,7 +2,7 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   computeEmergencyFund, computeSavingsRate, computeDebtLoad,
-  computeOverallScore, buildRecommendations
+  computeOverallScore, buildRecommendations, computeNetWorthBreakdown
 } = require('../src/financialHealth');
 
 describe('computeEmergencyFund', () => {
@@ -142,5 +142,32 @@ describe('buildRecommendations', () => {
     const recs = buildRecommendations({ emergencyFund, savingsRate, debtLoad });
     assert.equal(recs.length, 1);
     assert.match(recs[0].message, /debt/);
+  });
+});
+
+describe('computeNetWorthBreakdown', () => {
+  test('liquid + investment - debt equals net worth', () => {
+    const result = computeNetWorthBreakdown({ netWorth: 15000, investmentBalance: 8000, debtTotal: 1000 });
+    assert.equal(result.investment, 8000);
+    assert.equal(result.debt, 1000);
+    assert.equal(result.liquid, 8000);
+    assert.equal(result.liquid + result.investment - result.debt, result.netWorth);
+  });
+
+  test('no investment accounts tagged means all net worth is liquid (net of debt)', () => {
+    const result = computeNetWorthBreakdown({ netWorth: 5000, investmentBalance: 0, debtTotal: 500 });
+    assert.equal(result.investment, 0);
+    assert.equal(result.liquid, 5500);
+  });
+
+  test('liquid never goes negative even if debt/investment overstate net worth', () => {
+    const result = computeNetWorthBreakdown({ netWorth: 1000, investmentBalance: 20000, debtTotal: 0 });
+    assert.equal(result.liquid, 0);
+  });
+
+  test('a negative investment balance is treated as zero investment', () => {
+    const result = computeNetWorthBreakdown({ netWorth: 1000, investmentBalance: -200, debtTotal: 0 });
+    assert.equal(result.investment, 0);
+    assert.equal(result.liquid, 1000);
   });
 });

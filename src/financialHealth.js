@@ -87,7 +87,18 @@ function buildRecommendations({ emergencyFund, savingsRate, debtLoad }) {
   return recs;
 }
 
+// Splits net worth into liquid / investment / debt for the Net Worth
+// Breakdown display. Investment accounts are also manually tagged (same
+// reasoning as emergency fund accounts — Actual has no account-type field),
+// so "liquid" here is simply whatever's left once investment and debt are
+// accounted for: liquid + investment - debt = netWorth.
+function computeNetWorthBreakdown({ netWorth, investmentBalance, debtTotal }) {
+  const investment = Math.max(investmentBalance, 0);
+  const liquid = Math.max(netWorth - investment + debtTotal, 0);
+  return { liquid, investment, debt: debtTotal, netWorth };
+}
+
 module.exports = {
   computeEmergencyFund, computeSavingsRate, computeDebtLoad,
-  computeOverallScore, buildRecommendations
+  computeOverallScore, buildRecommendations, computeNetWorthBreakdown
 };

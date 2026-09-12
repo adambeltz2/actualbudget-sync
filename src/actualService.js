@@ -2,7 +2,7 @@ const api = require('@actual-app/api');
 const { q } = require('@actual-app/api');
 const { logger } = require('./logger');
 const { buildSpendingInsights, buildBalanceProjection } = require('./insights');
-const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations } = require('./financialHealth');
+const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations, computeNetWorthBreakdown } = require('./financialHealth');
 
 // Kept open across sync cycles instead of init()/shutdown() per run, so the
 // downloaded budget stays queryable between syncs (needed by the data
@@ -388,11 +388,12 @@ async function getFinancialInsights({ months = 6, annualReturnRatePct = 7 } = {}
   };
 }
 
-// Combines account balances (which accounts count as liquid savings is a
-// user setting, not something Actual's data can tell us — it only has
-// names and balances, no checking/savings/investment distinction) with
-// recent income/spend to produce the Financial Health Check widget's data.
-async function getFinancialHealthData({ emergencyFundAccountIds = [], targetMonths = 6, targetSavingsPct = 20 } = {}) {
+// Combines account balances (which accounts count as liquid savings or
+// investments is a user setting, not something Actual's data can tell us —
+// it only has names and balances, no checking/savings/investment
+// distinction) with recent income/spend to produce the Financial Health
+// Check widget's data.
+async function getFinancialHealthData({ emergencyFundAccountIds = [], investmentAccountIds = [], targetMonths = 6, targetSavingsPct = 20 } = {}) {
   const accounts = await getAccounts();
   const balances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
 
@@ -401,6 +402,9 @@ async function getFinancialHealthData({ emergencyFundAccountIds = [], targetMont
     0
   );
   const debtTotal = balances.reduce((sum, b) => sum + (b.balance < 0 ? -b.balance : 0), 0);
+  const netWorth = balances.reduce((sum, b) => sum + b.balance, 0);
+  const investmentBalance = balances.filter(b => investmentAccountIds.includes(b.id)).reduce((sum, b) => sum + b.balance, 0);
+  const netWorthBreakdown = computeNetWorthBreakdown({ netWorth, investmentBalance, debtTotal });
 
   // Averaged over the last 3 complete calendar months (excluding the
   // current, possibly-partial month) so checking this on the 2nd of the
@@ -420,7 +424,7 @@ async function getFinancialHealthData({ emergencyFundAccountIds = [], targetMont
   const { overall, label } = computeOverallScore({ emergencyFund, savingsRate, debtLoad });
   const recommendations = buildRecommendations({ emergencyFund, savingsRate, debtLoad });
 
-  return { overall, label, emergencyFund, savingsRate, debtLoad, recommendations, liquidBalance, monthlyIncome, monthlyAvgSpend };
+  return { overall, label, emergencyFund, savingsRate, debtLoad, recommendations, liquidBalance, monthlyIncome, monthlyAvgSpend, netWorthBreakdown };
 }
 
 async function runBankSync() {

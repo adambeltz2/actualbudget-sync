@@ -275,6 +275,7 @@ router.get('/api/data/financial-health', async (req, res) => {
       : (config.financialHealthTargetSavingsPct ?? 20);
     const health = await actualService.getFinancialHealthData({
       emergencyFundAccountIds: config.emergencyFundAccountIds || [],
+      investmentAccountIds: config.investmentAccountIds || [],
       targetMonths, targetSavingsPct
     });
     res.json(health);
