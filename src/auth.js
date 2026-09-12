@@ -6,7 +6,7 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Routes reachable without a session: the login page itself and the two
 // endpoints it calls to check setup state and authenticate.
-const PUBLIC_PATHS = new Set(['/login.html', '/api/auth/status', '/api/auth/login']);
+const PUBLIC_PATHS = new Set(['/login.html', '/api/auth/status', '/api/auth/login', '/api/version']);
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const derived = crypto.scryptSync(password, salt, 64).toString('hex');

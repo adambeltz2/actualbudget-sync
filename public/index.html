@@ -438,9 +438,19 @@
       <div class="num" style="font-size:16px; font-weight:700; margin-bottom:10px;">Live System Logs</div>
       <textarea id="logViewer" style="width:100%; height:280px; font-family:monospace; font-size:12px; padding:14px; border-radius:10px; line-height:1.5;" readonly></textarea>
     </div>
+
+    <footer style="display:flex; align-items:center; justify-content:center; gap:14px; font-size:12px; color:var(--text-muted); margin-top:28px; padding-top:20px; border-top:1px solid var(--border);">
+      <span>Actual Budget Smart Sync <span id="appVersion"></span></span>
+      <a href="https://github.com/adambeltz2/actualbudget-sync" target="_blank" rel="noopener" style="color:var(--text-muted);">GitHub</a>
+      <a href="https://www.buymeacoffee.com/adambeltz" target="_blank" rel="noopener" style="color:var(--text-muted);">☕ Buy Me a Coffee</a>
+    </footer>
   </div>
 
   <script>
+    fetch('/api/version').then(r => r.json()).then(({ version }) => {
+      document.getElementById('appVersion').innerText = version ? `v${version}` : '';
+    }).catch(() => {});
+
     const ACCENT = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0EA894';
     // Canvas contexts don't resolve CSS custom properties passed as color
     // strings, so Chart.js colors need real values resolved up front (same

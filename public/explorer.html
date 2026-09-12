@@ -163,9 +163,19 @@
         </div>
       </div>
     </div>
+
+    <footer style="display:flex; align-items:center; justify-content:center; gap:14px; font-size:12px; color:var(--text-muted); margin-top:28px; padding-top:20px; border-top:1px solid var(--border);">
+      <span>Actual Budget Smart Sync <span id="appVersion"></span></span>
+      <a href="https://github.com/adambeltz2/actualbudget-sync" target="_blank" rel="noopener" style="color:var(--text-muted);">GitHub</a>
+      <a href="https://www.buymeacoffee.com/adambeltz" target="_blank" rel="noopener" style="color:var(--text-muted);">☕ Buy Me a Coffee</a>
+    </footer>
   </div>
 
   <script>
+    fetch('/api/version').then(r => r.json()).then(({ version }) => {
+      document.getElementById('appVersion').innerText = version ? `v${version}` : '';
+    }).catch(() => {});
+
     const ACCOUNT_PALETTE = ['#0EA894', '#4C8DAE', '#8B7FD1', '#E8A33D', '#9C7A54'];
 
     // --- Theme ---
