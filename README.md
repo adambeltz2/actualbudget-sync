@@ -95,4 +95,8 @@ The dashboard (`/`) shows Income vs Spend for the current month and year-to-date
 
 Set an optional **Dashboard URL** in the Email Notifications section to add a "View Full Report" button to sync emails, linking back to this dashboard.
 
+Use **Test Connection** in the Actual Budget Configuration card to verify your Server URL/Sync ID before saving — it reports back immediately instead of requiring a save-and-sync-then-check-logs cycle.
+
+**Backup & Restore** on the dashboard lets you download your full configuration as JSON and restore it later (e.g. after moving to a new host). The backup file contains your Actual Budget and SMTP credentials in plain text regardless of `CONFIG_ENCRYPTION_KEY` — it's meant to be stored securely by you, not left lying around.
+
 The **Data Explorer** (linked from the dashboard) lists account balances and lets you filter transactions by account, category, date range, and payee, with pagination and a CSV export of the current filter.
