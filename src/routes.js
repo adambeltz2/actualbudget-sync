@@ -234,6 +234,23 @@ router.get('/api/data/summary', async (req, res) => {
   }
 });
 
+router.get('/api/data/insights', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const months = Math.min(Math.max(parseInt(req.query.months, 10) || 6, 3), 24);
+    const annualReturnRatePct = req.query.annualReturnPct !== undefined
+      ? Math.min(Math.max(parseFloat(req.query.annualReturnPct), -20), 30)
+      : (config.insightsAnnualReturnPct ?? 7);
+    const insights = await actualService.getFinancialInsights({ months, annualReturnRatePct });
+    res.json(insights);
+  } catch (err) {
+    logger.error('Financial insights request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to compute financial insights.' });
+  }
+});
+
 function csvEscape(value) {
   const str = String(value ?? '');
   return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;

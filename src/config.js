@@ -18,7 +18,8 @@ function defaultConfig() {
     publicUrl: '',
     dashboardPasswordHash: '', sessionSecret: crypto.randomBytes(32).toString('hex'),
     viewerPasswordHash: '',
-    dashboardWidgets: { incomeVsSpend: true, incomeVsSpendYTD: true, spendByCategory: true, balanceTrend: true, budgetVsActual: true },
+    dashboardWidgets: { incomeVsSpend: true, incomeVsSpendYTD: true, spendByCategory: true, balanceTrend: true, budgetVsActual: true, insights: true },
+    insightsAnnualReturnPct: 7,
     emailSections: { balances: true, transactions: true, budgetVsActual: true },
     lastSyncAt: null, lastSyncStatus: null, lastSyncError: null,
     webhookEnabled: false, webhookPlatform: 'discord', webhookUrl: ''

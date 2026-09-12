@@ -139,6 +139,7 @@
         <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetSpendByCategory"> Spend by Category</label>
         <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetBalanceTrend"> Balance Trend</label>
         <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetBudgetVsActual"> Spend vs Budget</label>
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetInsights"> Financial Insights</label>
       </div>
 
       <!-- Income vs Spend (month) -->
@@ -218,6 +219,45 @@
           </div>
         </div>
         <div id="budgetRows" style="display:flex; flex-direction:column; gap:16px;"></div>
+      </div>
+
+      <!-- Financial Insights -->
+      <div id="insightsWidget" hidden class="card" style="padding:26px 32px; margin-top:20px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:10px;">
+          <div class="label-caps">Financial Insights</div>
+          <div style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-muted);">
+            <span>Assumed annual return</span>
+            <select id="insightsReturnRate" style="font-size:13px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); padding:5px 7px;">
+              <option value="0">0% (savings pace only)</option>
+              <option value="4">4%</option>
+              <option value="7" selected>7% (long-run market average)</option>
+              <option value="10">10%</option>
+            </select>
+          </div>
+        </div>
+        <p class="field-hint" style="margin-top:0; margin-bottom:18px;">Projections are estimates from your own historical spending and balance trends, not financial advice.</p>
+
+        <div id="spendingTrendsSection" style="margin-bottom:22px;">
+          <div style="font-size:13px; font-weight:700; color:var(--text-secondary); margin-bottom:10px;">Spending Trends</div>
+          <div id="spendingTrendsList" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+
+        <div>
+          <div style="font-size:13px; font-weight:700; color:var(--text-secondary); margin-bottom:10px;">Balance Projection</div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:13.5px;">
+              <thead>
+                <tr>
+                  <th style="text-align:left; padding:8px 10px; color:var(--text-muted); font-weight:700; border-bottom:1px solid var(--border);">Horizon</th>
+                  <th style="text-align:right; padding:8px 10px; color:var(--text-muted); font-weight:700; border-bottom:1px solid var(--border);">If current pace continues</th>
+                  <th style="text-align:right; padding:8px 10px; color:var(--text-muted); font-weight:700; border-bottom:1px solid var(--border);">Invested at assumed return</th>
+                </tr>
+              </thead>
+              <tbody id="projectionRows"></tbody>
+            </table>
+          </div>
+          <p id="projectionFootnote" class="field-hint" style="margin-bottom:0;"></p>
+        </div>
       </div>
     </div>
 
@@ -501,6 +541,8 @@
       document.getElementById('widgetSpendByCategory').checked = widgets.spendByCategory !== false;
       document.getElementById('widgetBalanceTrend').checked = widgets.balanceTrend !== false;
       document.getElementById('widgetBudgetVsActual').checked = widgets.budgetVsActual !== false;
+      document.getElementById('widgetInsights').checked = widgets.insights !== false;
+      document.getElementById('insightsReturnRate').value = config.insightsAnnualReturnPct ?? 7;
 
       const sections = config.emailSections || {};
       document.getElementById('emailSectionBalances').checked = sections.balances !== false;
@@ -681,7 +723,66 @@
         document.getElementById('budgetVsActualWidget').hidden = false;
         renderBudgetRows(summary.budgetVsActual || []);
       }
+
+      if (widgets.insights !== false) {
+        document.getElementById('insightsWidget').hidden = false;
+        loadInsights(document.getElementById('insightsReturnRate').value);
+      }
     }
+
+    function renderSpendingTrends(trends) {
+      const list = document.getElementById('spendingTrendsList');
+      if (trends.length === 0) {
+        list.innerHTML = `<p style="color:var(--text-muted); font-size:13px; margin:0;">No notable spending trends yet — check back after a few more months of history.</p>`;
+        return;
+      }
+      list.innerHTML = trends.map(t => {
+        const isIncrease = t.direction === 'increase';
+        const color = isIncrease ? 'var(--negative)' : 'var(--positive)';
+        const arrow = isIncrease
+          ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px;"><path d="M6 9L12 15L18 9" stroke="' + color + '" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+          : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px;"><path d="M6 15L12 9L18 15" stroke="' + color + '" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        return `<div style="display:flex; align-items:flex-start; gap:8px; font-size:13.5px;">
+          <span style="margin-top:1px;">${arrow}</span>
+          <span>${t.message}</span>
+        </div>`;
+      }).join('');
+    }
+
+    function renderProjection(projection) {
+      const rows = document.getElementById('projectionRows');
+      const labels = { 1: '1 year', 5: '5 years', 10: '10 years' };
+      rows.innerHTML = projection.projections.map(p => `
+        <tr>
+          <td style="padding:9px 10px; border-bottom:1px solid var(--border);">${labels[p.years] || p.years + ' years'}</td>
+          <td class="num" style="text-align:right; padding:9px 10px; border-bottom:1px solid var(--border); font-weight:600;">${formatCurrency(p.trendContinuation)}</td>
+          <td class="num" style="text-align:right; padding:9px 10px; border-bottom:1px solid var(--border); font-weight:600; color:var(--accent-dark);">${formatCurrency(p.compoundGrowth)}</td>
+        </tr>`).join('');
+
+      const netText = projection.avgMonthlyNetChange >= 0
+        ? `saving an average of ${formatCurrency(projection.avgMonthlyNetChange)}/month`
+        : `spending down an average of ${formatCurrency(Math.abs(projection.avgMonthlyNetChange))}/month`;
+      document.getElementById('projectionFootnote').innerText =
+        `Based on your recent history, you've been ${netText}. "Invested at assumed return" compounds that pace monthly at the selected rate.`;
+    }
+
+    async function loadInsights(annualReturnPct) {
+      let res;
+      try {
+        res = await fetch(`/api/data/insights?annualReturnPct=${encodeURIComponent(annualReturnPct)}`);
+      } catch (err) {
+        return;
+      }
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      const data = await res.json();
+      if (data.error) return;
+      renderSpendingTrends(data.spendingTrends || []);
+      renderProjection(data.balanceProjection || { avgMonthlyNetChange: 0, projections: [] });
+    }
+
+    document.getElementById('insightsReturnRate').addEventListener('change', (e) => {
+      loadInsights(e.target.value);
+    });
 
     document.getElementById('summaryDays').addEventListener('change', (e) => {
       const widgets = {
@@ -690,6 +791,7 @@
         spendByCategory: document.getElementById('widgetSpendByCategory').checked,
         balanceTrend: document.getElementById('widgetBalanceTrend').checked,
         budgetVsActual: document.getElementById('widgetBudgetVsActual').checked,
+        insights: document.getElementById('widgetInsights').checked,
       };
       loadDashboardWidgets(widgets, e.target.value);
     });
@@ -717,7 +819,9 @@
           spendByCategory: document.getElementById('widgetSpendByCategory').checked,
           balanceTrend: document.getElementById('widgetBalanceTrend').checked,
           budgetVsActual: document.getElementById('widgetBudgetVsActual').checked,
+          insights: document.getElementById('widgetInsights').checked,
         },
+        insightsAnnualReturnPct: parseFloat(document.getElementById('insightsReturnRate').value),
         emailSections: {
           balances: document.getElementById('emailSectionBalances').checked,
           transactions: document.getElementById('emailSectionTransactions').checked,
