@@ -13,9 +13,10 @@ function defaultConfig() {
     actualUrl: '', actualPassword: '', syncId: '',
     cronSchedule: '0 6,12 * * *', enableEmail: false,
     smtpHost: '', smtpPort: '465', emailUser: '', emailPass: '', emailTo: '',
+    publicUrl: '',
     dashboardPasswordHash: '', sessionSecret: crypto.randomBytes(32).toString('hex'),
-    dashboardWidgets: { netWorth: true, spendByCategory: true, balanceTrend: true },
-    emailSections: { balances: true, transactions: true }
+    dashboardWidgets: { incomeVsSpend: true, incomeVsSpendYTD: true, spendByCategory: true, balanceTrend: true, budgetVsActual: true },
+    emailSections: { balances: true, transactions: true, budgetVsActual: true }
   };
 }
 

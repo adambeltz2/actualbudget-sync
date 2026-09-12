@@ -91,6 +91,8 @@ docker compose up -d
 
 ## Data Explorer & Dashboard
 
-The dashboard (`/`) shows a Net Worth stat tile plus Spend-by-Category and Balance Trend charts for the last 30 days, once Actual Budget is configured. Toggle which widgets appear under **Dashboard Widgets** in the config form.
+The dashboard (`/`) shows Income vs Spend for the current month and year-to-date, a Spend-by-Category donut, a Balance Trend sparkline, and a Spend vs Budget breakdown per category, once Actual Budget is configured. Toggle which widgets appear under **⚙ Customize** on the dashboard itself.
+
+Set an optional **Dashboard URL** in the Email Notifications section to add a "View Full Report" button to sync emails, linking back to this dashboard.
 
 The **Data Explorer** (linked from the dashboard) lists account balances and lets you filter transactions by account, category, date range, and payee, with pagination and a CSV export of the current filter.

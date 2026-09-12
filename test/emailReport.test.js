@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { buildReportHtml } = require('../src/emailReport');
+const { buildReportHtml, parseRecipients } = require('../src/emailReport');
 
 const accounts = [{ id: 'acc-1', name: 'Checking' }, { id: 'acc-2', name: 'Savings' }];
 const accountBalances = { 'acc-1': 1250.50, 'acc-2': -42.00 };
@@ -28,12 +28,12 @@ describe('buildReportHtml', () => {
   test('balances section is included by default and omitted when disabled', () => {
     const withBalances = buildReportHtml({ accounts, accountBalances, accountMap, added, bankSyncIssue: null });
     assert.match(withBalances.html, /Checking/);
-    assert.match(withBalances.html, /\$1250\.50/);
+    assert.match(withBalances.html, /\$1,250\.50/);
 
     const withoutBalances = buildReportHtml({
       accounts, accountBalances, accountMap, added, bankSyncIssue: null, sections: { balances: false }
     });
-    assert.doesNotMatch(withoutBalances.html, /\$1250\.50/);
+    assert.doesNotMatch(withoutBalances.html, /\$1,250\.50/);
   });
 
   test('transactions section is included by default and omitted when disabled', () => {
@@ -51,6 +51,34 @@ describe('buildReportHtml', () => {
     assert.match(html, /-\$42\.00/);
   });
 
+  test('total balance renders in the balances section', () => {
+    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, totalBalance: 1208.50 });
+    assert.match(html, /\$1,208\.50/);
+  });
+
+  test('budgetVsActual section is included by default and omitted when disabled', () => {
+    const budgetVsActual = [
+      { categoryId: 'c1', name: 'Groceries', budgeted: 800, spent: 685, remaining: 115, pctUsed: 86, overBudget: false },
+      { categoryId: 'c2', name: 'Dining Out', budgeted: 400, spent: 471, remaining: -71, pctUsed: 118, overBudget: true }
+    ];
+    const withBudget = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, budgetVsActual });
+    assert.match(withBudget.html, /Groceries/);
+    assert.match(withBudget.html, /\$115\.00 remaining/);
+    assert.match(withBudget.html, /Dining Out/);
+    assert.match(withBudget.html, /-\$71\.00 over/);
+
+    const withoutBudget = buildReportHtml({
+      accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, budgetVsActual,
+      sections: { budgetVsActual: false }
+    });
+    assert.doesNotMatch(withoutBudget.html, /Dining Out/);
+  });
+
+  test('an empty budgetVsActual list renders no budget section', () => {
+    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, budgetVsActual: [] });
+    assert.doesNotMatch(html, /Spend vs Budget/);
+  });
+
   test('user-provided text is HTML-escaped', () => {
     const maliciousAccounts = [{ id: 'acc-1', name: '<script>alert(1)</script>' }];
     const { html } = buildReportHtml({
@@ -62,5 +90,44 @@ describe('buildReportHtml', () => {
     });
     assert.doesNotMatch(html, /<script>alert/);
     assert.match(html, /&lt;script&gt;/);
+  });
+});
+
+describe('parseRecipients', () => {
+  test('passes a single address through unchanged', () => {
+    assert.equal(parseRecipients('alice@example.com'), 'alice@example.com');
+  });
+
+  test('splits comma-separated addresses and trims whitespace', () => {
+    assert.equal(
+      parseRecipients('alice@example.com,   bob@example.com'),
+      'alice@example.com, bob@example.com'
+    );
+  });
+
+  test('also accepts semicolon-separated addresses', () => {
+    assert.equal(
+      parseRecipients('alice@example.com; bob@example.com'),
+      'alice@example.com, bob@example.com'
+    );
+  });
+
+  test('drops empty entries from trailing/duplicate separators', () => {
+    assert.equal(
+      parseRecipients('alice@example.com,, bob@example.com,'),
+      'alice@example.com, bob@example.com'
+    );
+  });
+
+  test('de-duplicates repeated addresses', () => {
+    assert.equal(
+      parseRecipients('alice@example.com, alice@example.com'),
+      'alice@example.com'
+    );
+  });
+
+  test('handles empty or missing input without throwing', () => {
+    assert.equal(parseRecipients(''), '');
+    assert.equal(parseRecipients(undefined), '');
   });
 });
