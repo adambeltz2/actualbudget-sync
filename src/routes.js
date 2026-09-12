@@ -11,6 +11,13 @@ const { sendWebhookReport } = require('./webhookReport');
 
 const router = express.Router();
 const { requireAdmin } = auth;
+const { version } = require('../package.json');
+
+// Public (see PUBLIC_PATHS in auth.js) so the version shows in the footer
+// even on the login page, before a session exists.
+router.get('/api/version', (req, res) => {
+  res.json({ version });
+});
 
 // --- Config ---
 // actualPassword/emailPass are never sent to the client as plaintext; the
