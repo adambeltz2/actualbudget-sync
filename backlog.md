@@ -109,3 +109,40 @@ The sync email got the same "Spend vs Budget" section (compact bars, capped to 6
 `dashboardWidgets` and `emailSections` gained matching new toggle keys (`incomeVsSpend`, `incomeVsSpendYTD`, `budgetVsActual`); `netWorth` was dropped from the defaults for new installs (existing installs are unaffected since the frontend already treats a missing key as "shown," per the `!== false` convention established when these toggles were first built).
 Verified via `npm test` (46/46, including new `summarizeBudgetCategory` and `emailReport` budget-section tests) and, since this environment can't reach a live Actual Budget server, via Playwright driving a real headless browser against the app with the Actual/Chart.js-dependent endpoints mocked — confirming zero console/page errors and correct rendering across light and dark mode on all three pages.
 Affected files: `src/actualService.js`, `src/routes.js`, `src/config.js`, `src/syncJob.js`, `src/emailReport.js`, `public/index.html`, `public/explorer.html`, `public/login.html`, `test/actualService.test.js`, `test/emailReport.test.js`
+
+## P8 — Product review findings (2026-09-12)
+
+Grouped by technical dependency, not by how they were raised. Merge after each group.
+
+### Group 1 — Security & sync health
+Foundational and low-risk; ship first.
+
+#### [BUG] No brute-force protection on login
+`POST /api/auth/login` has no rate limiting or lockout — since the README's own quick-start (Pikapod, remote servers) implies the dashboard is sometimes exposed to the internet, an attacker can hammer the password endpoint indefinitely.
+Affected files: `src/auth.js`, `src/routes.js`
+
+#### [FEATURE] Surface last sync status on the dashboard
+If email is disabled, a failing bank sync only shows up in the log stream — nothing on the dashboard itself indicates the sync has been broken for days. Persist the last sync's timestamp/outcome and show it prominently on the dashboard.
+Affected files: `src/syncJob.js`, `src/config.js`, `src/routes.js`, `public/index.html`
+
+### Group 2 — Setup UX & data safety
+Builds on Group 1's connection-check/status plumbing where useful.
+
+#### [FEATURE] "Test Connection" button before saving
+Currently the only way to find out the Actual URL/Sync ID was wrong is to save, trigger a sync, and read the logs. A pre-save connection check (reusing the same probe Group 1's status indicator establishes) would catch typos immediately.
+Affected files: `src/routes.js`, `src/actualService.js`, `public/index.html`
+
+#### [FEATURE] Config export/import (backup/restore)
+`config.json` holds the dashboard password hash, session secret, and (optionally encrypted) Actual/SMTP credentials, with no export/import path. Losing `./data` without a manual backup means re-entering everything from scratch.
+Affected files: `src/routes.js`, `public/index.html`
+
+### Group 3 — Access & notifications
+Bigger, more novel surface area; ship last.
+
+#### [FEATURE] Shareable read-only access
+No way to give a second person (e.g. a spouse) visibility into the dashboard without handing them the same credential that can change config. A read-only login or link would fit now that the dashboard is worth looking at.
+Affected files: `src/auth.js`, `src/routes.js`, `public/login.html`, `public/index.html`, `public/explorer.html`
+
+#### [FEATURE] Alternative notification channels (Discord/Slack webhook)
+Email is the only sync-report channel. A webhook-based channel (Discord/Slack) alongside it would suit users who don't want another email.
+Affected files: `src/config.js`, `src/syncJob.js`, `public/index.html`, new `src/webhookReport.js`
