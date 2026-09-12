@@ -118,14 +118,12 @@ function projectAt({ currentBalance, avgMonthlyNetChange, monthlyVolatility, ann
   };
 }
 
-// Builds the projection block for the dashboard: a historical monthly net
-// change (from real balance history, via linear regression) extrapolated two
-// ways — a straight-line continuation of the current pace (with a "typical
-// range" band from historical volatility) and a compounded-growth projection
-// assuming the same monthly contribution keeps being invested at
-// `annualReturnRate`. `chartHorizonYears` also produces a finer year-by-year
-// series (0..N) suitable for plotting a projection chart.
-function buildBalanceProjection(monthlyBalances, { annualReturnRate = 0.07, horizonsYears = [1, 5, 10], chartHorizonYears = 10 } = {}) {
+// Projects a single balance series forward: a straight-line continuation of
+// the current pace (with a "typical range" band from historical volatility)
+// plus a compounded-growth projection assuming the same monthly contribution
+// keeps being invested at `annualReturnRate`. `chartHorizonYears` also
+// produces a finer year-by-year series (0..N) suitable for plotting.
+function projectSeries(monthlyBalances, { annualReturnRate = 0.07, horizonsYears = [1, 5, 10], chartHorizonYears = 10 } = {}) {
   if (monthlyBalances.length === 0) {
     return {
       currentBalance: 0, avgMonthlyNetChange: 0, monthlyVolatility: 0, annualReturnRate,
@@ -152,6 +150,42 @@ function buildBalanceProjection(monthlyBalances, { annualReturnRate = 0.07, hori
   }
 
   return { currentBalance, avgMonthlyNetChange, monthlyVolatility, annualReturnRate, history: monthlyBalances, projections, chartSeries };
+}
+
+// Builds the projection block for the dashboard. The "current pace (typical
+// range)" line always reflects the whole net-worth history, unchanged
+// regardless of investment tagging — it's the "if nothing changes" baseline.
+// The "invested at assumed return" line, when investment accounts are
+// tagged, only compounds the balance actually tagged as investments at
+// `annualReturnRate`; the remaining (liquid) balance is assumed to keep
+// growing at its own historical linear pace instead of a market return,
+// since cash sitting in checking doesn't compound like equities. With no
+// investment history to split out, it falls back to compounding the whole
+// balance, same as before investment tagging existed.
+function buildBalanceProjection(monthlyBalances, investmentMonthlyBalances = [], liquidMonthlyBalances = [], options = {}) {
+  const totalProjection = projectSeries(monthlyBalances, options);
+  if (investmentMonthlyBalances.length === 0 || liquidMonthlyBalances.length === 0) {
+    return totalProjection;
+  }
+
+  const { annualReturnRate = 0.07 } = options;
+  const investmentProjection = projectSeries(investmentMonthlyBalances, { ...options, annualReturnRate });
+  const liquidProjection = projectSeries(liquidMonthlyBalances, { ...options, annualReturnRate: 0 });
+
+  const combine = (point, i) => ({
+    ...point,
+    compoundGrowth: liquidProjection.projections[i].trendContinuation + investmentProjection.projections[i].compoundGrowth
+  });
+  const combineChart = (point, i) => ({
+    ...point,
+    compoundGrowth: liquidProjection.chartSeries[i].trendContinuation + investmentProjection.chartSeries[i].compoundGrowth
+  });
+
+  return {
+    ...totalProjection,
+    projections: totalProjection.projections.map(combine),
+    chartSeries: totalProjection.chartSeries.map(combineChart)
+  };
 }
 
 module.exports = {

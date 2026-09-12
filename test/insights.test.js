@@ -152,7 +152,7 @@ describe('buildBalanceProjection', () => {
       { month: '2026-03', balance: 11000 },
       { month: '2026-04', balance: 11500 }
     ];
-    const result = buildBalanceProjection(history, { annualReturnRate: 0.07 });
+    const result = buildBalanceProjection(history, [], [], { annualReturnRate: 0.07 });
     assert.equal(result.currentBalance, 11500);
     assert.ok(Math.abs(result.avgMonthlyNetChange - 500) < 0.001);
 
@@ -168,7 +168,7 @@ describe('buildBalanceProjection', () => {
       { month: '2026-02', balance: 1200 },
       { month: '2026-03', balance: 1400 }
     ];
-    const result = buildBalanceProjection(history, { annualReturnRate: 0.07, horizonsYears: [10] });
+    const result = buildBalanceProjection(history, [], [], { annualReturnRate: 0.07, horizonsYears: [10] });
     const projection = result.projections[0];
     assert.ok(projection.compoundGrowth > projection.trendContinuation);
   });
@@ -182,7 +182,7 @@ describe('buildBalanceProjection', () => {
       { month: '2026-03', balance: 1000 },
       { month: '2026-04', balance: 1300 }
     ];
-    const result = buildBalanceProjection(history, { annualReturnRate: 0.07 });
+    const result = buildBalanceProjection(history, [], [], { annualReturnRate: 0.07 });
     assert.ok(result.monthlyVolatility > 0);
 
     const oneYear = result.projections.find(p => p.years === 1);
@@ -198,7 +198,7 @@ describe('buildBalanceProjection', () => {
       { month: '2026-02', balance: 1100 },
       { month: '2026-03', balance: 1200 }
     ];
-    const result = buildBalanceProjection(history, { annualReturnRate: 0.07 });
+    const result = buildBalanceProjection(history, [], [], { annualReturnRate: 0.07 });
     assert.equal(result.monthlyVolatility, 0);
     for (const p of result.projections) {
       assert.equal(p.trendLow, p.trendContinuation);
@@ -211,7 +211,7 @@ describe('buildBalanceProjection', () => {
       { month: '2026-01', balance: 1000 },
       { month: '2026-02', balance: 1100 }
     ];
-    const result = buildBalanceProjection(history, { annualReturnRate: 0.07, chartHorizonYears: 5 });
+    const result = buildBalanceProjection(history, [], [], { annualReturnRate: 0.07, chartHorizonYears: 5 });
     assert.equal(result.chartSeries.length, 6);
     assert.equal(result.chartSeries[0].years, 0);
     assert.equal(result.chartSeries[0].trendContinuation, result.currentBalance);
@@ -225,5 +225,46 @@ describe('buildBalanceProjection', () => {
     ];
     const result = buildBalanceProjection(history);
     assert.deepEqual(result.history, history);
+  });
+
+  test('with investment accounts tagged, only the investment balance compounds at the assumed rate', () => {
+    const total = [
+      { month: '2026-01', balance: 10000 },
+      { month: '2026-02', balance: 10500 },
+      { month: '2026-03', balance: 11000 }
+    ];
+    // All of the net worth growth happens to be in the investment accounts;
+    // liquid stays perfectly flat.
+    const investment = [
+      { month: '2026-01', balance: 5000 },
+      { month: '2026-02', balance: 5500 },
+      { month: '2026-03', balance: 6000 }
+    ];
+    const liquid = [
+      { month: '2026-01', balance: 5000 },
+      { month: '2026-02', balance: 5000 },
+      { month: '2026-03', balance: 5000 }
+    ];
+    const withSplit = buildBalanceProjection(total, investment, liquid, { annualReturnRate: 0.07, horizonsYears: [10] });
+    const withoutSplit = buildBalanceProjection(total, [], [], { annualReturnRate: 0.07, horizonsYears: [10] });
+
+    // Compounding only half the balance (the investment half) at 7% for 10
+    // years produces a smaller "invested at assumed return" figure than
+    // compounding the whole net worth, since flat liquid cash contributes
+    // no growth beyond its own (zero) trend.
+    assert.ok(withSplit.projections[0].compoundGrowth < withoutSplit.projections[0].compoundGrowth);
+    // The "current pace" band is unaffected by investment tagging — it
+    // still reflects the whole net-worth history.
+    assert.equal(withSplit.projections[0].trendContinuation, withoutSplit.projections[0].trendContinuation);
+  });
+
+  test('falls back to compounding the whole balance when investment history is empty', () => {
+    const history = [
+      { month: '2026-01', balance: 1000 },
+      { month: '2026-02', balance: 1100 }
+    ];
+    const result = buildBalanceProjection(history, [], []);
+    const plain = buildBalanceProjection(history);
+    assert.deepEqual(result, plain);
   });
 });

@@ -2,6 +2,7 @@ const api = require('@actual-app/api');
 const { q } = require('@actual-app/api');
 const { logger } = require('./logger');
 const { buildSpendingInsights, buildBalanceProjection } = require('./insights');
+const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations, computeNetWorthBreakdown } = require('./financialHealth');
 
 // Kept open across sync cycles instead of init()/shutdown() per run, so the
 // downloaded budget stays queryable between syncs (needed by the data
@@ -335,23 +336,28 @@ async function getCategorySpendTrend({ months = 6 } = {}) {
 // by getMonthlyBalanceHistory, which needs one continuous multi-month series
 // for the Financial Insights projection rather than a single calendar
 // month's worth of days (what the dashboard's getBalanceTrend now returns).
-async function getDailyBalanceHistoryForDays(days) {
+// An optional accountIds filter scopes both the anchor balance and the
+// transaction query to just those accounts, so the same reconstruction
+// logic can produce a whole-net-worth series or a per-account-group one
+// (e.g. just the accounts tagged as investments).
+async function getDailyBalanceHistoryForDays(days, { accountIds } = {}) {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - (days - 1));
   const startStr = startDate.toISOString().split('T')[0];
 
-  const currentNetWorth = await getNetWorth();
+  const currentBalance = accountIds
+    ? (await Promise.all(accountIds.map(id => getAccountBalance(id)))).reduce((sum, b) => sum + b, 0)
+    : await getNetWorth();
 
-  const query = q('transactions').options({ splits: 'none' })
-    .filter({ date: { $gte: startStr } })
-    .groupBy('date')
-    .select(['date', { total: { $sum: '$amount' } }]);
+  let query = q('transactions').options({ splits: 'none' }).filter({ date: { $gte: startStr } });
+  if (accountIds) query = query.filter({ account: { $oneof: accountIds } });
+  query = query.groupBy('date').select(['date', { total: { $sum: '$amount' } }]);
   const { data: dailyTotals } = await api.runQuery(query);
 
   const totalsByDate = new Map(dailyTotals.map(d => [d.date, d.total]));
   const totalInRangeCents = dailyTotals.reduce((sum, d) => sum + d.total, 0);
 
-  let runningCents = Math.round(currentNetWorth * 100) - totalInRangeCents;
+  let runningCents = Math.round(currentBalance * 100) - totalInRangeCents;
   const trend = [];
   for (let i = 0; i < days; i++) {
     const d = new Date(startDate);
@@ -363,11 +369,7 @@ async function getDailyBalanceHistoryForDays(days) {
   return trend;
 }
 
-// One balance snapshot per calendar month (the last available day in each),
-// for projecting net worth forward via linear regression instead of
-// guessing at a growth rate.
-async function getMonthlyBalanceHistory({ months = 6 } = {}) {
-  const dailyTrend = await getDailyBalanceHistoryForDays(months * 31);
+function monthlyFromDaily(dailyTrend) {
   const byMonth = new Map();
   for (const point of dailyTrend) {
     byMonth.set(point.date.slice(0, 7), point.balance);
@@ -375,16 +377,81 @@ async function getMonthlyBalanceHistory({ months = 6 } = {}) {
   return [...byMonth.entries()].map(([month, balance]) => ({ month, balance }));
 }
 
-async function getFinancialInsights({ months = 6, annualReturnRatePct = 7 } = {}) {
-  const [categoryTrends, monthlyBalances] = await Promise.all([
+// One balance snapshot per calendar month (the last available day in each),
+// for projecting net worth forward via linear regression instead of
+// guessing at a growth rate.
+async function getMonthlyBalanceHistory({ months = 6 } = {}) {
+  const dailyTrend = await getDailyBalanceHistoryForDays(months * 31);
+  return monthlyFromDaily(dailyTrend);
+}
+
+// Same reconstruction, scoped to just the manually-tagged investment
+// accounts, so the projection can compound only the balance actually
+// invested instead of assuming a market return on cash sitting in checking.
+async function getMonthlyBalanceHistoryForAccounts(accountIds, { months = 6 } = {}) {
+  if (accountIds.length === 0) return [];
+  const dailyTrend = await getDailyBalanceHistoryForDays(months * 31, { accountIds });
+  return monthlyFromDaily(dailyTrend);
+}
+
+async function getFinancialInsights({ months = 6, annualReturnRatePct = 7, investmentAccountIds = [] } = {}) {
+  const [categoryTrends, monthlyBalances, investmentMonthlyBalances] = await Promise.all([
     getCategorySpendTrend({ months }),
-    getMonthlyBalanceHistory({ months })
+    getMonthlyBalanceHistory({ months }),
+    getMonthlyBalanceHistoryForAccounts(investmentAccountIds, { months })
   ]);
+
+  // liquid = total - investment at each matching month, so liquid +
+  // investment always reconciles exactly to the total net worth series.
+  const investmentByMonth = new Map(investmentMonthlyBalances.map(m => [m.month, m.balance]));
+  const liquidMonthlyBalances = investmentMonthlyBalances.length > 0
+    ? monthlyBalances.map(m => ({ month: m.month, balance: m.balance - (investmentByMonth.get(m.month) || 0) }))
+    : [];
 
   return {
     spendingTrends: buildSpendingInsights(categoryTrends),
-    balanceProjection: buildBalanceProjection(monthlyBalances, { annualReturnRate: annualReturnRatePct / 100 })
+    balanceProjection: buildBalanceProjection(monthlyBalances, investmentMonthlyBalances, liquidMonthlyBalances, { annualReturnRate: annualReturnRatePct / 100 }),
+    usesInvestmentTagging: investmentMonthlyBalances.length > 0
   };
+}
+
+// Combines account balances (which accounts count as liquid savings or
+// investments is a user setting, not something Actual's data can tell us —
+// it only has names and balances, no checking/savings/investment
+// distinction) with recent income/spend to produce the Financial Health
+// Check widget's data.
+async function getFinancialHealthData({ emergencyFundAccountIds = [], investmentAccountIds = [], targetMonths = 6, targetSavingsPct = 20 } = {}) {
+  const accounts = await getAccounts();
+  const balances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
+
+  const liquidBalance = Math.max(
+    balances.filter(b => emergencyFundAccountIds.includes(b.id)).reduce((sum, b) => sum + b.balance, 0),
+    0
+  );
+  const debtTotal = balances.reduce((sum, b) => sum + (b.balance < 0 ? -b.balance : 0), 0);
+  const netWorth = balances.reduce((sum, b) => sum + b.balance, 0);
+  const investmentBalance = balances.filter(b => investmentAccountIds.includes(b.id)).reduce((sum, b) => sum + b.balance, 0);
+  const netWorthBreakdown = computeNetWorthBreakdown({ netWorth, investmentBalance, debtTotal });
+
+  // Averaged over the last 3 complete calendar months (excluding the
+  // current, possibly-partial month) so checking this on the 2nd of the
+  // month doesn't make the emergency fund look artificially huge.
+  const now = new Date();
+  const recentMonths = [1, 2, 3].map(i => {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const monthlyFigures = await Promise.all(recentMonths.map(m => getIncomeVsSpend({ month: m })));
+  const monthlyIncome = monthlyFigures.reduce((sum, m) => sum + m.income, 0) / monthlyFigures.length;
+  const monthlyAvgSpend = monthlyFigures.reduce((sum, m) => sum + m.spend, 0) / monthlyFigures.length;
+
+  const emergencyFund = computeEmergencyFund({ liquidBalance, monthlyAvgSpend, targetMonths });
+  const savingsRate = computeSavingsRate({ income: monthlyIncome, spend: monthlyAvgSpend, targetPct: targetSavingsPct });
+  const debtLoad = computeDebtLoad({ debtTotal, monthlyIncome });
+  const { overall, label } = computeOverallScore({ emergencyFund, savingsRate, debtLoad });
+  const recommendations = buildRecommendations({ emergencyFund, savingsRate, debtLoad });
+
+  return { overall, label, emergencyFund, savingsRate, debtLoad, recommendations, liquidBalance, monthlyIncome, monthlyAvgSpend, netWorthBreakdown };
 }
 
 async function runBankSync() {
@@ -407,7 +474,7 @@ module.exports = {
   getTransactionsForAccount, getCategories, getPayees, queryTransactions, queryAllTransactions,
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
-  getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights,
+  getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getFinancialHealthData,
   testConnection,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).

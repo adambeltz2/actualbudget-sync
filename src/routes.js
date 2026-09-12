@@ -254,11 +254,34 @@ router.get('/api/data/insights', async (req, res) => {
     const annualReturnRatePct = req.query.annualReturnPct !== undefined
       ? Math.min(Math.max(parseFloat(req.query.annualReturnPct), -20), 30)
       : (config.insightsAnnualReturnPct ?? 7);
-    const insights = await actualService.getFinancialInsights({ months, annualReturnRatePct });
+    const insights = await actualService.getFinancialInsights({ months, annualReturnRatePct, investmentAccountIds: config.investmentAccountIds || [] });
     res.json(insights);
   } catch (err) {
     logger.error('Financial insights request failed: ' + err.message);
     res.status(500).json({ error: 'Failed to compute financial insights.' });
+  }
+});
+
+router.get('/api/data/financial-health', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const targetMonths = req.query.targetMonths !== undefined
+      ? Math.min(Math.max(parseInt(req.query.targetMonths, 10) || 6, 1), 24)
+      : (config.financialHealthTargetMonths ?? 6);
+    const targetSavingsPct = req.query.targetSavingsPct !== undefined
+      ? Math.min(Math.max(parseFloat(req.query.targetSavingsPct), 0), 100)
+      : (config.financialHealthTargetSavingsPct ?? 20);
+    const health = await actualService.getFinancialHealthData({
+      emergencyFundAccountIds: config.emergencyFundAccountIds || [],
+      investmentAccountIds: config.investmentAccountIds || [],
+      targetMonths, targetSavingsPct
+    });
+    res.json(health);
+  } catch (err) {
+    logger.error('Financial health request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to compute financial health.' });
   }
 });
 
