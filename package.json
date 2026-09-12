@@ -6,7 +6,7 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@actual-app/api": "latest",
+    "@actual-app/api": "26.9.0",
     "node-cron": "^3.0.3",
     "winston": "^3.11.0",
     "winston-daily-rotate-file": "^5.0.0",

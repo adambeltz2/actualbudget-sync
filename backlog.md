@@ -216,3 +216,17 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - `/api/data/summary` now also passes the selected month through to `getIncomeVsSpend`/`getBudgetVsActual` (which already accepted a `month` param, previously just never wired to the selector) — so "This Month"/"Last Month" now applies consistently across every summary widget, not just the two that used to key off `days`.
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
+
+## P18 — Follow-ups from Docker/optimization review (2026-09-12)
+
+### [DEBT] `@actual-app/api` pinned to `"latest"`, no committed lockfile — DONE
+Root cause pattern behind two bugs found this session (the payee-name query-shape assumption, and the general fragility of relying on this SDK's exact query behavior): `package.json` pinned `@actual-app/api` to `"latest"`, and `.gitignore` excluded `package-lock.json` entirely, so every `npm install` (in Docker builds, in CI) could silently resolve a different version with different query behavior — with no lockfile to catch the drift or roll back from. Pinned to the exact version already verified working (`26.9.0`) and committed `package-lock.json` so builds are reproducible; a future upstream change now shows up as a visible diff instead of a silent behavior change discovered via a user's screenshot.
+Affected files: `package.json`, `package-lock.json` (new), `.gitignore`
+
+### [BUG] Suspected: Data Explorer's payee search filter may not work — OPEN, needs live verification
+`buildTransactionFilters`'s search filter does `.filter({ payee_name: { $like: ... } })`, but a search of `@actual-app/api@26.9.0`'s bundled source turns up no evidence `payee_name` (unqualified) is a registered field in the query engine's schema — only the raw `payee` id and a dot-path `payee.name` used elsewhere (Actual's own CSV export). This is the same class of issue as the payee-name display bug already fixed, just on the filter side: the search box may silently return zero results, or the filter may simply be ignored. Not fixed yet because it can't be verified without a live Actual server — next step is to try searching a payee name in the Data Explorer and report what actually happens (all results / no results / an error).
+Affected files (if confirmed): `src/actualService.js` (`buildTransactionFilters`)
+
+### [DEBT] CI builds the Docker image but never runs it — OPEN
+The `docker-build` CI job (added alongside the multi-stage Dockerfile optimization) confirms the image builds successfully, but doesn't confirm the resulting container actually boots and serves traffic. A smoke-test step (start the built image, curl `/healthz`, fail the job if it doesn't return 200 within a few seconds) would close that gap.
+Affected files: `.github/workflows/test.yml`
