@@ -1,7 +1,8 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  hashPassword, verifyPassword, signSession, verifySession, parseCookies
+  hashPassword, verifyPassword, signSession, verifySession, parseCookies,
+  isLoginLocked, loginLockRemainingMs, recordLoginFailure, recordLoginSuccess
 } = require('../src/auth');
 
 describe('hashPassword / verifyPassword', () => {
@@ -73,5 +74,43 @@ describe('parseCookies', () => {
   test('returns an empty object for a missing header', () => {
     assert.deepEqual(parseCookies(undefined), {});
     assert.deepEqual(parseCookies(''), {});
+  });
+});
+
+describe('login rate limiting', () => {
+  // Each test uses a distinct fake IP since the underlying state is a
+  // module-level map shared across the whole test file.
+  test('an IP with no recorded attempts is not locked', () => {
+    assert.equal(isLoginLocked('10.0.0.1'), false);
+    assert.equal(loginLockRemainingMs('10.0.0.1'), 0);
+  });
+
+  test('fewer than the limit of failures does not lock the IP', () => {
+    const ip = '10.0.0.2';
+    for (let i = 0; i < 4; i++) recordLoginFailure(ip);
+    assert.equal(isLoginLocked(ip), false);
+  });
+
+  test('reaching the failure limit locks the IP with a positive remaining time', () => {
+    const ip = '10.0.0.3';
+    for (let i = 0; i < 5; i++) recordLoginFailure(ip);
+    assert.equal(isLoginLocked(ip), true);
+    assert.ok(loginLockRemainingMs(ip) > 0);
+  });
+
+  test('a successful login clears a locked-out IP', () => {
+    const ip = '10.0.0.4';
+    for (let i = 0; i < 5; i++) recordLoginFailure(ip);
+    assert.equal(isLoginLocked(ip), true);
+    recordLoginSuccess(ip);
+    assert.equal(isLoginLocked(ip), false);
+  });
+
+  test('different IPs are tracked independently', () => {
+    const lockedIp = '10.0.0.5';
+    const cleanIp = '10.0.0.6';
+    for (let i = 0; i < 5; i++) recordLoginFailure(lockedIp);
+    assert.equal(isLoginLocked(lockedIp), true);
+    assert.equal(isLoginLocked(cleanIp), false);
   });
 });

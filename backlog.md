@@ -114,15 +114,15 @@ Affected files: `src/actualService.js`, `src/routes.js`, `src/config.js`, `src/s
 
 Grouped by technical dependency, not by how they were raised. Merge after each group.
 
-### Group 1 — Security & sync health
-Foundational and low-risk; ship first.
+### Group 1 — Security & sync health — DONE
+Foundational and low-risk; shipped first.
 
-#### [BUG] No brute-force protection on login
-`POST /api/auth/login` has no rate limiting or lockout — since the README's own quick-start (Pikapod, remote servers) implies the dashboard is sometimes exposed to the internet, an attacker can hammer the password endpoint indefinitely.
-Affected files: `src/auth.js`, `src/routes.js`
+#### [BUG] No brute-force protection on login — DONE
+Added in-memory rate limiting in `src/auth.js` keyed by client IP (`isLoginLocked`/`recordLoginFailure`/`recordLoginSuccess`): 5 failed attempts within 15 minutes locks that IP out for 15 minutes, returning `429` with a "try again in N minutes" message; a successful login clears the counter. `index.js` now sets `trust proxy` so the real client IP is used behind a reverse proxy (Pikapod, nginx) rather than the proxy's own address. State is in-memory and resets on restart — the goal is slowing an automated guesser, not surviving a restart.
+Affected files: `src/auth.js`, `src/routes.js`, `index.js`, `test/auth.test.js`
 
-#### [FEATURE] Surface last sync status on the dashboard
-If email is disabled, a failing bank sync only shows up in the log stream — nothing on the dashboard itself indicates the sync has been broken for days. Persist the last sync's timestamp/outcome and show it prominently on the dashboard.
+#### [FEATURE] Surface last sync status on the dashboard — DONE
+`syncJob.js` now records `lastSyncAt`/`lastSyncStatus` (`success`/`warning`/`error`)/`lastSyncError` to config after every sync (re-reading config immediately before the write so a settings change made mid-sync isn't clobbered); a bank-connection issue that doesn't throw is recorded as `warning` rather than a silent `success`. The dashboard shows a colored pill next to the "Dashboard" heading ("✓ Synced 2 hours ago" / "⚠ Synced with a warning..." / "✕ Sync failed..."), with the error detail in its hover tooltip, and refreshes automatically after a manual sync completes.
 Affected files: `src/syncJob.js`, `src/config.js`, `src/routes.js`, `public/index.html`
 
 ### Group 2 — Setup UX & data safety

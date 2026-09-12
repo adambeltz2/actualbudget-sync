@@ -27,7 +27,10 @@ router.post('/api/config', (req, res) => {
     actualPassword: req.body.actualPassword ? req.body.actualPassword : current.actualPassword,
     emailPass: req.body.emailPass ? req.body.emailPass : current.emailPass,
     dashboardPasswordHash: current.dashboardPasswordHash,
-    sessionSecret: current.sessionSecret
+    sessionSecret: current.sessionSecret,
+    lastSyncAt: current.lastSyncAt,
+    lastSyncStatus: current.lastSyncStatus,
+    lastSyncError: current.lastSyncError
   };
   saveConfig(updated);
   applySchedule();
@@ -214,6 +217,12 @@ router.get('/api/auth/status', (req, res) => {
 });
 
 router.post('/api/auth/login', (req, res) => {
+  const ip = req.ip;
+  if (auth.isLoginLocked(ip)) {
+    const minutes = Math.ceil(auth.loginLockRemainingMs(ip) / 60000);
+    return res.status(429).json({ error: `Too many failed attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.` });
+  }
+
   const { password } = req.body || {};
   if (!password) return res.status(400).json({ error: 'Password required' });
 
@@ -224,9 +233,12 @@ router.post('/api/auth/login', (req, res) => {
     saveConfig(config);
     logger.info('Dashboard password configured for the first time.');
   } else if (!auth.verifyPassword(password, config.dashboardPasswordHash)) {
+    auth.recordLoginFailure(ip);
+    logger.warn(`Failed dashboard login attempt from ${ip}.`);
     return res.status(401).json({ error: 'Invalid password' });
   }
 
+  auth.recordLoginSuccess(ip);
   const expiresAt = Date.now() + auth.SESSION_TTL_MS;
   const token = auth.signSession(config.sessionSecret, expiresAt);
   const secureFlag = req.secure ? '; Secure' : '';

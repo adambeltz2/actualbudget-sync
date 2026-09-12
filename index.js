@@ -11,6 +11,10 @@ const { getConfig } = require('./src/config');
 const actualService = require('./src/actualService');
 
 const app = express();
+// Self-hosted deployments are commonly fronted by a reverse proxy (Pikapod,
+// nginx, etc.); trust its X-Forwarded-For so login rate limiting keys on the
+// real client IP instead of the proxy's.
+app.set('trust proxy', true);
 app.use(express.json());
 
 // Unauthenticated so Docker/Compose can probe it without credentials.
