@@ -1,7 +1,7 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  linearRegression, projectFutureValue, classifySpendTrend,
+  linearRegression, projectFutureValue, classifySpendTrend, standardDeviation,
   buildSpendingInsights, buildBalanceProjection
 } = require('../src/insights');
 
@@ -56,6 +56,22 @@ describe('projectFutureValue', () => {
   });
 });
 
+describe('standardDeviation', () => {
+  test('a constant series has zero deviation', () => {
+    assert.equal(standardDeviation([5, 5, 5, 5]), 0);
+  });
+
+  test('fewer than two values has zero deviation rather than throwing', () => {
+    assert.equal(standardDeviation([]), 0);
+    assert.equal(standardDeviation([42]), 0);
+  });
+
+  test('matches a hand-computed population standard deviation', () => {
+    // values 2,4,4,4,5,5,7,9 -> mean 5, population variance 4, stdev 2
+    assert.equal(standardDeviation([2, 4, 4, 4, 5, 5, 7, 9]), 2);
+  });
+});
+
 describe('classifySpendTrend', () => {
   test('detects a rising trend from an increasing series', () => {
     const monthlyTotals = [100, 100, 150, 150].map((total, i) => ({ month: `m${i}`, total }));
@@ -92,6 +108,11 @@ describe('buildSpendingInsights', () => {
     assert.equal(insights.length, 1);
     assert.equal(insights[0].direction, 'increase');
     assert.match(insights[0].message, /Groceries spending has increased/);
+  });
+
+  test('includes the raw monthly totals for sparkline rendering', () => {
+    const insights = buildSpendingInsights([{ categoryId: 'groceries', name: 'Groceries', monthlyTotals: sixMonthsRising }]);
+    assert.deepEqual(insights[0].monthlyTotals, sixMonthsRising);
   });
 
   test('ignores a category with fewer than the minimum months of history', () => {
@@ -150,5 +171,59 @@ describe('buildBalanceProjection', () => {
     const result = buildBalanceProjection(history, { annualReturnRate: 0.07, horizonsYears: [10] });
     const projection = result.projections[0];
     assert.ok(projection.compoundGrowth > projection.trendContinuation);
+  });
+
+  test('the typical-range band widens for a longer horizon (grows with sqrt(months))', () => {
+    // A volatile but flat-average history: net change alternates so the
+    // regression slope is ~0 but month-to-month swings are real.
+    const history = [
+      { month: '2026-01', balance: 1000 },
+      { month: '2026-02', balance: 1300 },
+      { month: '2026-03', balance: 1000 },
+      { month: '2026-04', balance: 1300 }
+    ];
+    const result = buildBalanceProjection(history, { annualReturnRate: 0.07 });
+    assert.ok(result.monthlyVolatility > 0);
+
+    const oneYear = result.projections.find(p => p.years === 1);
+    const tenYear = result.projections.find(p => p.years === 10);
+    const oneYearBand = oneYear.trendHigh - oneYear.trendLow;
+    const tenYearBand = tenYear.trendHigh - tenYear.trendLow;
+    assert.ok(tenYearBand > oneYearBand);
+  });
+
+  test('a perfectly steady history has no band (zero volatility)', () => {
+    const history = [
+      { month: '2026-01', balance: 1000 },
+      { month: '2026-02', balance: 1100 },
+      { month: '2026-03', balance: 1200 }
+    ];
+    const result = buildBalanceProjection(history, { annualReturnRate: 0.07 });
+    assert.equal(result.monthlyVolatility, 0);
+    for (const p of result.projections) {
+      assert.equal(p.trendLow, p.trendContinuation);
+      assert.equal(p.trendHigh, p.trendContinuation);
+    }
+  });
+
+  test('chartSeries covers year 0 through chartHorizonYears inclusive, starting at the current balance', () => {
+    const history = [
+      { month: '2026-01', balance: 1000 },
+      { month: '2026-02', balance: 1100 }
+    ];
+    const result = buildBalanceProjection(history, { annualReturnRate: 0.07, chartHorizonYears: 5 });
+    assert.equal(result.chartSeries.length, 6);
+    assert.equal(result.chartSeries[0].years, 0);
+    assert.equal(result.chartSeries[0].trendContinuation, result.currentBalance);
+    assert.equal(result.chartSeries[5].years, 5);
+  });
+
+  test('exposes the raw monthly history for charting', () => {
+    const history = [
+      { month: '2026-01', balance: 1000 },
+      { month: '2026-02', balance: 1100 }
+    ];
+    const result = buildBalanceProjection(history);
+    assert.deepEqual(result.history, history);
   });
 });

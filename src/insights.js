@@ -6,6 +6,13 @@ function average(numbers) {
   return numbers.reduce((sum, n) => sum + n, 0) / numbers.length;
 }
 
+function standardDeviation(numbers) {
+  if (numbers.length < 2) return 0;
+  const mean = average(numbers);
+  const variance = average(numbers.map(n => (n - mean) ** 2));
+  return Math.sqrt(variance);
+}
+
 // Ordinary least squares over {x, y} points. x is expected to be a simple
 // 0-based month index, so slope is directly "average change per month".
 function linearRegression(points) {
@@ -82,20 +89,48 @@ function buildSpendingInsights(categoryTrends, { significantPctChange = 15, minM
       pctChange: roundedPct,
       firstHalfAvg: Math.round(firstHalfAvg * 100) / 100,
       secondHalfAvg: Math.round(secondHalfAvg * 100) / 100,
+      monthlyTotals: trend.monthlyTotals,
       message: `${trend.name} spending has ${direction}d ${roundedPct}% over the last ${months} months ($${Math.round(firstHalfAvg)} → $${Math.round(secondHalfAvg)}/mo).`
     });
   }
   return insights.sort((a, b) => b.pctChange - a.pctChange);
 }
 
+// A single projection point: the straight-line continuation of the current
+// pace (with a Wealthfront/Personal-Capital-style "typical range" band around
+// it, derived from how volatile the actual month-to-month change has
+// historically been — a wider historical swing means a wider band, and the
+// band widens with sqrt(months) the way a random walk's uncertainty does),
+// plus the compound-growth figure at the assumed return rate.
+function projectAt({ currentBalance, avgMonthlyNetChange, monthlyVolatility, annualReturnRate, months }) {
+  const trendContinuation = currentBalance + avgMonthlyNetChange * months;
+  const band = monthlyVolatility * Math.sqrt(months);
+  return {
+    trendContinuation,
+    trendLow: trendContinuation - band,
+    trendHigh: trendContinuation + band,
+    compoundGrowth: projectFutureValue({
+      presentValue: currentBalance,
+      monthlyContribution: avgMonthlyNetChange,
+      annualReturnRate,
+      months
+    })
+  };
+}
+
 // Builds the projection block for the dashboard: a historical monthly net
 // change (from real balance history, via linear regression) extrapolated two
-// ways — a simple straight-line continuation of the current pace, and a
-// compounded-growth projection assuming the same monthly contribution keeps
-// being invested at `annualReturnRate`.
-function buildBalanceProjection(monthlyBalances, { annualReturnRate = 0.07, horizonsYears = [1, 5, 10] } = {}) {
+// ways — a straight-line continuation of the current pace (with a "typical
+// range" band from historical volatility) and a compounded-growth projection
+// assuming the same monthly contribution keeps being invested at
+// `annualReturnRate`. `chartHorizonYears` also produces a finer year-by-year
+// series (0..N) suitable for plotting a projection chart.
+function buildBalanceProjection(monthlyBalances, { annualReturnRate = 0.07, horizonsYears = [1, 5, 10], chartHorizonYears = 10 } = {}) {
   if (monthlyBalances.length === 0) {
-    return { currentBalance: 0, avgMonthlyNetChange: 0, annualReturnRate, projections: [] };
+    return {
+      currentBalance: 0, avgMonthlyNetChange: 0, monthlyVolatility: 0, annualReturnRate,
+      history: [], projections: [], chartSeries: []
+    };
   }
 
   const currentBalance = monthlyBalances[monthlyBalances.length - 1].balance;
@@ -103,24 +138,23 @@ function buildBalanceProjection(monthlyBalances, { annualReturnRate = 0.07, hori
   const { slope } = linearRegression(points);
   const avgMonthlyNetChange = monthlyBalances.length >= 2 ? slope : 0;
 
-  const projections = horizonsYears.map(years => {
-    const months = years * 12;
-    return {
-      years,
-      trendContinuation: currentBalance + avgMonthlyNetChange * months,
-      compoundGrowth: projectFutureValue({
-        presentValue: currentBalance,
-        monthlyContribution: avgMonthlyNetChange,
-        annualReturnRate,
-        months
-      })
-    };
-  });
+  const deltas = monthlyBalances.slice(1).map((m, i) => m.balance - monthlyBalances[i].balance);
+  const monthlyVolatility = standardDeviation(deltas);
 
-  return { currentBalance, avgMonthlyNetChange, annualReturnRate, projections };
+  const projections = horizonsYears.map(years => ({
+    years,
+    ...projectAt({ currentBalance, avgMonthlyNetChange, monthlyVolatility, annualReturnRate, months: years * 12 })
+  }));
+
+  const chartSeries = [];
+  for (let year = 0; year <= chartHorizonYears; year++) {
+    chartSeries.push({ years: year, ...projectAt({ currentBalance, avgMonthlyNetChange, monthlyVolatility, annualReturnRate, months: year * 12 }) });
+  }
+
+  return { currentBalance, avgMonthlyNetChange, monthlyVolatility, annualReturnRate, history: monthlyBalances, projections, chartSeries };
 }
 
 module.exports = {
-  linearRegression, projectFutureValue, classifySpendTrend,
+  linearRegression, projectFutureValue, classifySpendTrend, standardDeviation,
   buildSpendingInsights, buildBalanceProjection
 };
