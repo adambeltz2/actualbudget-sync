@@ -100,3 +100,11 @@ Use **Test Connection** in the Actual Budget Configuration card to verify your S
 **Backup & Restore** on the dashboard lets you download your full configuration as JSON and restore it later (e.g. after moving to a new host). The backup file contains your Actual Budget and SMTP credentials in plain text regardless of `CONFIG_ENCRYPTION_KEY` — it's meant to be stored securely by you, not left lying around.
 
 The **Data Explorer** (linked from the dashboard) lists account balances and lets you filter transactions by account, category, date range, and payee, with pagination and a CSV export of the current filter.
+
+## Read-Only Access
+
+Use **Access & Sharing** on the dashboard to set a separate viewer password for a second person (e.g. a spouse) who should be able to see the dashboard and Data Explorer without being able to change settings, trigger a sync, or export/import a backup. Logging in with the viewer password shows a "Read-only access" badge and hides everything else. Clearing the viewer password immediately signs out any active viewer sessions.
+
+## Webhook Notifications
+
+**Webhook Notifications** on the dashboard sends the same sync summary as the email report to a Discord or Slack channel via an incoming webhook, instead of (or alongside) email. Use "Send Test Message" to confirm the URL works before relying on it. Like your Actual Budget and SMTP passwords, the webhook URL is encrypted at rest when `CONFIG_ENCRYPTION_KEY` is set.

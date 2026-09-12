@@ -103,7 +103,8 @@
         </div>
         <div class="num" style="font-weight:700; font-size:19px;">Actual Budget Smart Sync</div>
       </div>
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <span id="viewerBadge" hidden style="font-size:12px; font-weight:700; padding:5px 10px; border-radius:999px; background:color-mix(in srgb, var(--accent) 15%, transparent); color:var(--accent-dark);">Read-only access</span>
         <button id="themeToggleBtn" title="Toggle dark mode" class="btn btn-ghost">🌙</button>
         <a href="/explorer.html" class="btn btn-ghost">Data Explorer</a>
         <button id="triggerSyncBtn" class="btn btn-primary">Trigger Manual Sync</button>
@@ -309,6 +310,58 @@
         </div>
       </div>
 
+      <!-- Webhook Section -->
+      <div class="card" style="padding:22px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:10px;">
+          <div>
+            <div class="num" style="font-size:16px; font-weight:700;">Webhook Notifications</div>
+            <p class="field-hint" style="margin-top:2px;">Post a sync summary to a Discord or Slack channel instead of (or alongside) email.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="enableWebhook">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div id="webhookSettingsDiv" class="grid-2" style="opacity:0.5; pointer-events:none; transition:opacity 0.2s;">
+          <div>
+            <label class="field-label">Platform</label>
+            <select id="webhookPlatform" style="width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-family:inherit; font-size:14px;">
+              <option value="discord">Discord</option>
+              <option value="slack">Slack</option>
+              <option value="generic">Generic (raw JSON)</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Webhook URL</label>
+            <input type="password" id="webhookUrl" autocomplete="new-password" placeholder="https://discord.com/api/webhooks/...">
+            <p id="webhookUrlHint" class="field-hint">Discord: channel &gt; Edit Channel &gt; Integrations &gt; Webhooks. Slack: create an Incoming Webhook app.</p>
+          </div>
+          <div style="grid-column:1/-1; display:flex; align-items:center; gap:12px;">
+            <button type="button" id="testWebhookBtn" class="btn btn-ghost" style="padding:7px 14px; font-size:13px;">Send Test Message</button>
+            <p id="testWebhookResult" hidden style="font-size:13px; padding:9px 12px; border-radius:8px; margin:0;"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Access & Sharing -->
+      <div class="card" style="padding:22px;">
+        <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Access &amp; Sharing</div>
+        <p class="field-hint" style="margin-top:0; margin-bottom:14px;">Give someone else (e.g. a spouse) a read-only login that can view the dashboard and Data Explorer but can't change settings or trigger syncs.</p>
+        <div class="grid-2">
+          <div>
+            <label class="field-label">Viewer Password</label>
+            <input type="password" id="viewerPassword" autocomplete="new-password">
+            <p id="viewerPasswordHint" class="field-hint">Read-only access is currently disabled.</p>
+          </div>
+          <div style="display:flex; align-items:flex-end; gap:10px;">
+            <button type="button" id="setViewerPasswordBtn" class="btn btn-ghost">Save Viewer Password</button>
+            <button type="button" id="disableViewerAccessBtn" class="btn btn-ghost" hidden>Disable Access</button>
+          </div>
+        </div>
+        <p id="viewerPasswordResult" hidden style="font-size:13px; padding:9px 12px; border-radius:8px; margin:14px 0 0;"></p>
+      </div>
+
       <!-- Backup & Restore -->
       <div class="card" style="padding:22px;">
         <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Backup &amp; Restore</div>
@@ -372,6 +425,15 @@
     }
     emailToggle.addEventListener('change', (e) => updateToggleUI(e.target.checked));
 
+    // --- Webhook toggle switch ---
+    const webhookToggle = document.getElementById('enableWebhook');
+    const webhookSettingsDiv = document.getElementById('webhookSettingsDiv');
+    function updateWebhookToggleUI(isEnabled) {
+      webhookSettingsDiv.style.opacity = isEnabled ? '1' : '0.5';
+      webhookSettingsDiv.style.pointerEvents = isEnabled ? 'auto' : 'none';
+    }
+    webhookToggle.addEventListener('change', (e) => updateWebhookToggleUI(e.target.checked));
+
     document.getElementById('customizeWidgetsBtn').addEventListener('click', () => {
       document.getElementById('widgetVisibilityRow').hidden = !document.getElementById('widgetVisibilityRow').hidden;
     });
@@ -411,6 +473,27 @@
         ? 'App password is saved. Leave blank to keep it, or type a new one to change it.'
         : 'If using Gmail, use a 16-digit App Password.';
       document.getElementById('emailTo').value = config.emailTo || '';
+
+      const isWebhookEnabled = config.webhookEnabled || false;
+      webhookToggle.checked = isWebhookEnabled;
+      updateWebhookToggleUI(isWebhookEnabled);
+      document.getElementById('webhookPlatform').value = config.webhookPlatform || 'discord';
+      document.getElementById('webhookUrl').value = '';
+      document.getElementById('webhookUrl').placeholder = config.webhookUrlSet ? '•••••••• (unchanged)' : 'https://discord.com/api/webhooks/...';
+      document.getElementById('webhookUrlHint').innerText = config.webhookUrlSet
+        ? 'Webhook URL is saved. Leave blank to keep it, or paste a new one to change it.'
+        : 'Discord: channel > Edit Channel > Integrations > Webhooks. Slack: create an Incoming Webhook app.';
+
+      document.getElementById('viewerPasswordHint').innerText = config.viewerAccessEnabled
+        ? 'Read-only access is enabled. Enter a new password below to change it.'
+        : 'Read-only access is currently disabled.';
+      document.getElementById('disableViewerAccessBtn').hidden = !config.viewerAccessEnabled;
+
+      const isViewer = config.role === 'viewer';
+      document.getElementById('viewerBadge').hidden = !isViewer;
+      document.getElementById('triggerSyncBtn').hidden = isViewer;
+      document.getElementById('configForm').hidden = isViewer;
+      document.getElementById('customizeWidgetsBtn').hidden = isViewer;
 
       const widgets = config.dashboardWidgets || {};
       document.getElementById('widgetIncomeVsSpend').checked = widgets.incomeVsSpend !== false;
@@ -625,6 +708,9 @@
         emailUser: document.getElementById('emailUser').value,
         emailPass: document.getElementById('emailPass').value,
         emailTo: document.getElementById('emailTo').value,
+        webhookEnabled: webhookToggle.checked,
+        webhookPlatform: document.getElementById('webhookPlatform').value,
+        webhookUrl: document.getElementById('webhookUrl').value,
         dashboardWidgets: {
           incomeVsSpend: document.getElementById('widgetIncomeVsSpend').checked,
           incomeVsSpendYTD: document.getElementById('widgetIncomeVsSpendYTD').checked,
@@ -741,6 +827,84 @@
         btn.disabled = false;
         btn.innerText = 'Test Connection';
       }
+    });
+
+    // --- Test Webhook ---
+    document.getElementById('testWebhookBtn').addEventListener('click', async function() {
+      const resultEl = document.getElementById('testWebhookResult');
+      const btn = this;
+      btn.disabled = true;
+      btn.innerText = 'Sending…';
+      resultEl.hidden = true;
+
+      try {
+        const res = await fetch('/api/config/test-webhook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            webhookUrl: document.getElementById('webhookUrl').value,
+            webhookPlatform: document.getElementById('webhookPlatform').value,
+          })
+        });
+        const data = await res.json();
+        resultEl.hidden = false;
+        if (data.success) {
+          resultEl.style.background = 'color-mix(in srgb, var(--positive) 12%, var(--card-bg))';
+          resultEl.style.color = 'var(--positive)';
+          resultEl.innerText = '✓ Test message sent — check the channel.';
+        } else {
+          resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
+          resultEl.style.color = 'var(--negative)';
+          resultEl.innerText = `✕ ${data.error || 'Failed to send test message.'}`;
+        }
+      } catch (err) {
+        resultEl.hidden = false;
+        resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
+        resultEl.style.color = 'var(--negative)';
+        resultEl.innerText = '✕ Could not reach the server.';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Send Test Message';
+      }
+    });
+
+    // --- Viewer (read-only) access ---
+    function showViewerPasswordResult(success, message) {
+      const resultEl = document.getElementById('viewerPasswordResult');
+      resultEl.hidden = false;
+      resultEl.style.background = success
+        ? 'color-mix(in srgb, var(--positive) 12%, var(--card-bg))'
+        : 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
+      resultEl.style.color = success ? 'var(--positive)' : 'var(--negative)';
+      resultEl.innerText = message;
+    }
+
+    async function setViewerPassword(password) {
+      try {
+        const res = await fetch('/api/auth/viewer-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+        const data = await res.json();
+        if (!res.ok) { showViewerPasswordResult(false, data.error || 'Failed to update viewer access.'); return; }
+        showViewerPasswordResult(true, data.enabled ? '✓ Viewer access saved.' : '✓ Viewer access disabled.');
+        document.getElementById('viewerPassword').value = '';
+        loadConfig();
+      } catch (err) {
+        showViewerPasswordResult(false, 'Could not reach the server.');
+      }
+    }
+
+    document.getElementById('setViewerPasswordBtn').addEventListener('click', () => {
+      const password = document.getElementById('viewerPassword').value;
+      if (!password) { showViewerPasswordResult(false, 'Enter a password first.'); return; }
+      setViewerPassword(password);
+    });
+
+    document.getElementById('disableViewerAccessBtn').addEventListener('click', () => {
+      if (!confirm('Disable read-only viewer access? Anyone using the viewer password will be logged out.')) return;
+      setViewerPassword('');
     });
 
     // --- Backup & Restore ---

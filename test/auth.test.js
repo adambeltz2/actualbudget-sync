@@ -30,9 +30,14 @@ describe('hashPassword / verifyPassword', () => {
 });
 
 describe('signSession / verifySession', () => {
-  test('a freshly signed, unexpired session verifies', () => {
+  test('a freshly signed, unexpired session verifies and defaults to the admin role', () => {
     const token = signSession('secret', Date.now() + 60_000);
-    assert.equal(verifySession('secret', token), true);
+    assert.equal(verifySession('secret', token), 'admin');
+  });
+
+  test('a viewer-role session verifies as viewer', () => {
+    const token = signSession('secret', Date.now() + 60_000, 'viewer');
+    assert.equal(verifySession('secret', token), 'viewer');
   });
 
   test('an expired session is rejected', () => {
@@ -48,7 +53,15 @@ describe('signSession / verifySession', () => {
   test('a tampered payload is rejected', () => {
     const token = signSession('secret', Date.now() + 60_000);
     const [, sig] = token.split('.');
-    const tampered = `${Date.now() + 999_999_999}.${sig}`;
+    const tampered = `${Date.now() + 999_999_999}:admin.${sig}`;
+    assert.equal(verifySession('secret', tampered), false);
+  });
+
+  test('a tampered role is rejected (signature no longer matches)', () => {
+    const token = signSession('secret', Date.now() + 60_000, 'viewer');
+    const [payload, sig] = token.split('.');
+    const [expiresAt] = payload.split(':');
+    const tampered = `${expiresAt}:admin.${sig}`;
     assert.equal(verifySession('secret', tampered), false);
   });
 

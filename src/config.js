@@ -6,7 +6,9 @@ const { encrypt, decrypt } = require('./secretCrypto');
 const CONFIG_PATH = '/data/config.json';
 
 // Encrypted at rest when CONFIG_ENCRYPTION_KEY is set (see secretCrypto.js).
-const SECRET_FIELDS = ['actualPassword', 'emailPass'];
+// Webhook URLs are bearer credentials (anyone holding one can post as this
+// integration), so they get the same at-rest treatment as passwords.
+const SECRET_FIELDS = ['actualPassword', 'emailPass', 'webhookUrl'];
 
 function defaultConfig() {
   return {
@@ -15,9 +17,11 @@ function defaultConfig() {
     smtpHost: '', smtpPort: '465', emailUser: '', emailPass: '', emailTo: '',
     publicUrl: '',
     dashboardPasswordHash: '', sessionSecret: crypto.randomBytes(32).toString('hex'),
+    viewerPasswordHash: '',
     dashboardWidgets: { incomeVsSpend: true, incomeVsSpendYTD: true, spendByCategory: true, balanceTrend: true, budgetVsActual: true },
     emailSections: { balances: true, transactions: true, budgetVsActual: true },
-    lastSyncAt: null, lastSyncStatus: null, lastSyncError: null
+    lastSyncAt: null, lastSyncStatus: null, lastSyncError: null,
+    webhookEnabled: false, webhookPlatform: 'discord', webhookUrl: ''
   };
 }
 
