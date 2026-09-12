@@ -28,12 +28,12 @@ describe('buildReportHtml', () => {
   test('balances section is included by default and omitted when disabled', () => {
     const withBalances = buildReportHtml({ accounts, accountBalances, accountMap, added, bankSyncIssue: null });
     assert.match(withBalances.html, /Checking/);
-    assert.match(withBalances.html, /\$1250\.50/);
+    assert.match(withBalances.html, /\$1,250\.50/);
 
     const withoutBalances = buildReportHtml({
       accounts, accountBalances, accountMap, added, bankSyncIssue: null, sections: { balances: false }
     });
-    assert.doesNotMatch(withoutBalances.html, /\$1250\.50/);
+    assert.doesNotMatch(withoutBalances.html, /\$1,250\.50/);
   });
 
   test('transactions section is included by default and omitted when disabled', () => {
@@ -49,6 +49,34 @@ describe('buildReportHtml', () => {
   test('a negative balance renders with a minus sign', () => {
     const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null });
     assert.match(html, /-\$42\.00/);
+  });
+
+  test('total balance renders in the balances section', () => {
+    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, totalBalance: 1208.50 });
+    assert.match(html, /\$1,208\.50/);
+  });
+
+  test('budgetVsActual section is included by default and omitted when disabled', () => {
+    const budgetVsActual = [
+      { categoryId: 'c1', name: 'Groceries', budgeted: 800, spent: 685, remaining: 115, pctUsed: 86, overBudget: false },
+      { categoryId: 'c2', name: 'Dining Out', budgeted: 400, spent: 471, remaining: -71, pctUsed: 118, overBudget: true }
+    ];
+    const withBudget = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, budgetVsActual });
+    assert.match(withBudget.html, /Groceries/);
+    assert.match(withBudget.html, /\$115\.00 remaining/);
+    assert.match(withBudget.html, /Dining Out/);
+    assert.match(withBudget.html, /-\$71\.00 over/);
+
+    const withoutBudget = buildReportHtml({
+      accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, budgetVsActual,
+      sections: { budgetVsActual: false }
+    });
+    assert.doesNotMatch(withoutBudget.html, /Dining Out/);
+  });
+
+  test('an empty budgetVsActual list renders no budget section', () => {
+    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, budgetVsActual: [] });
+    assert.doesNotMatch(html, /Spend vs Budget/);
   });
 
   test('user-provided text is HTML-escaped', () => {

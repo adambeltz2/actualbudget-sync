@@ -28,6 +28,8 @@ async function syncAndReport() {
 
     const accounts = await actualService.getAccounts();
     const accountMap = accounts.reduce((map, acc) => { map[acc.id] = acc.name; return map; }, {});
+    const categories = await actualService.getCategories();
+    const categoryMap = categories.reduce((map, cat) => { map[cat.id] = cat.name; return map; }, {});
 
     const accountBalances = {};
     for (const acc of accounts) {
@@ -65,7 +67,14 @@ async function syncAndReport() {
 
     if (config.enableEmail && (added.length > 0 || bankSyncIssue)) {
       logger.info('Compiling HTML email report...');
-      const { subject, html } = buildReportHtml({ accounts, accountBalances, accountMap, added, bankSyncIssue, sections: config.emailSections });
+      const includeBudget = config.emailSections?.budgetVsActual !== false;
+      const budgetVsActual = includeBudget ? await actualService.getBudgetVsActual() : [];
+      const totalBalance = Object.values(accountBalances).reduce((sum, b) => sum + b, 0);
+      const { subject, html } = buildReportHtml({
+        accounts, accountBalances, accountMap, categoryMap, added, bankSyncIssue,
+        totalBalance, budgetVsActual, publicUrl: config.publicUrl,
+        sections: config.emailSections
+      });
       await sendReport(config, { subject, html });
       logger.info('Email report successfully dispatched.');
     } else {

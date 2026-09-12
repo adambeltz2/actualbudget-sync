@@ -144,6 +144,84 @@ async function getBalanceTrend({ days = 30 } = {}) {
   return trend;
 }
 
+function currentMonthStr() {
+  return new Date().toISOString().slice(0, 7); // "YYYY-MM"
+}
+
+async function getBudgetMonths() {
+  return api.getBudgetMonths();
+}
+
+async function getIncomeVsSpend({ month } = {}) {
+  const targetMonth = month || currentMonthStr();
+  const availableMonths = await getBudgetMonths();
+  if (!availableMonths.includes(targetMonth)) {
+    return { month: targetMonth, income: 0, spend: 0 };
+  }
+  const budgetMonth = await api.getBudgetMonth(targetMonth);
+  return {
+    month: targetMonth,
+    income: budgetMonth.totalIncome / 100,
+    spend: Math.abs(budgetMonth.totalSpent) / 100
+  };
+}
+
+async function getIncomeVsSpendYTD() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const monthsSoFar = [];
+  for (let m = 1; m <= now.getMonth() + 1; m++) {
+    monthsSoFar.push(`${year}-${String(m).padStart(2, '0')}`);
+  }
+
+  const availableMonths = await getBudgetMonths();
+  const validMonths = monthsSoFar.filter(m => availableMonths.includes(m));
+  const budgetMonths = await Promise.all(validMonths.map(m => api.getBudgetMonth(m)));
+
+  return {
+    income: budgetMonths.reduce((sum, bm) => sum + bm.totalIncome, 0) / 100,
+    spend: budgetMonths.reduce((sum, bm) => sum + Math.abs(bm.totalSpent), 0) / 100,
+    monthsIncluded: validMonths.length
+  };
+}
+
+// Pure — takes one category object from getBudgetMonth()'s categoryGroups
+// (amounts still in cents, spend as a negative sum like transaction amounts)
+// and derives the display-ready stats. Exported for unit testing.
+function summarizeBudgetCategory(cat) {
+  const budgeted = (cat.budgeted || 0) / 100;
+  const spent = Math.abs(cat.spent || 0) / 100;
+  const overBudget = budgeted > 0 ? spent > budgeted : spent > 0;
+  const pctUsed = budgeted > 0 ? Math.round((spent / budgeted) * 100) : (spent > 0 ? 100 : 0);
+  return {
+    categoryId: cat.id,
+    name: cat.name,
+    budgeted,
+    spent,
+    remaining: budgeted - spent,
+    pctUsed,
+    overBudget
+  };
+}
+
+async function getBudgetVsActual({ month } = {}) {
+  const targetMonth = month || currentMonthStr();
+  const availableMonths = await getBudgetMonths();
+  if (!availableMonths.includes(targetMonth)) return [];
+
+  const budgetMonth = await api.getBudgetMonth(targetMonth);
+  const categories = [];
+  for (const group of budgetMonth.categoryGroups) {
+    if (group.is_income || group.hidden) continue;
+    for (const cat of group.categories) {
+      if (cat.hidden) continue;
+      if (!cat.budgeted && !cat.spent) continue;
+      categories.push(summarizeBudgetCategory(cat));
+    }
+  }
+  return categories.sort((a, b) => b.spent - a.spent);
+}
+
 async function runBankSync() {
   return api.runBankSync();
 }
@@ -163,7 +241,8 @@ module.exports = {
   ensureReady, refreshBudget, getAccounts, getAccountBalance,
   getTransactionsForAccount, getCategories, queryTransactions,
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
+  getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
-  buildTransactionFilters, SORT_ORDERS
+  buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory
 };

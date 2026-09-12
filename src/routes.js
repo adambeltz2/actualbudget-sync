@@ -144,12 +144,14 @@ router.get('/api/data/summary', async (req, res) => {
   try {
     await actualService.ensureReady(config);
     const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
-    const [netWorth, spendByCategory, balanceTrend] = await Promise.all([
-      actualService.getNetWorth(),
+    const [incomeVsSpend, incomeVsSpendYTD, spendByCategory, balanceTrend, budgetVsActual] = await Promise.all([
+      actualService.getIncomeVsSpend(),
+      actualService.getIncomeVsSpendYTD(),
       actualService.getSpendByCategory({ days }),
-      actualService.getBalanceTrend({ days })
+      actualService.getBalanceTrend({ days }),
+      actualService.getBudgetVsActual()
     ]);
-    res.json({ netWorth, spendByCategory, balanceTrend });
+    res.json({ incomeVsSpend, incomeVsSpendYTD, spendByCategory, balanceTrend, budgetVsActual });
   } catch (err) {
     logger.error('Dashboard summary request failed: ' + err.message);
     res.status(500).json({ error: 'Failed to load dashboard summary.' });

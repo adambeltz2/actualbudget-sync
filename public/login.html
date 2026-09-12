@@ -4,25 +4,55 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Actual Budget Sync — Login</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>tailwind.config = { darkMode: 'class' };</script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap">
+  <style>
+    :root {
+      --bg: #F1F0EC; --card-bg: #FFFFFF; --border: #F0EFEB;
+      --text: #1E2A32; --text-secondary: #33404A; --text-muted: #8A93A0;
+      --accent: #0EA894; --accent-dark: #0C8E7D; --negative: #C4573F;
+      --shadow: 0 1px 2px rgba(30,42,50,0.04), 0 8px 24px rgba(30,42,50,0.06);
+    }
+    html.dark {
+      --bg: #171D21; --card-bg: #1F262B; --border: #2C363D;
+      --text: #EDEFF0; --text-secondary: #C7CDD1; --text-muted: #7C8890;
+      --accent: #14BFA8; --accent-dark: #0EA894; --negative: #E0806A;
+      --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px rgba(0,0,0,0.3);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: var(--bg); color: var(--text);
+      font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
+    }
+    .num { font-family: 'Sora', system-ui, sans-serif; }
+    .card { background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow); padding: 32px; width: 100%; max-width: 380px; }
+    label.field-label { display: block; font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; }
+    input[type="password"] {
+      width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--card-bg); color: var(--text); font-family: inherit; font-size: 14px;
+    }
+    input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    button { width: 100%; padding: 11px; border: none; border-radius: 10px; background: var(--accent); color: white; font-weight: 700; font-size: 14px; font-family: inherit; cursor: pointer; }
+    button:hover { background: var(--accent-dark); }
+    [hidden] { display: none !important; }
+  </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 flex items-center justify-center min-h-screen font-sans transition-colors">
-  <div class="max-w-sm w-full bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md">
-    <h1 class="text-xl font-bold text-gray-700 dark:text-gray-100 mb-1">Actual Budget Smart Sync</h1>
-    <p id="subtitle" class="text-sm text-gray-500 dark:text-gray-400 mb-6">Enter your dashboard password.</p>
+<body>
+  <div class="card">
+    <div class="num" style="font-size:19px; font-weight:800; margin-bottom:4px;">Actual Budget Smart Sync</div>
+    <p id="subtitle" style="font-size:13.5px; color:var(--text-muted); margin-top:0; margin-bottom:22px;">Enter your dashboard password.</p>
 
-    <form id="loginForm" class="space-y-4">
+    <form id="loginForm" style="display:flex; flex-direction:column; gap:16px;">
       <div>
-        <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">Password</label>
-        <input type="password" id="password" required class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500">
+        <label class="field-label">Password</label>
+        <input type="password" id="password" required>
       </div>
-      <div id="confirmField" class="hidden">
-        <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">Confirm Password</label>
-        <input type="password" id="confirmPassword" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500">
+      <div id="confirmField" hidden>
+        <label class="field-label">Confirm Password</label>
+        <input type="password" id="confirmPassword">
       </div>
-      <p id="errorMsg" class="text-sm text-red-600 dark:text-red-400 hidden"></p>
-      <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow transition">Sign In</button>
+      <p id="errorMsg" style="font-size:13px; color:var(--negative); margin:0;" hidden></p>
+      <button type="submit">Sign In</button>
     </form>
   </div>
 
@@ -43,19 +73,19 @@
       if (!configured) {
         isFirstRun = true;
         subtitle.innerText = 'No dashboard password is set yet. Choose one to secure this dashboard.';
-        confirmField.classList.remove('hidden');
+        confirmField.hidden = false;
         confirmInput.required = true;
       }
     });
 
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      errorMsg.classList.add('hidden');
+      errorMsg.hidden = true;
       const password = document.getElementById('password').value;
 
       if (isFirstRun && password !== confirmInput.value) {
         errorMsg.innerText = 'Passwords do not match.';
-        errorMsg.classList.remove('hidden');
+        errorMsg.hidden = false;
         return;
       }
 
@@ -68,7 +98,7 @@
         });
       } catch (err) {
         errorMsg.innerText = 'Could not reach the server. Please try again.';
-        errorMsg.classList.remove('hidden');
+        errorMsg.hidden = false;
         return;
       }
       if (res.ok) {
@@ -76,7 +106,7 @@
       } else {
         const data = await res.json().catch(() => ({}));
         errorMsg.innerText = data.error || 'Login failed.';
-        errorMsg.classList.remove('hidden');
+        errorMsg.hidden = false;
       }
     });
   </script>

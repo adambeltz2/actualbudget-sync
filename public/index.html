@@ -4,222 +4,358 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Actual Budget Sync Dashboard</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>tailwind.config = { darkMode: 'class' };</script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #F1F0EC;
+      --card-bg: #FFFFFF;
+      --card-bg-soft: #FAF9F6;
+      --border: #F0EFEB;
+      --text: #1E2A32;
+      --text-secondary: #33404A;
+      --text-muted: #8A93A0;
+      --accent: #0EA894;
+      --accent-dark: #0C8E7D;
+      --positive: #1C8C74;
+      --negative: #C4573F;
+      --track: #F0EFEB;
+      --shadow: 0 1px 2px rgba(30,42,50,0.04), 0 8px 24px rgba(30,42,50,0.06);
+    }
+    html.dark {
+      --bg: #171D21;
+      --card-bg: #1F262B;
+      --card-bg-soft: #232B31;
+      --border: #2C363D;
+      --text: #EDEFF0;
+      --text-secondary: #C7CDD1;
+      --text-muted: #7C8890;
+      --accent: #14BFA8;
+      --accent-dark: #0EA894;
+      --positive: #2FBF9B;
+      --negative: #E0806A;
+      --track: #2C363D;
+      --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px rgba(0,0,0,0.3);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 40px 24px 64px;
+      background: var(--bg); color: var(--text);
+      font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
+      transition: background 0.2s, color 0.2s;
+    }
+    .shell { max-width: 1040px; margin: 0 auto; }
+    .num { font-family: 'Sora', system-ui, sans-serif; }
+    a { color: var(--accent); }
+    .card { background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow); }
+    .card-soft { background: var(--card-bg-soft); border: 1px solid var(--border); border-radius: 10px; }
+    .label-caps { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer;
+      padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 14px;
+      font-family: inherit; transition: opacity 0.15s;
+    }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-ghost { background: var(--card-bg); color: var(--text-secondary); box-shadow: var(--shadow); }
+    .btn-ghost:hover { opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #FFFFFF; }
+    .btn-primary:hover { background: var(--accent-dark); }
+    .btn-accent-soft { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-dark); }
+    a.btn { text-decoration: none; }
+    label.field-label { display: block; font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; }
+    .field-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    input[type="text"], input[type="password"], input[type="email"], input[type="number"] {
+      width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--card-bg); color: var(--text); font-family: inherit; font-size: 14px;
+    }
+    input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 20px; }
+    @media (max-width: 760px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+    textarea#logViewer { background: #10151A; color: #4ADE94; border: 1px solid var(--border); }
+    .error-banner {
+      background: color-mix(in srgb, var(--negative) 12%, var(--card-bg));
+      border: 1px solid color-mix(in srgb, var(--negative) 35%, var(--card-bg));
+      color: var(--negative); font-size: 14px; padding: 12px 14px; border-radius: 10px; margin-bottom: 24px;
+    }
+    .toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle .slider {
+      position: absolute; inset: 0; background: var(--border); border-radius: 999px; transition: 0.2s; cursor: pointer;
+    }
+    .toggle .slider::before {
+      content: ""; position: absolute; height: 18px; width: 18px; left: 3px; top: 3px;
+      background: white; border-radius: 50%; transition: 0.2s;
+    }
+    .toggle input:checked + .slider { background: var(--accent); }
+    .toggle input:checked + .slider::before { transform: translateX(20px); }
+    [hidden] { display: none !important; }
+  </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-6 font-sans transition-colors">
-  <div class="max-w-4xl mx-auto bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md">
-    <div class="flex justify-between items-center border-b dark:border-gray-700 pb-4 mb-6">
-      <h1 class="text-2xl font-bold text-gray-700 dark:text-gray-100">Actual Budget Smart Sync</h1>
-      <div class="flex gap-2 items-center">
-        <button id="themeToggleBtn" title="Toggle dark mode" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-2 px-3 rounded shadow transition">🌙</button>
-        <a href="/explorer.html" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded shadow transition">Data Explorer</a>
-        <button id="triggerSyncBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow transition disabled:opacity-60 disabled:cursor-not-allowed">Trigger Manual Sync</button>
-        <button id="logoutBtn" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-2 px-4 rounded shadow transition">Logout</button>
+<body>
+  <div class="shell">
+
+    <!-- Top nav -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:32px; flex-wrap:wrap; gap:12px;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div style="width:36px; height:36px; border-radius:10px; background:var(--accent); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 17L10 11L14 15L20 7" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 7H20V13" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="num" style="font-weight:700; font-size:19px;">Actual Budget Smart Sync</div>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="themeToggleBtn" title="Toggle dark mode" class="btn btn-ghost">🌙</button>
+        <a href="/explorer.html" class="btn btn-ghost">Data Explorer</a>
+        <button id="triggerSyncBtn" class="btn btn-primary">Trigger Manual Sync</button>
+        <button id="logoutBtn" class="btn btn-ghost">Logout</button>
       </div>
     </div>
 
-    <div id="errorBanner" class="hidden bg-red-50 dark:bg-red-900/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm p-3 rounded mb-6"></div>
+    <div id="errorBanner" class="error-banner" hidden></div>
 
     <!-- Dashboard Widgets -->
-    <div id="dashboardWidgetsSection" class="hidden mb-8">
-      <div class="flex justify-between items-center mb-3">
-        <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-100">Dashboard</h2>
-        <div class="flex items-center gap-3">
-          <select id="summaryDays" class="text-sm rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 p-1.5 border">
+    <div id="dashboardWidgetsSection" hidden style="margin-bottom:32px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+        <div class="num" style="font-size:18px; font-weight:700;">Dashboard</div>
+        <div style="display:flex; align-items:center; gap:14px;">
+          <select id="summaryDays" style="font-size:13px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); padding:6px 8px;">
             <option value="7">Last 7 days</option>
             <option value="30" selected>Last 30 days</option>
             <option value="90">Last 90 days</option>
             <option value="365">Last year</option>
           </select>
-          <button id="customizeWidgetsBtn" title="Choose which widgets are shown" class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">⚙ Customize</button>
-          <a href="/explorer.html" class="text-sm text-blue-600 dark:text-blue-400 hover:underline">View all transactions →</a>
+          <button id="customizeWidgetsBtn" style="background:none; border:none; cursor:pointer; font-size:13px; color:var(--text-muted); font-family:inherit;">⚙ Customize</button>
+          <a href="/explorer.html" style="font-size:13px; text-decoration:none;">View all transactions →</a>
         </div>
       </div>
 
-      <div id="widgetVisibilityRow" class="hidden flex flex-wrap gap-6 mb-4 p-3 bg-gray-50 dark:bg-gray-900/50 border dark:border-gray-700 rounded text-sm">
-        <label class="flex items-center gap-2 font-medium text-gray-700 dark:text-gray-200">
-          <input type="checkbox" id="widgetNetWorth" class="rounded border-gray-300"> Net Worth
-        </label>
-        <label class="flex items-center gap-2 font-medium text-gray-700 dark:text-gray-200">
-          <input type="checkbox" id="widgetSpendByCategory" class="rounded border-gray-300"> Spend by Category
-        </label>
-        <label class="flex items-center gap-2 font-medium text-gray-700 dark:text-gray-200">
-          <input type="checkbox" id="widgetBalanceTrend" class="rounded border-gray-300"> Balance Trend
-        </label>
+      <div id="widgetVisibilityRow" hidden class="card-soft" style="display:flex; flex-wrap:wrap; gap:18px; padding:12px 16px; margin-bottom:16px; font-size:13px;">
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetIncomeVsSpend"> Income vs Spend</label>
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetIncomeVsSpendYTD"> Income vs Spend YTD</label>
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetSpendByCategory"> Spend by Category</label>
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetBalanceTrend"> Balance Trend</label>
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetBudgetVsActual"> Spend vs Budget</label>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div id="netWorthWidget" class="hidden border dark:border-gray-700 rounded p-4 bg-gray-50 dark:bg-gray-900/50">
-          <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Net Worth</p>
-          <p id="netWorthValue" class="text-2xl font-bold text-gray-800 dark:text-gray-100">—</p>
+      <!-- Income vs Spend (month) -->
+      <div id="incomeVsSpendWidget" hidden class="card" style="padding:28px 32px; margin-bottom:20px;">
+        <div class="label-caps">Income vs Spend · This Month</div>
+        <div style="display:flex; align-items:stretch; gap:32px; margin-top:12px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:140px;">
+            <div style="font-size:12px; font-weight:600; color:var(--text-muted);">Income</div>
+            <div id="ivsIncome" class="num" style="font-size:40px; font-weight:800; color:var(--positive); line-height:1.1; margin-top:4px;">—</div>
+          </div>
+          <div style="width:1px; background:var(--border);"></div>
+          <div style="flex:1; min-width:140px;">
+            <div style="font-size:12px; font-weight:600; color:var(--text-muted);">Spend</div>
+            <div id="ivsSpend" class="num" style="font-size:40px; font-weight:800; color:var(--text); line-height:1.1; margin-top:4px;">—</div>
+          </div>
         </div>
-        <div id="spendByCategoryWidget" class="hidden border dark:border-gray-700 rounded p-4 bg-gray-50 dark:bg-gray-900/50 md:col-span-1">
-          <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Spend by Category</p>
-          <canvas id="spendByCategoryChart" height="140"></canvas>
+        <div id="ivsNetRow" style="display:flex; align-items:center; gap:6px; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+          <span id="ivsNetText" style="font-weight:700; font-size:14px;"></span>
         </div>
-        <div id="balanceTrendWidget" class="hidden border dark:border-gray-700 rounded p-4 bg-gray-50 dark:bg-gray-900/50 md:col-span-1">
-          <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">Balance Trend</p>
-          <canvas id="balanceTrendChart" height="140"></canvas>
+      </div>
+
+      <!-- Income vs Spend YTD -->
+      <div id="incomeVsSpendYTDWidget" hidden class="card" style="padding:18px 32px; margin-bottom:20px;">
+        <div class="label-caps" style="margin-bottom:12px;">Income vs Spend · Year to Date</div>
+        <div style="display:flex; align-items:stretch; gap:32px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:120px;">
+            <div style="font-size:12px; font-weight:600; color:var(--text-muted);">Income YTD</div>
+            <div id="ytdIncome" class="num" style="font-size:22px; font-weight:800; color:var(--positive); margin-top:4px;">—</div>
+          </div>
+          <div style="width:1px; background:var(--border);"></div>
+          <div style="flex:1; min-width:120px;">
+            <div style="font-size:12px; font-weight:600; color:var(--text-muted);">Spend YTD</div>
+            <div id="ytdSpend" class="num" style="font-size:22px; font-weight:800; margin-top:4px;">—</div>
+          </div>
+          <div style="width:1px; background:var(--border);"></div>
+          <div style="flex:1; min-width:120px;">
+            <div style="font-size:12px; font-weight:600; color:var(--text-muted);">Net Saved YTD</div>
+            <div id="ytdNet" class="num" style="font-size:22px; font-weight:800; color:var(--positive); margin-top:4px;">—</div>
+            <div id="ytdPct" style="font-size:12px; color:var(--text-muted); margin-top:2px;"></div>
+          </div>
         </div>
+      </div>
+
+      <!-- Three-up row -->
+      <div class="grid-3" style="margin-bottom:20px;">
+        <div class="card" style="padding:22px;">
+          <div class="label-caps" style="margin-bottom:12px;">Accounts</div>
+          <div id="accountsList" style="display:flex; flex-direction:column;"></div>
+        </div>
+
+        <div id="spendByCategoryWidget" hidden class="card" style="padding:22px; display:flex; flex-direction:column;">
+          <div class="label-caps" style="margin-bottom:12px;">Spend by Category</div>
+          <div style="position:relative; flex:1; display:flex; align-items:center; justify-content:center; min-height:150px;">
+            <canvas id="spendByCategoryChart"></canvas>
+            <div id="donutCenter" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none;">
+              <div id="donutTotal" class="num" style="font-weight:700; font-size:16px;"></div>
+              <div style="font-size:10px; color:var(--text-muted);">total spend</div>
+            </div>
+          </div>
+          <div id="spendByCategoryLegend" style="display:flex; flex-direction:column; gap:6px; margin-top:12px; font-size:12.5px;"></div>
+        </div>
+
+        <div id="balanceTrendWidget" hidden class="card" style="padding:22px; display:flex; flex-direction:column;">
+          <div class="label-caps" style="margin-bottom:12px;">Balance Trend</div>
+          <div style="flex:1; min-height:100px;"><canvas id="balanceTrendChart"></canvas></div>
+          <div id="trendDelta" style="font-size:13px; margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <!-- Spend vs Budget -->
+      <div id="budgetVsActualWidget" hidden class="card" style="padding:26px 32px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+          <div class="label-caps">Spend vs Budget · This Month</div>
+          <div style="display:flex; align-items:center; gap:16px; font-size:12.5px;">
+            <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:var(--accent);"></span>On track</span>
+            <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:var(--negative);"></span>Over budget</span>
+          </div>
+        </div>
+        <div id="budgetRows" style="display:flex; flex-direction:column; gap:16px;"></div>
       </div>
     </div>
 
-    <form id="configForm" class="space-y-6">
+    <form id="configForm" style="display:flex; flex-direction:column; gap:20px;">
       <!-- Actual Budget Section -->
-      <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded border dark:border-gray-700">
-        <h2 class="text-lg font-semibold mb-4 text-gray-700 dark:text-gray-100">Actual Budget Configuration</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="card" style="padding:22px;">
+        <div class="num" style="font-size:16px; font-weight:700; margin-bottom:16px;">Actual Budget Configuration</div>
+        <div class="grid-2">
           <div>
-            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">Server URL</label>
-            <input type="text" id="actualUrl" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500" placeholder="https://your-budget.pikapod.net">
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">The web address of your Actual Budget instance.</p>
+            <label class="field-label">Server URL</label>
+            <input type="text" id="actualUrl" placeholder="https://your-budget.pikapod.net">
+            <p class="field-hint">The web address of your Actual Budget instance.</p>
           </div>
           <div>
-            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">Password</label>
-            <input type="password" id="actualPassword" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500" autocomplete="new-password">
-            <p id="actualPasswordHint" class="text-xs text-gray-500 dark:text-gray-400 mt-1">Your master login password.</p>
+            <label class="field-label">Password</label>
+            <input type="password" id="actualPassword" autocomplete="new-password">
+            <p id="actualPasswordHint" class="field-hint">Your master login password.</p>
           </div>
-          <div class="md:col-span-2">
-            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">Sync ID</label>
-            <input type="text" id="syncId" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500">
-            <p class="text-xs text-blue-600 dark:text-blue-300 mt-1 bg-blue-50 dark:bg-blue-900/30 p-2 rounded border border-blue-100 dark:border-blue-800">
+          <div style="grid-column:1/-1;">
+            <label class="field-label">Sync ID</label>
+            <input type="text" id="syncId">
+            <p style="font-size:12px; color:var(--accent-dark); margin-top:6px; background:color-mix(in srgb, var(--accent) 10%, var(--card-bg)); padding:8px 10px; border-radius:8px;">
               <strong>How to find this:</strong> Open Actual Budget in your browser -> Go to <strong>Settings</strong> -> Click <strong>Show advanced settings</strong> -> Copy the long <strong>Sync ID</strong> string.
             </p>
           </div>
-          <div class="md:col-span-2">
-            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">Cron Schedule</label>
-            <input type="text" id="cronSchedule" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border font-mono" placeholder="0 6,12 * * *">
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Cron format: <code>0 6,12 * * *</code> syncs at 6:00 AM and 12:00 PM (Noon) daily.</p>
+          <div style="grid-column:1/-1;">
+            <label class="field-label">Cron Schedule</label>
+            <input type="text" id="cronSchedule" style="font-family:monospace;" placeholder="0 6,12 * * *">
+            <p class="field-hint">Cron format: <code>0 6,12 * * *</code> syncs at 6:00 AM and 12:00 PM (Noon) daily.</p>
           </div>
         </div>
       </div>
 
       <!-- Email Section -->
-      <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded border dark:border-gray-700">
-        <div class="flex items-center justify-between mb-4 border-b dark:border-gray-700 pb-4">
+      <div class="card" style="padding:22px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:10px;">
           <div>
-            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-100">Email Notifications</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400">Send an HTML summary of new transactions.</p>
+            <div class="num" style="font-size:16px; font-weight:700;">Email Notifications</div>
+            <p class="field-hint" style="margin-top:2px;">Send an HTML summary of new transactions.</p>
           </div>
-
-          <!-- Explicit Toggle Switch -->
-          <label class="flex items-center cursor-pointer select-none">
-            <div class="relative">
-              <input type="checkbox" id="enableEmail" class="sr-only">
-              <div class="block bg-gray-300 dark:bg-gray-600 w-16 h-8 rounded-full transition-colors duration-300" id="toggleBg"></div>
-              <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform duration-300 flex items-center justify-center shadow"></div>
-            </div>
-            <div class="ml-3 font-bold text-gray-500 dark:text-gray-400 w-8" id="toggleText">OFF</div>
+          <label class="toggle">
+            <input type="checkbox" id="enableEmail">
+            <span class="slider"></span>
           </label>
-          <style>
-            input:checked ~ .dot { transform: translateX(100%); }
-            input:checked ~ #toggleBg { background-color: #10b981; }
-          </style>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-50 transition-opacity duration-300 pointer-events-none" id="emailSettingsDiv">
-          <div>
-            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">SMTP Host</label>
-            <input type="text" id="smtpHost" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border" placeholder="smtp.gmail.com">
+        <div id="emailSettingsDiv" class="grid-2" style="opacity:0.5; pointer-events:none; transition:opacity 0.2s;">
+          <div style="grid-column:1/-1;">
+            <label class="field-label">Dashboard URL <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+            <input type="text" id="publicUrl" placeholder="https://sync.yourdomain.com">
+            <p class="field-hint">If set, the email report includes a "View Full Report" button linking here.</p>
           </div>
           <div>
-            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">SMTP Port</label>
-            <input type="number" id="smtpPort" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border" placeholder="465">
+            <label class="field-label">SMTP Host</label>
+            <input type="text" id="smtpHost" placeholder="smtp.gmail.com">
           </div>
           <div>
-            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">Email Username</label>
-            <input type="email" id="emailUser" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border" placeholder="youremail@gmail.com">
+            <label class="field-label">SMTP Port</label>
+            <input type="number" id="smtpPort" placeholder="465">
           </div>
           <div>
-            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">App Password</label>
-            <input type="password" id="emailPass" class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border" autocomplete="new-password">
-            <p id="emailPassHint" class="text-xs text-gray-500 dark:text-gray-400 mt-1">If using Gmail, use a 16-digit App Password.</p>
+            <label class="field-label">Email Username</label>
+            <input type="email" id="emailUser" placeholder="youremail@gmail.com">
           </div>
-          <div class="md:col-span-2">
-            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200">Send Reports To:</label>
+          <div>
+            <label class="field-label">App Password</label>
+            <input type="password" id="emailPass" autocomplete="new-password">
+            <p id="emailPassHint" class="field-hint">If using Gmail, use a 16-digit App Password.</p>
+          </div>
+          <div style="grid-column:1/-1;">
+            <label class="field-label">Send Reports To:</label>
             <input type="email" id="emailTo" multiple
               title="Separate multiple addresses with commas, e.g. alice@example.com, bob@example.com"
-              class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm p-2 border"
               placeholder="alice@example.com, bob@example.com">
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate multiple addresses with commas — e.g. <code>alice@example.com, bob@example.com</code>.</p>
+            <p class="field-hint">Separate multiple addresses with commas — e.g. <code>alice@example.com, bob@example.com</code>.</p>
           </div>
-          <div class="md:col-span-2">
-            <label class="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">Include in report:</label>
-            <div class="flex flex-wrap gap-6">
-              <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
-                <input type="checkbox" id="emailSectionBalances" class="rounded border-gray-300"> Account balances
-              </label>
-              <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
-                <input type="checkbox" id="emailSectionTransactions" class="rounded border-gray-300"> New transactions
-              </label>
+          <div style="grid-column:1/-1;">
+            <label class="field-label">Include in report:</label>
+            <div style="display:flex; flex-wrap:wrap; gap:18px; font-size:13.5px; color:var(--text-secondary);">
+              <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="emailSectionBalances"> Account balances</label>
+              <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="emailSectionTransactions"> New transactions</label>
+              <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="emailSectionBudgetVsActual"> Spend vs budget</label>
             </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Connection issue alerts are always included regardless of these settings.</p>
+            <p class="field-hint">Connection issue alerts are always included regardless of these settings.</p>
           </div>
         </div>
       </div>
 
-      <div class="flex justify-end items-center gap-4 mt-4">
-        <button type="button" id="postSaveSyncBtn" class="hidden bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold py-2 px-6 rounded shadow border border-blue-300 dark:border-blue-700 transition">Test Connection & Sync Now</button>
-        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-8 rounded shadow transition">Save Configuration</button>
+      <div style="display:flex; justify-content:flex-end; align-items:center; gap:12px;">
+        <button type="button" id="postSaveSyncBtn" class="btn btn-accent-soft" hidden>Test Connection & Sync Now</button>
+        <button type="submit" class="btn btn-primary" style="padding:10px 28px;">Save Configuration</button>
       </div>
     </form>
 
-    <div class="mt-8 border-t dark:border-gray-700 pt-6">
-      <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-100 mb-2">Live System Logs</h2>
-      <textarea id="logViewer" class="w-full h-80 bg-gray-900 text-green-400 font-mono text-xs p-4 rounded border-gray-700 leading-relaxed" readonly></textarea>
+    <div style="margin-top:32px; padding-top:24px; border-top:1px solid var(--border);">
+      <div class="num" style="font-size:16px; font-weight:700; margin-bottom:10px;">Live System Logs</div>
+      <textarea id="logViewer" style="width:100%; height:280px; font-family:monospace; font-size:12px; padding:14px; border-radius:10px; line-height:1.5;" readonly></textarea>
     </div>
   </div>
 
   <script>
+    const ACCENT = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0EA894';
+    const CATEGORY_PALETTE = ['#0EA894', '#E8A33D', '#4C8DAE', '#8B7FD1', '#C4573F', '#9C7A54'];
+    const ACCOUNT_PALETTE = ['#0EA894', '#4C8DAE', '#8B7FD1', '#E8A33D', '#9C7A54'];
+
     // --- Theme ---
     function applyTheme(isDark) {
       document.documentElement.classList.toggle('dark', isDark);
       document.getElementById('themeToggleBtn').innerText = isDark ? '☀️' : '🌙';
     }
-    function initTheme() {
+    try {
       const stored = localStorage.getItem('theme');
       const isDark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
       applyTheme(isDark);
-    }
+    } catch (e) { /* localStorage may be unavailable (private mode); default light theme is fine */ }
     document.getElementById('themeToggleBtn').addEventListener('click', () => {
       const isDark = !document.documentElement.classList.contains('dark');
       applyTheme(isDark);
-      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch (e) { /* ignore */ }
     });
-    try { initTheme(); } catch (e) { /* localStorage may be unavailable (private mode); default light theme is fine */ }
 
     // --- Error banner ---
     const errorBanner = document.getElementById('errorBanner');
-    function showError(message) {
-      errorBanner.innerText = message;
-      errorBanner.classList.remove('hidden');
-    }
-    function hideError() {
-      errorBanner.classList.add('hidden');
+    function showError(message) { errorBanner.innerText = message; errorBanner.hidden = false; }
+    function hideError() { errorBanner.hidden = true; }
+
+    function formatCurrency(amount) {
+      const text = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return amount < 0 ? `-$${text}` : `$${text}`;
     }
 
-    // --- UI Logic ---
+    // --- Email toggle switch ---
     const emailToggle = document.getElementById('enableEmail');
     const emailSettingsDiv = document.getElementById('emailSettingsDiv');
-    const toggleText = document.getElementById('toggleText');
-
     function updateToggleUI(isEnabled) {
-      if (isEnabled) {
-        emailSettingsDiv.classList.remove('opacity-50', 'pointer-events-none');
-        toggleText.innerText = 'ON';
-        toggleText.classList.replace('text-gray-500', 'text-green-600');
-      } else {
-        emailSettingsDiv.classList.add('opacity-50', 'pointer-events-none');
-        toggleText.innerText = 'OFF';
-        toggleText.classList.replace('text-green-600', 'text-gray-500');
-      }
+      emailSettingsDiv.style.opacity = isEnabled ? '1' : '0.5';
+      emailSettingsDiv.style.pointerEvents = isEnabled ? 'auto' : 'none';
     }
     emailToggle.addEventListener('change', (e) => updateToggleUI(e.target.checked));
 
     document.getElementById('customizeWidgetsBtn').addEventListener('click', () => {
-      document.getElementById('widgetVisibilityRow').classList.toggle('hidden');
+      document.getElementById('widgetVisibilityRow').hidden = !document.getElementById('widgetVisibilityRow').hidden;
     });
 
     // --- Config Save/Load ---
@@ -245,8 +381,9 @@
       document.getElementById('syncId').value = config.syncId || '';
       document.getElementById('cronSchedule').value = config.cronSchedule || '0 6,12 * * *';
       const isEmailEnabled = config.enableEmail || false;
-      document.getElementById('enableEmail').checked = isEmailEnabled;
+      emailToggle.checked = isEmailEnabled;
       updateToggleUI(isEmailEnabled);
+      document.getElementById('publicUrl').value = config.publicUrl || '';
       document.getElementById('smtpHost').value = config.smtpHost || '';
       document.getElementById('smtpPort').value = config.smtpPort || '465';
       document.getElementById('emailUser').value = config.emailUser || '';
@@ -258,17 +395,20 @@
       document.getElementById('emailTo').value = config.emailTo || '';
 
       const widgets = config.dashboardWidgets || {};
-      document.getElementById('widgetNetWorth').checked = widgets.netWorth !== false;
+      document.getElementById('widgetIncomeVsSpend').checked = widgets.incomeVsSpend !== false;
+      document.getElementById('widgetIncomeVsSpendYTD').checked = widgets.incomeVsSpendYTD !== false;
       document.getElementById('widgetSpendByCategory').checked = widgets.spendByCategory !== false;
       document.getElementById('widgetBalanceTrend').checked = widgets.balanceTrend !== false;
+      document.getElementById('widgetBudgetVsActual').checked = widgets.budgetVsActual !== false;
 
       const sections = config.emailSections || {};
       document.getElementById('emailSectionBalances').checked = sections.balances !== false;
       document.getElementById('emailSectionTransactions').checked = sections.transactions !== false;
+      document.getElementById('emailSectionBudgetVsActual').checked = sections.budgetVsActual !== false;
 
       const isConfigured = !!(config.actualUrl && config.actualPasswordSet && config.syncId);
       if (isConfigured) {
-        document.getElementById('dashboardWidgetsSection').classList.remove('hidden');
+        document.getElementById('dashboardWidgetsSection').hidden = false;
         loadDashboardWidgets(widgets, document.getElementById('summaryDays').value);
       }
     }
@@ -277,9 +417,38 @@
     let spendChart = null;
     let trendChart = null;
 
-    function formatCurrency(amount) {
-      const text = Math.abs(amount).toFixed(2);
-      return amount < 0 ? `-$${text}` : `$${text}`;
+    function renderAccounts(accounts) {
+      const list = document.getElementById('accountsList');
+      list.innerHTML = accounts.map((a, i) => `
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
+          <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+            <span style="width:9px; height:9px; border-radius:50%; background:${ACCOUNT_PALETTE[i % ACCOUNT_PALETTE.length]}; flex-shrink:0;"></span>
+            <span style="font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</span>
+          </div>
+          <span class="num" style="font-weight:700; font-size:14px; color:${a.balance < 0 ? 'var(--negative)' : 'var(--text)'}; flex-shrink:0; margin-left:10px;">${formatCurrency(a.balance)}</span>
+        </div>`).join('') || `<p style="color:var(--text-muted); font-size:13px;">No accounts yet.</p>`;
+    }
+
+    function renderBudgetRows(categories) {
+      const container = document.getElementById('budgetRows');
+      container.innerHTML = categories.slice(0, 8).map(cat => {
+        const pct = Math.min(cat.pctUsed, 100);
+        const barColor = cat.overBudget ? 'var(--negative)' : 'var(--accent)';
+        const status = cat.overBudget
+          ? `<span style="color:var(--negative); font-weight:700;">-${formatCurrency(Math.abs(cat.remaining))} over</span>`
+          : `<span style="color:var(--text-secondary); font-weight:700;">${formatCurrency(cat.remaining)} remaining</span>`;
+        return `<div>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <span style="font-size:13.5px; font-weight:600;">${cat.name}</span>
+            <span style="font-size:12.5px;">${status}</span>
+          </div>
+          <div style="position:relative; height:16px; background:var(--track); border-radius:5px;">
+            <div style="position:absolute; left:0; top:0; bottom:0; width:${pct}%; background:${barColor}; border-radius:5px; display:flex; align-items:center; justify-content:flex-end; padding-right:8px;">
+              <span class="num" style="font-size:11px; font-weight:700; color:white;">${cat.pctUsed}%</span>
+            </div>
+          </div>
+        </div>`;
+      }).join('') || `<p style="color:var(--text-muted); font-size:13px;">No budgeted categories yet.</p>`;
     }
 
     async function loadDashboardWidgets(widgets, days) {
@@ -294,55 +463,102 @@
       const summary = await res.json();
       if (summary.error) { showError(summary.error); return; }
 
-      if (widgets.netWorth !== false) {
-        document.getElementById('netWorthWidget').classList.remove('hidden');
-        const el = document.getElementById('netWorthValue');
-        el.innerText = formatCurrency(summary.netWorth);
-        el.classList.toggle('text-red-600', summary.netWorth < 0);
+      let accountsRes;
+      try {
+        accountsRes = await fetch('/api/data/accounts');
+        const accounts = await accountsRes.json();
+        if (!accounts.error) renderAccounts(accounts);
+      } catch (err) { /* accounts list is supplementary; summary widgets still render */ }
+
+      if (widgets.incomeVsSpend !== false) {
+        document.getElementById('incomeVsSpendWidget').hidden = false;
+        const { income, spend } = summary.incomeVsSpend;
+        document.getElementById('ivsIncome').innerText = formatCurrency(income);
+        document.getElementById('ivsSpend').innerText = formatCurrency(spend);
+        const net = income - spend;
+        const pct = income > 0 ? Math.round((net / income) * 100) : 0;
+        const arrow = net >= 0
+          ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px; margin-right:4px;"><path d="M6 15L12 9L18 15" stroke="var(--positive)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+          : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px; margin-right:4px;"><path d="M6 9L12 15L18 9" stroke="var(--negative)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        document.getElementById('ivsNetText').innerHTML = `${arrow}<span style="color:${net >= 0 ? 'var(--positive)' : 'var(--negative)'};">${formatCurrency(Math.abs(net))} ${net >= 0 ? 'saved' : 'over income'}</span> <span style="color:var(--text-muted); font-weight:400;">(${pct}% of income) this month</span>`;
+      }
+
+      if (widgets.incomeVsSpendYTD !== false) {
+        document.getElementById('incomeVsSpendYTDWidget').hidden = false;
+        const { income, spend } = summary.incomeVsSpendYTD;
+        const net = income - spend;
+        const pct = income > 0 ? Math.round((net / income) * 100) : 0;
+        document.getElementById('ytdIncome').innerText = formatCurrency(income);
+        document.getElementById('ytdSpend').innerText = formatCurrency(spend);
+        document.getElementById('ytdNet').innerText = formatCurrency(net);
+        document.getElementById('ytdNet').style.color = net >= 0 ? 'var(--positive)' : 'var(--negative)';
+        document.getElementById('ytdPct').innerText = `${pct}% of income`;
       }
 
       if (widgets.spendByCategory !== false && summary.spendByCategory.length > 0) {
-        document.getElementById('spendByCategoryWidget').classList.remove('hidden');
-        const ctx = document.getElementById('spendByCategoryChart');
+        document.getElementById('spendByCategoryWidget').hidden = false;
         const top = summary.spendByCategory.slice(0, 6);
+        const total = top.reduce((sum, c) => sum + c.total, 0);
+        document.getElementById('donutTotal').innerText = formatCurrency(total);
+
+        const ctx = document.getElementById('spendByCategoryChart');
         if (spendChart) spendChart.destroy();
         spendChart = new Chart(ctx, {
-          type: 'bar',
+          type: 'doughnut',
           data: {
             labels: top.map(c => c.name),
-            datasets: [{ data: top.map(c => c.total), backgroundColor: '#3b82f6' }]
+            datasets: [{ data: top.map(c => c.total), backgroundColor: top.map((_, i) => CATEGORY_PALETTE[i % CATEGORY_PALETTE.length]), borderWidth: 0 }]
           },
-          options: {
-            indexAxis: 'y',
-            plugins: { legend: { display: false } },
-            scales: { x: { ticks: { callback: v => '$' + v } } }
-          }
+          options: { cutout: '68%', plugins: { legend: { display: false }, tooltip: { enabled: true } } }
         });
+
+        document.getElementById('spendByCategoryLegend').innerHTML = top.map((c, i) => `
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${CATEGORY_PALETTE[i % CATEGORY_PALETTE.length]}; flex-shrink:0;"></span>
+            <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${c.name}</span>
+            <span style="color:var(--text-muted);">${total > 0 ? Math.round((c.total / total) * 100) : 0}%</span>
+          </div>`).join('');
       }
 
       if (widgets.balanceTrend !== false && summary.balanceTrend.length > 0) {
-        document.getElementById('balanceTrendWidget').classList.remove('hidden');
+        document.getElementById('balanceTrendWidget').hidden = false;
+        const points = summary.balanceTrend;
         const ctx = document.getElementById('balanceTrendChart');
         if (trendChart) trendChart.destroy();
         trendChart = new Chart(ctx, {
           type: 'line',
           data: {
-            labels: summary.balanceTrend.map(p => p.date),
-            datasets: [{ data: summary.balanceTrend.map(p => p.balance), borderColor: '#10b981', tension: 0.2, pointRadius: 0 }]
+            labels: points.map(p => p.date),
+            datasets: [{
+              data: points.map(p => p.balance), borderColor: ACCENT, backgroundColor: ACCENT + '33',
+              fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2.5
+            }]
           },
           options: {
             plugins: { legend: { display: false } },
-            scales: { x: { ticks: { maxTicksLimit: 6 } }, y: { ticks: { callback: v => '$' + v } } }
+            scales: { x: { display: false }, y: { display: false } },
+            elements: { line: { capBezierPoints: true } }
           }
         });
+
+        const delta = points[points.length - 1].balance - points[0].balance;
+        const deltaColor = delta >= 0 ? 'var(--positive)' : 'var(--negative)';
+        document.getElementById('trendDelta').innerHTML = `<span style="color:${deltaColor}; font-weight:700;">${delta >= 0 ? '+' : ''}${formatCurrency(delta)}</span> <span style="color:var(--text-muted);">past ${points.length} days</span>`;
+      }
+
+      if (widgets.budgetVsActual !== false) {
+        document.getElementById('budgetVsActualWidget').hidden = false;
+        renderBudgetRows(summary.budgetVsActual || []);
       }
     }
 
     document.getElementById('summaryDays').addEventListener('change', (e) => {
       const widgets = {
-        netWorth: document.getElementById('widgetNetWorth').checked,
+        incomeVsSpend: document.getElementById('widgetIncomeVsSpend').checked,
+        incomeVsSpendYTD: document.getElementById('widgetIncomeVsSpendYTD').checked,
         spendByCategory: document.getElementById('widgetSpendByCategory').checked,
         balanceTrend: document.getElementById('widgetBalanceTrend').checked,
+        budgetVsActual: document.getElementById('widgetBudgetVsActual').checked,
       };
       loadDashboardWidgets(widgets, e.target.value);
     });
@@ -354,20 +570,24 @@
         actualPassword: document.getElementById('actualPassword').value,
         syncId: document.getElementById('syncId').value,
         cronSchedule: document.getElementById('cronSchedule').value,
-        enableEmail: document.getElementById('enableEmail').checked,
+        enableEmail: emailToggle.checked,
+        publicUrl: document.getElementById('publicUrl').value,
         smtpHost: document.getElementById('smtpHost').value,
         smtpPort: document.getElementById('smtpPort').value,
         emailUser: document.getElementById('emailUser').value,
         emailPass: document.getElementById('emailPass').value,
         emailTo: document.getElementById('emailTo').value,
         dashboardWidgets: {
-          netWorth: document.getElementById('widgetNetWorth').checked,
+          incomeVsSpend: document.getElementById('widgetIncomeVsSpend').checked,
+          incomeVsSpendYTD: document.getElementById('widgetIncomeVsSpendYTD').checked,
           spendByCategory: document.getElementById('widgetSpendByCategory').checked,
           balanceTrend: document.getElementById('widgetBalanceTrend').checked,
+          budgetVsActual: document.getElementById('widgetBudgetVsActual').checked,
         },
         emailSections: {
           balances: document.getElementById('emailSectionBalances').checked,
           transactions: document.getElementById('emailSectionTransactions').checked,
+          budgetVsActual: document.getElementById('emailSectionBudgetVsActual').checked,
         },
       };
       try {
@@ -381,7 +601,7 @@
         showError('Could not reach the server. Configuration was not saved.');
         return;
       }
-      document.getElementById('postSaveSyncBtn').classList.remove('hidden');
+      document.getElementById('postSaveSyncBtn').hidden = false;
       loadConfig();
     });
 
