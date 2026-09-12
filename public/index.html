@@ -1132,8 +1132,11 @@
       const netText = projection.avgMonthlyNetChange >= 0
         ? `saving an average of ${formatCurrency(projection.avgMonthlyNetChange)}/month`
         : `spending down an average of ${formatCurrency(Math.abs(projection.avgMonthlyNetChange))}/month`;
+      const investedExplanation = data.usesInvestmentTagging
+        ? '"Invested at assumed return" compounds only your tagged Investment Accounts at the selected rate; your remaining (liquid) balance keeps growing at its own recent pace, uncompounded.'
+        : '"Invested at assumed return" compounds that pace monthly at the selected rate. Tag accounts under Investment Accounts in settings to compound only your actual investments instead of your whole balance.';
       document.getElementById('projectionFootnote').innerText =
-        `Based on your recent history, you've been ${netText}. The shaded range reflects how much your monthly change has historically varied; "Invested at assumed return" compounds that pace monthly at the selected rate.`;
+        `Based on your recent history, you've been ${netText}. The shaded range reflects how much your monthly change has historically varied; ${investedExplanation}`;
 
       const tenYear = projection.projections.find(p => p.years === 10);
       document.getElementById('headlineProjection').innerText = tenYear ? formatCurrency(tenYear.compoundGrowth) : '—';

@@ -254,7 +254,7 @@ router.get('/api/data/insights', async (req, res) => {
     const annualReturnRatePct = req.query.annualReturnPct !== undefined
       ? Math.min(Math.max(parseFloat(req.query.annualReturnPct), -20), 30)
       : (config.insightsAnnualReturnPct ?? 7);
-    const insights = await actualService.getFinancialInsights({ months, annualReturnRatePct });
+    const insights = await actualService.getFinancialInsights({ months, annualReturnRatePct, investmentAccountIds: config.investmentAccountIds || [] });
     res.json(insights);
   } catch (err) {
     logger.error('Financial insights request failed: ' + err.message);
