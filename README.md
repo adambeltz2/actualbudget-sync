@@ -10,6 +10,18 @@ This service is designed to run independently of your main Actual Budget server.
 
 **Available on both [GitHub Container Registry](https://github.com/adambeltz2/actualbudget-sync/pkgs/container/actualbudget-sync) and [Docker Hub](https://hub.docker.com/r/adambeltz/actualbudget-sync)** — pick whichever registry you prefer, the image is identical.
 
+## Screenshots
+
+**Dashboard** — Income vs Spend, account balances, spend by category, balance trend, budget vs actual, and financial projections, all from your own synced data.
+
+![Dashboard screenshot](docs/screenshots/dashboard.png)
+
+**Email report** — a sync summary with new transactions, budget status, and account balances, delivered straight to your inbox.
+
+![Email report screenshot](docs/screenshots/email-report.png)
+
+*(Screenshots use sample data, not real account information.)*
+
 ## Features
 * **Automated Syncing:** Triggers `runBankSync()` automatically using standard cron syntax (e.g., `0 6,12 * * *`).
 * **Snapshot Comparison:** Fetches current transactions before the sync, waits for the SimpleFIN/bank data to update, and fetches transactions again to find new items.

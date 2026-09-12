@@ -279,7 +279,7 @@ router.get('/api/data/transactions/export', async (req, res) => {
 
     const sort = parseSort(req.query.sort);
     const [transactions, accounts, categories] = await Promise.all([
-      actualService.queryTransactions({ ...filters, limit: 5000, offset: 0, sort }),
+      actualService.queryAllTransactions(filters, { sort }),
       actualService.getAccounts({ includeClosed: true }),
       actualService.getCategories()
     ]);

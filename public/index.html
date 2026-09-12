@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Actual Budget Sync Dashboard</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+  <!-- Vendored locally (public/vendor/chart.umd.js, from npm chart.js@4.4.4) rather than
+       loaded from a CDN — a self-hosted dashboard shouldn't depend on cdnjs.cloudflare.com
+       being reachable from every viewer's browser (corporate firewalls, ad blockers, DNS
+       filtering, and restrictive/offline networks all commonly block it). -->
+  <script src="/vendor/chart.umd.js"></script>
   <style>
     :root {
       --bg: #F1F0EC;
@@ -673,7 +677,20 @@
         if (!accounts.error) renderAccounts(accounts);
       } catch (err) { /* accounts list is supplementary; summary widgets still render */ }
 
-      if (widgets.incomeVsSpend !== false) {
+      // Each widget renders inside its own try/catch: a chart failing to
+      // draw in one card (e.g. Chart.js failing to load from a blocked CDN)
+      // must not take every widget after it down with it — previously an
+      // uncaught error here silently blanked every remaining widget too.
+      function safeRenderWidget(name, render) {
+        try {
+          render();
+        } catch (err) {
+          console.error(`Dashboard widget "${name}" failed to render:`, err);
+        }
+      }
+
+      safeRenderWidget('incomeVsSpend', () => {
+        if (widgets.incomeVsSpend === false) return;
         document.getElementById('incomeVsSpendWidget').hidden = false;
         const { income, spend } = summary.incomeVsSpend;
         document.getElementById('ivsIncome').innerText = formatCurrency(income);
@@ -684,9 +701,10 @@
           ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px; margin-right:4px;"><path d="M6 15L12 9L18 15" stroke="var(--positive)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
           : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px; margin-right:4px;"><path d="M6 9L12 15L18 9" stroke="var(--negative)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
         document.getElementById('ivsNetText').innerHTML = `${arrow}<span style="color:${net >= 0 ? 'var(--positive)' : 'var(--negative)'};">${formatCurrency(Math.abs(net))} ${net >= 0 ? 'saved' : 'over income'}</span> <span style="color:var(--text-muted); font-weight:400;">(${pct}% of income) this month</span>`;
-      }
+      });
 
-      if (widgets.incomeVsSpendYTD !== false) {
+      safeRenderWidget('incomeVsSpendYTD', () => {
+        if (widgets.incomeVsSpendYTD === false) return;
         document.getElementById('incomeVsSpendYTDWidget').hidden = false;
         const { income, spend } = summary.incomeVsSpendYTD;
         const net = income - spend;
@@ -696,13 +714,12 @@
         document.getElementById('ytdNet').innerText = formatCurrency(net);
         document.getElementById('ytdNet').style.color = net >= 0 ? 'var(--positive)' : 'var(--negative)';
         document.getElementById('ytdPct').innerText = `${pct}% of income`;
-      }
+      });
 
-      if (widgets.spendByCategory !== false && summary.spendByCategory.length > 0) {
-        document.getElementById('spendByCategoryWidget').hidden = false;
+      safeRenderWidget('spendByCategory', () => {
+        if (widgets.spendByCategory === false || summary.spendByCategory.length === 0) return;
         const top = summary.spendByCategory.slice(0, 6);
         const total = top.reduce((sum, c) => sum + c.total, 0);
-        document.getElementById('donutTotal').innerText = formatCurrency(total);
 
         const ctx = document.getElementById('spendByCategoryChart');
         if (spendChart) spendChart.destroy();
@@ -715,16 +732,21 @@
           options: { cutout: '68%', plugins: { legend: { display: false }, tooltip: { enabled: true } } }
         });
 
+        // Only reveal the card once the chart itself has been created
+        // successfully — otherwise a Chart.js failure leaves an empty-looking
+        // card with just a header, instead of the card simply staying hidden.
+        document.getElementById('donutTotal').innerText = formatCurrency(total);
         document.getElementById('spendByCategoryLegend').innerHTML = top.map((c, i) => `
           <div style="display:flex; align-items:center; gap:8px;">
             <span style="width:8px;height:8px;border-radius:50%;background:${CATEGORY_PALETTE[i % CATEGORY_PALETTE.length]}; flex-shrink:0;"></span>
             <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${c.name}</span>
             <span style="color:var(--text-muted);">${total > 0 ? Math.round((c.total / total) * 100) : 0}%</span>
           </div>`).join('');
-      }
+        document.getElementById('spendByCategoryWidget').hidden = false;
+      });
 
-      if (widgets.balanceTrend !== false && summary.balanceTrend.length > 0) {
-        document.getElementById('balanceTrendWidget').hidden = false;
+      safeRenderWidget('balanceTrend', () => {
+        if (widgets.balanceTrend === false || summary.balanceTrend.length === 0) return;
         const points = summary.balanceTrend;
         const ctx = document.getElementById('balanceTrendChart');
         if (trendChart) trendChart.destroy();
@@ -747,17 +769,20 @@
         const delta = points[points.length - 1].balance - points[0].balance;
         const deltaColor = delta >= 0 ? 'var(--positive)' : 'var(--negative)';
         document.getElementById('trendDelta').innerHTML = `<span style="color:${deltaColor}; font-weight:700;">${delta >= 0 ? '+' : ''}${formatCurrency(delta)}</span> <span style="color:var(--text-muted);">past ${points.length} days</span>`;
-      }
+        document.getElementById('balanceTrendWidget').hidden = false;
+      });
 
-      if (widgets.budgetVsActual !== false) {
+      safeRenderWidget('budgetVsActual', () => {
+        if (widgets.budgetVsActual === false) return;
         document.getElementById('budgetVsActualWidget').hidden = false;
         renderBudgetRows(summary.budgetVsActual || []);
-      }
+      });
 
-      if (widgets.insights !== false) {
+      safeRenderWidget('insights', () => {
+        if (widgets.insights === false) return;
         document.getElementById('insightsWidget').hidden = false;
         loadInsights(document.getElementById('insightsReturnRate').value);
-      }
+      });
     }
 
     // Small hand-rolled SVG sparkline (no Chart.js instance per row — this
@@ -896,8 +921,12 @@
       if (res.status === 401) { window.location.href = '/login.html'; return; }
       const data = await res.json();
       if (data.error) return;
-      renderSpendingTrends(data.spendingTrends || []);
-      renderProjection(data);
+      try {
+        renderSpendingTrends(data.spendingTrends || []);
+        renderProjection(data);
+      } catch (err) {
+        console.error('Financial Insights widget failed to render:', err);
+      }
     }
 
     document.getElementById('insightsReturnRate').addEventListener('change', (e) => {

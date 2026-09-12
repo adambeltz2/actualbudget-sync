@@ -71,7 +71,12 @@ async function syncAndReport() {
       newTransactions.push(...await actualService.getTransactionsForAccount(acc.id, startDate, endDate));
     }
 
-    const added = _.differenceBy(newTransactions, oldTransactions, 'id');
+    // getTransactionsForAccount doesn't include payee_name (only the raw
+    // payee id) — resolved here, once, rather than per-account inside the
+    // fetch loops above, and only for the transactions actually reported.
+    const rawAdded = _.differenceBy(newTransactions, oldTransactions, 'id');
+    const payees = await actualService.getPayees();
+    const added = actualService.resolvePayeeNames(rawAdded, payees);
     const totalBalance = Object.values(accountBalances).reduce((sum, b) => sum + b, 0);
     const hasReportableChange = added.length > 0 || bankSyncIssue;
 

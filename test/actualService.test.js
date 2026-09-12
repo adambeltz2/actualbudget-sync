@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory } = require('../src/actualService');
+const { buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames } = require('../src/actualService');
 
 describe('buildTransactionFilters', () => {
   test('returns an empty array when no filters are given', () => {
@@ -84,5 +84,38 @@ describe('summarizeBudgetCategory', () => {
     assert.equal(result.budgeted, 0);
     assert.equal(result.spent, 0);
     assert.equal(result.overBudget, false);
+  });
+});
+
+describe('resolvePayeeNames', () => {
+  // @actual-app/api's transactions view doesn't include payee_name from a
+  // bare select('*') — only the raw payee id — so every transaction needs
+  // its name resolved against a separately-fetched payees list.
+  const payees = [{ id: 'p1', name: 'Coffee Shop' }, { id: 'p2', name: 'Employer' }];
+
+  test('fills in payee_name from the payee id when missing', () => {
+    const transactions = [{ id: 't1', payee: 'p1' }, { id: 't2', payee: 'p2' }];
+    const resolved = resolvePayeeNames(transactions, payees);
+    assert.equal(resolved[0].payee_name, 'Coffee Shop');
+    assert.equal(resolved[1].payee_name, 'Employer');
+  });
+
+  test('leaves an existing payee_name untouched', () => {
+    const transactions = [{ id: 't1', payee: 'p1', payee_name: 'Already Set' }];
+    const resolved = resolvePayeeNames(transactions, payees);
+    assert.equal(resolved[0].payee_name, 'Already Set');
+  });
+
+  test('a transaction with no matching payee (e.g. a transfer) gets null rather than throwing', () => {
+    const transactions = [{ id: 't1', payee: null }, { id: 't2', payee: 'unknown-id' }];
+    const resolved = resolvePayeeNames(transactions, payees);
+    assert.equal(resolved[0].payee_name, null);
+    assert.equal(resolved[1].payee_name, null);
+  });
+
+  test('does not mutate the original transaction objects', () => {
+    const original = { id: 't1', payee: 'p1' };
+    resolvePayeeNames([original], payees);
+    assert.equal(original.payee_name, undefined);
   });
 });

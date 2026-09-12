@@ -79,6 +79,30 @@ describe('buildReportHtml', () => {
     assert.doesNotMatch(html, /Spend vs Budget/);
   });
 
+  test('shows the new-transaction count as a headline even with zero transactions', () => {
+    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null });
+    assert.match(html, /New Transactions[\s\S]*?>0</);
+  });
+
+  test('sections render in the requested order: transactions, account status, budget, balances', () => {
+    const budgetVsActual = [
+      { categoryId: 'c1', name: 'Groceries', budgeted: 800, spent: 685, remaining: 115, pctUsed: 86, overBudget: false }
+    ];
+    const { html } = buildReportHtml({
+      accounts, accountBalances, accountMap, added, bankSyncIssue: 'Connection timed out',
+      totalBalance: 1208.50, budgetVsActual
+    });
+    const txIndex = html.indexOf('New Transactions');
+    const statusIndex = html.indexOf('Account Status');
+    const budgetIndex = html.indexOf('Spend vs Budget');
+    const balanceIndex = html.indexOf('Total Balance');
+
+    assert.ok(txIndex !== -1 && statusIndex !== -1 && budgetIndex !== -1 && balanceIndex !== -1);
+    assert.ok(txIndex < statusIndex, 'transactions should come before account status');
+    assert.ok(statusIndex < budgetIndex, 'account status should come before budget');
+    assert.ok(budgetIndex < balanceIndex, 'budget should come before balances');
+  });
+
   test('user-provided text is HTML-escaped', () => {
     const maliciousAccounts = [{ id: 'acc-1', name: '<script>alert(1)</script>' }];
     const { html } = buildReportHtml({
