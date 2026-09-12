@@ -64,11 +64,44 @@ function buildReportHtml({
 
     <div style="padding:26px;">`;
 
+  // Section order (requested): new transactions, then account status/failures,
+  // then budget graphics, then account balances.
+  if (includeTransactions) {
+    html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED};">New Transactions</div>
+      <div style="font-family:'Sora',sans-serif; font-size:32px; font-weight:800; color:#1E2A32; margin-top:4px; margin-bottom:${added.length > 0 ? '14px' : '22px'};">${added.length}</div>`;
+
+    if (added.length > 0) {
+      html += `<div style="margin-bottom:24px;">`;
+      for (const accountId in groupedTransactions) {
+        html += `<p style="font-size:12.5px; color:${MUTED}; margin:14px 0 4px;">${_.escape(accountMap[accountId] || 'Unknown')}</p>`;
+        groupedTransactions[accountId].forEach(t => {
+          const amt = t.amount / 100;
+          const amtColor = amt < 0 ? CORAL : '#1C8C74';
+          html += `<div style="display:flex; align-items:flex-start; justify-content:space-between; padding:9px 0; border-bottom:1px solid #F0EFEB;">
+            <div>
+              <div style="font-weight:600; font-size:14px; color:#33404A;">${_.escape(t.payee_name || 'Unknown')}</div>
+              <div style="font-size:12px; color:${MUTED}; margin-top:2px;">${_.escape(categoryMap[t.category] || 'Uncategorized')}</div>
+            </div>
+            <span style="font-weight:700; font-size:14px; color:${amtColor}; white-space:nowrap;">${formatCurrency(amt)}</span>
+          </div>`;
+        });
+      }
+      html += `</div>`;
+    }
+  }
+
   // Connection issues are always surfaced regardless of section toggles — this is the one alert users shouldn't be able to silence.
   if (bankSyncIssue) {
     html += `<div style="background-color:#fceceb; border-left:4px solid ${CORAL}; padding:15px; border-radius:4px; margin-bottom:22px;">
-        <h4 style="margin:0 0 5px 0; color:#c0392b; font-size:14px;">⚠️ Action Required</h4>
+        <h4 style="margin:0 0 5px 0; color:#c0392b; font-size:14px;">⚠️ Account Status: Action Required</h4>
         <p style="margin:0; font-size:13.5px; color:#4B5760;">${_.escape(bankSyncIssue)}</p></div>`;
+  }
+
+  if (includeBudget && budgetVsActual.length > 0) {
+    html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:12px;">Spend vs Budget</div>
+      <div style="margin-bottom:24px;">`;
+    budgetVsActual.slice(0, 6).forEach(cat => { html += renderBudgetRow(cat); });
+    html += `</div>`;
   }
 
   if (includeBalances) {
@@ -80,32 +113,6 @@ function buildReportHtml({
     accounts.forEach((acc, i) => {
       html += renderAccountRow(acc, accountBalances[acc.id], DOT_PALETTE[i % DOT_PALETTE.length]);
     });
-    html += `</div>`;
-  }
-
-  if (includeBudget && budgetVsActual.length > 0) {
-    html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:12px;">Spend vs Budget</div>
-      <div style="margin-bottom:24px;">`;
-    budgetVsActual.slice(0, 6).forEach(cat => { html += renderBudgetRow(cat); });
-    html += `</div>`;
-  }
-
-  if (includeTransactions && added.length > 0) {
-    html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:4px;">Recent Transactions</div><div style="margin-bottom:24px;">`;
-    for (const accountId in groupedTransactions) {
-      html += `<p style="font-size:12.5px; color:${MUTED}; margin:14px 0 4px;">${_.escape(accountMap[accountId] || 'Unknown')}</p>`;
-      groupedTransactions[accountId].forEach(t => {
-        const amt = t.amount / 100;
-        const amtColor = amt < 0 ? CORAL : '#1C8C74';
-        html += `<div style="display:flex; align-items:flex-start; justify-content:space-between; padding:9px 0; border-bottom:1px solid #F0EFEB;">
-          <div>
-            <div style="font-weight:600; font-size:14px; color:#33404A;">${_.escape(t.payee_name || 'Unknown')}</div>
-            <div style="font-size:12px; color:${MUTED}; margin-top:2px;">${_.escape(categoryMap[t.category] || 'Uncategorized')}</div>
-          </div>
-          <span style="font-weight:700; font-size:14px; color:${amtColor}; white-space:nowrap;">${formatCurrency(amt)}</span>
-        </div>`;
-      });
-    }
     html += `</div>`;
   }
 

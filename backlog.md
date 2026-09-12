@@ -161,3 +161,9 @@ Affected files: `src/insights.js`, `public/index.html`, `test/insights.test.js`
 ### [FEATURE] App version + project links footer — DONE
 Added `GET /api/version` (public, reads `package.json`'s `version` field so it never drifts out of sync with a release) and a small footer on all three pages (`index.html`, `explorer.html`, `login.html`) showing "Actual Budget Smart Sync v{version}" plus links to the GitHub repo and to Buy Me a Coffee, both `target="_blank" rel="noopener"` per house convention for external links. `/api/version` is listed in `auth.js`'s `PUBLIC_PATHS` so the version shows on the login page too, before any session exists.
 Affected files: `src/routes.js`, `src/auth.js`, `public/index.html`, `public/explorer.html`, `public/login.html`
+
+## P11 — Email report section order — DONE
+
+### [FEATURE] Reorder email sections: new transactions, account status, budget, balances — DONE
+Requested directly by the user. `buildReportHtml` now renders sections in the order: New Transactions (a headline count, always shown when the section is enabled, even at 0 — followed by the grouped list only when there are any), Account Status (the connection-issue alert, renamed from "Action Required" to "Account Status: Action Required" and still always shown regardless of section toggles, per its original design intent), Spend vs Budget, then Total Balance/Accounts. Previously balances led and transactions trailed. No section's own content or toggle behavior changed, only the order they're emitted in.
+Affected files: `src/emailReport.js`, `test/emailReport.test.js`
