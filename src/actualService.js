@@ -61,6 +61,20 @@ async function getCategories() {
   return api.getCategories();
 }
 
+async function getPayees() {
+  return api.getPayees();
+}
+
+// A bare `select('*')`/`getTransactions()` does not include payee_name —
+// only the raw `payee` id — because payee_name isn't part of the underlying
+// transactions view in @actual-app/api; it has to be resolved the same way
+// this module already resolves account/category names elsewhere. Pure and
+// exported for unit testing.
+function resolvePayeeNames(transactions, payees) {
+  const payeeName = Object.fromEntries(payees.map(p => [p.id, p.name]));
+  return transactions.map(t => ({ ...t, payee_name: t.payee_name || payeeName[t.payee] || null }));
+}
+
 function buildTransactionFilters({ accountId, categoryId, startDate, endDate, search } = {}) {
   const filters = [];
   if (accountId) filters.push({ account: accountId });
@@ -84,8 +98,8 @@ async function queryTransactions({ limit = 50, offset = 0, sort = 'date_desc', .
     query = query.filter(filter);
   }
   query = query.orderBy(SORT_ORDERS[sort] || SORT_ORDERS.date_desc).limit(limit).offset(offset);
-  const { data } = await api.runQuery(query);
-  return data;
+  const [{ data }, payees] = await Promise.all([api.runQuery(query), getPayees()]);
+  return resolvePayeeNames(data, payees);
 }
 
 async function countTransactions(filterArgs = {}) {
@@ -311,12 +325,12 @@ function isReady() {
 
 module.exports = {
   ensureReady, refreshBudget, getAccounts, getAccountBalance,
-  getTransactionsForAccount, getCategories, queryTransactions,
+  getTransactionsForAccount, getCategories, getPayees, queryTransactions,
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights,
   testConnection,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
-  buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory
+  buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames
 };
