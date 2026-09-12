@@ -223,7 +223,11 @@
     <form id="configForm" style="display:flex; flex-direction:column; gap:20px;">
       <!-- Actual Budget Section -->
       <div class="card" style="padding:22px;">
-        <div class="num" style="font-size:16px; font-weight:700; margin-bottom:16px;">Actual Budget Configuration</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+          <div class="num" style="font-size:16px; font-weight:700;">Actual Budget Configuration</div>
+          <button type="button" id="testConnectionBtn" class="btn btn-ghost" style="padding:7px 14px; font-size:13px;">Test Connection</button>
+        </div>
+        <p id="testConnectionResult" hidden style="font-size:13px; padding:9px 12px; border-radius:8px; margin:-4px 0 16px;"></p>
         <div class="grid-2">
           <div>
             <label class="field-label">Server URL</label>
@@ -302,6 +306,17 @@
             </div>
             <p class="field-hint">Connection issue alerts are always included regardless of these settings.</p>
           </div>
+        </div>
+      </div>
+
+      <!-- Backup & Restore -->
+      <div class="card" style="padding:22px;">
+        <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Backup &amp; Restore</div>
+        <p class="field-hint" style="margin-top:0; margin-bottom:14px;">Download your settings to restore them later, or after moving to a new host. The backup file contains your Actual Budget and SMTP credentials in plain text — store it somewhere safe.</p>
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <button type="button" id="exportConfigBtn" class="btn btn-ghost">Export Config</button>
+          <button type="button" id="importConfigBtn" class="btn btn-ghost">Import Config</button>
+          <input type="file" id="importConfigFile" accept="application/json" hidden>
         </div>
       </div>
 
@@ -686,6 +701,86 @@
     document.getElementById('logoutBtn').addEventListener('click', async () => {
       await fetch('/api/auth/logout', { method: 'POST' });
       window.location.href = '/login.html';
+    });
+
+    // --- Test Connection ---
+    document.getElementById('testConnectionBtn').addEventListener('click', async function() {
+      const resultEl = document.getElementById('testConnectionResult');
+      const btn = this;
+      btn.disabled = true;
+      btn.innerText = 'Testing…';
+      resultEl.hidden = true;
+
+      try {
+        const res = await fetch('/api/config/test-connection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            actualUrl: document.getElementById('actualUrl').value,
+            actualPassword: document.getElementById('actualPassword').value,
+            syncId: document.getElementById('syncId').value,
+          })
+        });
+        const data = await res.json();
+        resultEl.hidden = false;
+        if (data.success) {
+          resultEl.style.background = 'color-mix(in srgb, var(--positive) 12%, var(--card-bg))';
+          resultEl.style.color = 'var(--positive)';
+          resultEl.innerText = `✓ Connected — found ${data.accountCount} account${data.accountCount === 1 ? '' : 's'}.`;
+        } else {
+          resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
+          resultEl.style.color = 'var(--negative)';
+          resultEl.innerText = `✕ ${data.error || 'Connection failed.'}`;
+        }
+      } catch (err) {
+        resultEl.hidden = false;
+        resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
+        resultEl.style.color = 'var(--negative)';
+        resultEl.innerText = '✕ Could not reach the server.';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Test Connection';
+      }
+    });
+
+    // --- Backup & Restore ---
+    document.getElementById('exportConfigBtn').addEventListener('click', () => {
+      window.location.href = '/api/config/export';
+    });
+
+    document.getElementById('importConfigBtn').addEventListener('click', () => {
+      document.getElementById('importConfigFile').click();
+    });
+
+    document.getElementById('importConfigFile').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+
+      if (!confirm('This will replace your current settings with the ones in this backup file. Continue?')) return;
+
+      let parsed;
+      try {
+        parsed = JSON.parse(await file.text());
+      } catch (err) {
+        showError('That file is not valid JSON.');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/config/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(parsed)
+        });
+        const data = await res.json();
+        if (!res.ok) { showError(data.error || 'Failed to import configuration.'); return; }
+        hideError();
+        alert('Configuration restored. The page will now reload.');
+        window.location.reload();
+      } catch (err) {
+        showError('Could not reach the server. Configuration was not imported.');
+      }
     });
 
     // --- LIVE LOG STREAMING ---

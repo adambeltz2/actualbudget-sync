@@ -32,6 +32,16 @@ async function refreshBudget(config) {
   await api.downloadBudget(config.syncId);
 }
 
+// Used by the dashboard's "Test Connection" button. Reuses ensureReady, so a
+// failed test only tears down the shared session temporarily — the next real
+// call (a scheduled sync or a dashboard load) re-initializes from the saved
+// config's own fingerprint and self-heals.
+async function testConnection(candidateConfig) {
+  await ensureReady(candidateConfig);
+  const accounts = await getAccounts({ includeClosed: true });
+  return { accountCount: accounts.length };
+}
+
 async function getAccounts({ includeClosed = false } = {}) {
   const all = await api.getAccounts();
   return includeClosed ? all : all.filter(a => !a.closed);
@@ -242,6 +252,7 @@ module.exports = {
   getTransactionsForAccount, getCategories, queryTransactions,
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
+  testConnection,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
   buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory

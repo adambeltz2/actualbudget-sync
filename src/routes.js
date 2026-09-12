@@ -38,6 +38,48 @@ router.post('/api/config', (req, res) => {
   res.json({ success: true });
 });
 
+router.post('/api/config/test-connection', async (req, res) => {
+  const current = getConfig();
+  const actualUrl = req.body.actualUrl || current.actualUrl;
+  const actualPassword = req.body.actualPassword || current.actualPassword;
+  const syncId = req.body.syncId || current.syncId;
+
+  if (!actualUrl || !actualPassword || !syncId) {
+    return res.status(400).json({ error: 'Server URL, password, and Sync ID are all required to test the connection.' });
+  }
+
+  try {
+    const { accountCount } = await actualService.testConnection({ actualUrl, actualPassword, syncId });
+    logger.info(`Connection test succeeded (${accountCount} account(s) found).`);
+    res.json({ success: true, accountCount });
+  } catch (err) {
+    logger.warn('Connection test failed: ' + err.message);
+    res.json({ success: false, error: err.message });
+  }
+});
+
+// Exports the full config, including decrypted secrets — this is a backup
+// file the user downloads and stores themselves, not something served to
+// the browser UI at rest, so it intentionally differs from GET /api/config's
+// redaction. The UI warns the user before download.
+router.get('/api/config/export', (req, res) => {
+  const config = getConfig();
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', 'attachment; filename="actualbudget-sync-config-backup.json"');
+  res.send(JSON.stringify(config, null, 2));
+});
+
+router.post('/api/config/import', (req, res) => {
+  const incoming = req.body;
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
+    return res.status(400).json({ error: 'That file does not look like a valid config backup.' });
+  }
+  saveConfig(incoming);
+  applySchedule();
+  logger.info('Configuration restored from an imported backup.');
+  res.json({ success: true });
+});
+
 // --- Sync ---
 router.post('/api/sync', (req, res) => {
   logger.info('Manual sync triggered via Web Dashboard.');

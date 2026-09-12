@@ -125,15 +125,14 @@ Affected files: `src/auth.js`, `src/routes.js`, `index.js`, `test/auth.test.js`
 `syncJob.js` now records `lastSyncAt`/`lastSyncStatus` (`success`/`warning`/`error`)/`lastSyncError` to config after every sync (re-reading config immediately before the write so a settings change made mid-sync isn't clobbered); a bank-connection issue that doesn't throw is recorded as `warning` rather than a silent `success`. The dashboard shows a colored pill next to the "Dashboard" heading ("✓ Synced 2 hours ago" / "⚠ Synced with a warning..." / "✕ Sync failed..."), with the error detail in its hover tooltip, and refreshes automatically after a manual sync completes.
 Affected files: `src/syncJob.js`, `src/config.js`, `src/routes.js`, `public/index.html`
 
-### Group 2 — Setup UX & data safety
-Builds on Group 1's connection-check/status plumbing where useful.
+### Group 2 — Setup UX & data safety — DONE
 
-#### [FEATURE] "Test Connection" button before saving
-Currently the only way to find out the Actual URL/Sync ID was wrong is to save, trigger a sync, and read the logs. A pre-save connection check (reusing the same probe Group 1's status indicator establishes) would catch typos immediately.
-Affected files: `src/routes.js`, `src/actualService.js`, `public/index.html`
+#### [FEATURE] "Test Connection" button before saving — DONE
+Added `actualService.testConnection()` (reuses `ensureReady()` + `getAccounts()` — a failed test only tears down the shared session temporarily, since the next real call re-initializes from the saved config's own fingerprint) and `POST /api/config/test-connection`. The Actual Budget Configuration card has a "Test Connection" button that posts the current form values (falling back to the saved password when the field is left blank, same masked-password convention as Save) and shows "✓ Connected — found N accounts" or the actual error inline, without saving anything.
+Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`
 
-#### [FEATURE] Config export/import (backup/restore)
-`config.json` holds the dashboard password hash, session secret, and (optionally encrypted) Actual/SMTP credentials, with no export/import path. Losing `./data` without a manual backup means re-entering everything from scratch.
+#### [FEATURE] Config export/import (backup/restore) — DONE
+Added `GET /api/config/export` (downloads the full decrypted config as JSON — a backup the user stores themselves, clearly labeled as containing plaintext credentials) and `POST /api/config/import` (validates the upload is a plain object, then replaces the config wholesale and reschedules the cron job). A "Backup & Restore" card provides Export/Import buttons; import asks for confirmation before overwriting and reloads the page afterward.
 Affected files: `src/routes.js`, `public/index.html`
 
 ### Group 3 — Access & notifications
