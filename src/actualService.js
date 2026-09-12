@@ -1,6 +1,7 @@
 const api = require('@actual-app/api');
 const { q } = require('@actual-app/api');
 const { logger } = require('./logger');
+const { buildSpendingInsights, buildBalanceProjection } = require('./insights');
 
 // Kept open across sync cycles instead of init()/shutdown() per run, so the
 // downloaded budget stays queryable between syncs (needed by the data
@@ -232,6 +233,67 @@ async function getBudgetVsActual({ month } = {}) {
   return categories.sort((a, b) => b.spent - a.spent);
 }
 
+// Per-category monthly spend for the last `months` calendar months (oldest
+// first), used to detect trends like "groceries are creeping up". One query
+// per month (rather than a single multi-key groupBy, which the query builder
+// doesn't support cleanly) — fine at the "6 months" scale this is meant for.
+async function getCategorySpendTrend({ months = 6 } = {}) {
+  const categories = await getCategories();
+  const categoryName = Object.fromEntries(categories.map(c => [c.id, c.name]));
+
+  const now = new Date();
+  const monthRanges = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const start = d.toISOString().slice(0, 10);
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+    monthRanges.push({ month: d.toISOString().slice(0, 7), start, end });
+  }
+
+  const perMonth = await Promise.all(monthRanges.map(async ({ month, start, end }) => {
+    const query = q('transactions').options({ splits: 'none' })
+      .filter({ date: { $gte: start, $lte: end } })
+      .filter({ amount: { $lt: 0 } })
+      .filter({ category: { $ne: null } })
+      .groupBy('category')
+      .select(['category', { total: { $sum: '$amount' } }]);
+    const { data } = await api.runQuery(query);
+    return { month, totals: Object.fromEntries(data.map(row => [row.category, Math.abs(row.total) / 100])) };
+  }));
+
+  const trends = [];
+  for (const [categoryId, name] of Object.entries(categoryName)) {
+    const monthlyTotals = perMonth.map(({ month, totals }) => ({ month, total: totals[categoryId] || 0 }));
+    if (monthlyTotals.every(m => m.total === 0)) continue;
+    trends.push({ categoryId, name, monthlyTotals });
+  }
+  return trends;
+}
+
+// One balance snapshot per calendar month covered by getBalanceTrend's daily
+// series (its last available day each month), for projecting net worth
+// forward via linear regression instead of guessing at a growth rate.
+async function getMonthlyBalanceHistory({ months = 6 } = {}) {
+  const dailyTrend = await getBalanceTrend({ days: months * 31 });
+  const byMonth = new Map();
+  for (const point of dailyTrend) {
+    byMonth.set(point.date.slice(0, 7), point.balance);
+  }
+  return [...byMonth.entries()].map(([month, balance]) => ({ month, balance }));
+}
+
+async function getFinancialInsights({ months = 6, annualReturnRatePct = 7 } = {}) {
+  const [categoryTrends, monthlyBalances] = await Promise.all([
+    getCategorySpendTrend({ months }),
+    getMonthlyBalanceHistory({ months })
+  ]);
+
+  return {
+    spendingTrends: buildSpendingInsights(categoryTrends),
+    balanceProjection: buildBalanceProjection(monthlyBalances, { annualReturnRate: annualReturnRatePct / 100 })
+  };
+}
+
 async function runBankSync() {
   return api.runBankSync();
 }
@@ -252,6 +314,7 @@ module.exports = {
   getTransactionsForAccount, getCategories, queryTransactions,
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
+  getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights,
   testConnection,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
