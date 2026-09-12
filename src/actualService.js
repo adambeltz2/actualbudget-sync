@@ -102,6 +102,31 @@ async function queryTransactions({ limit = 50, offset = 0, sort = 'date_desc', .
   return resolvePayeeNames(data, payees);
 }
 
+// Used by CSV export, which needs every matching transaction rather than one
+// page — pages through in batches instead of a single arbitrarily large
+// limit, so it keeps working correctly as a budget grows past whatever that
+// number was. maxRows is a sanity backstop against a runaway loop on a
+// filter that somehow never shrinks, not a real-world ceiling.
+async function queryAllTransactions(filterArgs = {}, { sort = 'date_desc', pageSize = 1000, maxRows = 100000 } = {}) {
+  let query = q('transactions').options({ splits: 'none' }).select('*');
+  for (const filter of buildTransactionFilters(filterArgs)) {
+    query = query.filter(filter);
+  }
+  query = query.orderBy(SORT_ORDERS[sort] || SORT_ORDERS.date_desc);
+
+  const all = [];
+  let offset = 0;
+  while (all.length < maxRows) {
+    const { data } = await api.runQuery(query.limit(pageSize).offset(offset));
+    all.push(...data);
+    if (data.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  const payees = await getPayees();
+  return resolvePayeeNames(all, payees);
+}
+
 async function countTransactions(filterArgs = {}) {
   let query = q('transactions').options({ splits: 'none' });
   for (const filter of buildTransactionFilters(filterArgs)) {
@@ -325,7 +350,7 @@ function isReady() {
 
 module.exports = {
   ensureReady, refreshBudget, getAccounts, getAccountBalance,
-  getTransactionsForAccount, getCategories, getPayees, queryTransactions,
+  getTransactionsForAccount, getCategories, getPayees, queryTransactions, queryAllTransactions,
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights,
