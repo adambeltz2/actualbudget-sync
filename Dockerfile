@@ -4,6 +4,14 @@ FROM node:20-slim
 # Set the working directory
 WORKDIR /app
 
+# Baked in by the publish workflow (docker/build-push-action's build-args) so
+# the running app can report exactly which commit it was built from — the
+# package.json version alone doesn't change often enough to tell a user
+# whether they've actually pulled the latest image. Empty by default for a
+# local `docker build`/`docker compose build` with no build-arg supplied.
+ARG GIT_COMMIT=""
+ENV GIT_COMMIT=$GIT_COMMIT
+
 # Copy package files and install dependencies
 # Doing this first allows Docker to "cache" the dependencies layer
 COPY package*.json ./
