@@ -230,13 +230,13 @@ router.get('/api/data/summary', async (req, res) => {
   if (!config) return;
   try {
     await actualService.ensureReady(config);
-    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
+    const month = /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : undefined;
     const [incomeVsSpend, incomeVsSpendYTD, spendByCategory, balanceTrend, budgetVsActual] = await Promise.all([
-      actualService.getIncomeVsSpend(),
+      actualService.getIncomeVsSpend({ month }),
       actualService.getIncomeVsSpendYTD(),
-      actualService.getSpendByCategory({ days }),
-      actualService.getBalanceTrend({ days }),
-      actualService.getBudgetVsActual()
+      actualService.getSpendByCategory({ month }),
+      actualService.getBalanceTrend({ month }),
+      actualService.getBudgetVsActual({ month })
     ]);
     res.json({ incomeVsSpend, incomeVsSpendYTD, spendByCategory, balanceTrend, budgetVsActual });
   } catch (err) {

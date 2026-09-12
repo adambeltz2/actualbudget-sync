@@ -142,13 +142,33 @@ async function getNetWorth() {
   return balances.reduce((sum, b) => sum + b, 0);
 }
 
-async function getSpendByCategory({ days = 30 } = {}) {
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - (days - 1));
-  const startStr = startDate.toISOString().split('T')[0];
+function currentMonthStr() {
+  return new Date().toISOString().slice(0, 7); // "YYYY-MM"
+}
+
+// Calendar-month bounds for a "YYYY-MM" string, clamped to today when the
+// requested month is the current one — budgets live in monthly buckets, not
+// rolling day windows, so "This Month"/"Last Month" replace what used to be
+// an arbitrary "last N days" picker.
+function monthDateRange(month) {
+  const targetMonth = month || currentMonthStr();
+  const [year, mo] = targetMonth.split('-').map(Number);
+  const monthStart = new Date(year, mo - 1, 1);
+  const naturalMonthEnd = new Date(year, mo, 0);
+  const today = new Date();
+  const monthEnd = (targetMonth === currentMonthStr() && naturalMonthEnd > today) ? today : naturalMonthEnd;
+  return {
+    monthStart, monthEnd,
+    startStr: monthStart.toISOString().split('T')[0],
+    endStr: monthEnd.toISOString().split('T')[0]
+  };
+}
+
+async function getSpendByCategory({ month } = {}) {
+  const { startStr, endStr } = monthDateRange(month);
 
   const query = q('transactions').options({ splits: 'none' })
-    .filter({ date: { $gte: startStr } })
+    .filter({ date: { $gte: startStr, $lte: endStr } })
     .filter({ amount: { $lt: 0 } })
     .filter({ category: { $ne: null } })
     .groupBy('category')
@@ -164,38 +184,40 @@ async function getSpendByCategory({ days = 30 } = {}) {
 }
 
 // Actual only exposes the current balance, not a history, so the trend is
-// reconstructed by walking backward from the current net worth using each
-// day's transaction total.
-async function getBalanceTrend({ days = 30 } = {}) {
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - (days - 1));
-  const startStr = startDate.toISOString().split('T')[0];
-
+// reconstructed by walking backward from the current net worth. When the
+// requested month isn't the current one, the anchor is rolled back further
+// first — to net worth as of that month's own end — by subtracting
+// everything that happened after it.
+async function getBalanceTrend({ month } = {}) {
+  const { monthStart, monthEnd, startStr, endStr } = monthDateRange(month);
   const currentNetWorth = await getNetWorth();
 
-  const query = q('transactions').options({ splits: 'none' })
-    .filter({ date: { $gte: startStr } })
-    .groupBy('date')
-    .select(['date', { total: { $sum: '$amount' } }]);
-  const { data: dailyTotals } = await api.runQuery(query);
+  const { data: afterTotal } = await api.runQuery(
+    q('transactions').options({ splits: 'none' }).filter({ date: { $gt: endStr } }).calculate({ $sum: '$amount' })
+  );
+  const netWorthAtMonthEndCents = Math.round(currentNetWorth * 100) - (afterTotal || 0);
+
+  const { data: dailyTotals } = await api.runQuery(
+    q('transactions').options({ splits: 'none' })
+      .filter({ date: { $gte: startStr, $lte: endStr } })
+      .groupBy('date')
+      .select(['date', { total: { $sum: '$amount' } }])
+  );
 
   const totalsByDate = new Map(dailyTotals.map(d => [d.date, d.total]));
   const totalInRangeCents = dailyTotals.reduce((sum, d) => sum + d.total, 0);
 
-  let runningCents = Math.round(currentNetWorth * 100) - totalInRangeCents;
+  const numDays = Math.round((monthEnd - monthStart) / 86400000) + 1;
+  let runningCents = netWorthAtMonthEndCents - totalInRangeCents;
   const trend = [];
-  for (let i = 0; i < days; i++) {
-    const d = new Date(startDate);
+  for (let i = 0; i < numDays; i++) {
+    const d = new Date(monthStart);
     d.setDate(d.getDate() + i);
     const dayStr = d.toISOString().split('T')[0];
     runningCents += totalsByDate.get(dayStr) || 0;
     trend.push({ date: dayStr, balance: runningCents / 100 });
   }
   return trend;
-}
-
-function currentMonthStr() {
-  return new Date().toISOString().slice(0, 7); // "YYYY-MM"
 }
 
 async function getBudgetMonths() {
@@ -309,11 +331,43 @@ async function getCategorySpendTrend({ months = 6 } = {}) {
   return trends;
 }
 
-// One balance snapshot per calendar month covered by getBalanceTrend's daily
-// series (its last available day each month), for projecting net worth
-// forward via linear regression instead of guessing at a growth rate.
+// Rolling-window daily balance reconstruction ending today. Used internally
+// by getMonthlyBalanceHistory, which needs one continuous multi-month series
+// for the Financial Insights projection rather than a single calendar
+// month's worth of days (what the dashboard's getBalanceTrend now returns).
+async function getDailyBalanceHistoryForDays(days) {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - (days - 1));
+  const startStr = startDate.toISOString().split('T')[0];
+
+  const currentNetWorth = await getNetWorth();
+
+  const query = q('transactions').options({ splits: 'none' })
+    .filter({ date: { $gte: startStr } })
+    .groupBy('date')
+    .select(['date', { total: { $sum: '$amount' } }]);
+  const { data: dailyTotals } = await api.runQuery(query);
+
+  const totalsByDate = new Map(dailyTotals.map(d => [d.date, d.total]));
+  const totalInRangeCents = dailyTotals.reduce((sum, d) => sum + d.total, 0);
+
+  let runningCents = Math.round(currentNetWorth * 100) - totalInRangeCents;
+  const trend = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i);
+    const dayStr = d.toISOString().split('T')[0];
+    runningCents += totalsByDate.get(dayStr) || 0;
+    trend.push({ date: dayStr, balance: runningCents / 100 });
+  }
+  return trend;
+}
+
+// One balance snapshot per calendar month (the last available day in each),
+// for projecting net worth forward via linear regression instead of
+// guessing at a growth rate.
 async function getMonthlyBalanceHistory({ months = 6 } = {}) {
-  const dailyTrend = await getBalanceTrend({ days: months * 31 });
+  const dailyTrend = await getDailyBalanceHistoryForDays(months * 31);
   const byMonth = new Map();
   for (const point of dailyTrend) {
     byMonth.set(point.date.slice(0, 7), point.balance);
@@ -357,5 +411,5 @@ module.exports = {
   testConnection,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
-  buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames
+  buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange
 };
