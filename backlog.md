@@ -135,13 +135,12 @@ Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`
 Added `GET /api/config/export` (downloads the full decrypted config as JSON — a backup the user stores themselves, clearly labeled as containing plaintext credentials) and `POST /api/config/import` (validates the upload is a plain object, then replaces the config wholesale and reschedules the cron job). A "Backup & Restore" card provides Export/Import buttons; import asks for confirmation before overwriting and reloads the page afterward.
 Affected files: `src/routes.js`, `public/index.html`
 
-### Group 3 — Access & notifications
-Bigger, more novel surface area; ship last.
+### Group 3 — Access & notifications — DONE
 
-#### [FEATURE] Shareable read-only access
-No way to give a second person (e.g. a spouse) visibility into the dashboard without handing them the same credential that can change config. A read-only login or link would fit now that the dashboard is worth looking at.
-Affected files: `src/auth.js`, `src/routes.js`, `public/login.html`, `public/index.html`, `public/explorer.html`
+#### [FEATURE] Shareable read-only access — DONE
+Sessions now carry a role (`admin`/`viewer`) embedded and signed in the session token itself (`signSession`/`verifySession` in `src/auth.js`), so a viewer token can't be reinterpreted as admin even if the admin password later changes. A separate `viewerPasswordHash` in config is set/cleared via `POST /api/auth/viewer-password` (admin-only), and login checks it as a fallback after the admin password. `requireAdmin` middleware gates every state-changing or secret-exposing route (`POST /api/config`, `/api/config/test-connection`, `/api/config/test-webhook`, `GET/POST /api/config/export|import`, `POST /api/sync`, `POST /api/auth/viewer-password`); the read-only data-explorer/dashboard-summary routes stay open to both roles, matching the intent of "visibility without edit access." Disabling viewer access immediately revokes any already-issued viewer session (`requireAuth` re-checks `viewerPasswordHash` on every request) rather than waiting for the 7-day token to expire. The dashboard hides the entire settings form, "Trigger Manual Sync", and "Customize" behind `config.role === 'viewer'` and shows a "Read-only access" badge instead; a new "Access & Sharing" card lets the admin set/update/disable the viewer password. `public/explorer.html` needed no changes — it was already fully read-only.
+Affected files: `src/auth.js`, `src/config.js`, `src/routes.js`, `public/index.html`, `test/auth.test.js`
 
-#### [FEATURE] Alternative notification channels (Discord/Slack webhook)
-Email is the only sync-report channel. A webhook-based channel (Discord/Slack) alongside it would suit users who don't want another email.
-Affected files: `src/config.js`, `src/syncJob.js`, `public/index.html`, new `src/webhookReport.js`
+#### [FEATURE] Alternative notification channels (Discord/Slack webhook) — DONE
+Added `src/webhookReport.js` (`buildWebhookPayload`/`sendWebhookReport`, using Node's built-in global `fetch` — no new dependency) supporting Discord embeds, Slack blocks, or a flat "generic" JSON body for other automations. New config fields `webhookEnabled`/`webhookPlatform`/`webhookUrl` (the URL is treated as a bearer credential and added to `SECRET_FIELDS` for at-rest encryption alongside the existing passwords). Wired into `syncJob.js` right after the email send, gated on the same "was there anything to report" condition, with its own try/catch so a webhook failure never fails the sync. A "Webhook Notifications" card (mirroring the Email card's toggle/masked-URL conventions) includes a "Send Test Message" button backed by `POST /api/config/test-webhook`.
+Affected files: `src/config.js`, `src/syncJob.js`, `src/routes.js`, `src/webhookReport.js`, `public/index.html`, `test/webhookReport.test.js`

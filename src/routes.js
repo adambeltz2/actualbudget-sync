@@ -7,27 +7,36 @@ const { syncAndReport, isSyncRunning } = require('./syncJob');
 const { applySchedule } = require('./scheduler');
 const auth = require('./auth');
 const actualService = require('./actualService');
+const { sendWebhookReport } = require('./webhookReport');
 
 const router = express.Router();
+const { requireAdmin } = auth;
 
 // --- Config ---
 // actualPassword/emailPass are never sent to the client as plaintext; the
 // client only learns whether one is set, and a save only changes it when a
 // new non-empty value is submitted (see POST handler below).
 router.get('/api/config', (req, res) => {
-  const { dashboardPasswordHash, sessionSecret, actualPassword, emailPass, ...safeConfig } = getConfig();
-  res.json({ ...safeConfig, actualPasswordSet: !!actualPassword, emailPassSet: !!emailPass });
+  const { dashboardPasswordHash, sessionSecret, viewerPasswordHash, actualPassword, emailPass, webhookUrl, ...safeConfig } = getConfig();
+  res.json({
+    ...safeConfig,
+    actualPasswordSet: !!actualPassword, emailPassSet: !!emailPass, webhookUrlSet: !!webhookUrl,
+    viewerAccessEnabled: !!viewerPasswordHash,
+    role: req.sessionRole
+  });
 });
 
-router.post('/api/config', (req, res) => {
+router.post('/api/config', requireAdmin, (req, res) => {
   const current = getConfig();
   const updated = {
     ...current,
     ...req.body,
     actualPassword: req.body.actualPassword ? req.body.actualPassword : current.actualPassword,
     emailPass: req.body.emailPass ? req.body.emailPass : current.emailPass,
+    webhookUrl: req.body.webhookUrl ? req.body.webhookUrl : current.webhookUrl,
     dashboardPasswordHash: current.dashboardPasswordHash,
     sessionSecret: current.sessionSecret,
+    viewerPasswordHash: current.viewerPasswordHash,
     lastSyncAt: current.lastSyncAt,
     lastSyncStatus: current.lastSyncStatus,
     lastSyncError: current.lastSyncError
@@ -38,7 +47,7 @@ router.post('/api/config', (req, res) => {
   res.json({ success: true });
 });
 
-router.post('/api/config/test-connection', async (req, res) => {
+router.post('/api/config/test-connection', requireAdmin, async (req, res) => {
   const current = getConfig();
   const actualUrl = req.body.actualUrl || current.actualUrl;
   const actualPassword = req.body.actualPassword || current.actualPassword;
@@ -62,14 +71,14 @@ router.post('/api/config/test-connection', async (req, res) => {
 // file the user downloads and stores themselves, not something served to
 // the browser UI at rest, so it intentionally differs from GET /api/config's
 // redaction. The UI warns the user before download.
-router.get('/api/config/export', (req, res) => {
+router.get('/api/config/export', requireAdmin, (req, res) => {
   const config = getConfig();
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Content-Disposition', 'attachment; filename="actualbudget-sync-config-backup.json"');
   res.send(JSON.stringify(config, null, 2));
 });
 
-router.post('/api/config/import', (req, res) => {
+router.post('/api/config/import', requireAdmin, (req, res) => {
   const incoming = req.body;
   if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
     return res.status(400).json({ error: 'That file does not look like a valid config backup.' });
@@ -80,8 +89,30 @@ router.post('/api/config/import', (req, res) => {
   res.json({ success: true });
 });
 
+router.post('/api/config/test-webhook', requireAdmin, async (req, res) => {
+  const current = getConfig();
+  const webhookUrl = req.body.webhookUrl || current.webhookUrl;
+  const webhookPlatform = req.body.webhookPlatform || current.webhookPlatform;
+
+  if (!webhookUrl) {
+    return res.status(400).json({ error: 'A webhook URL is required to send a test message.' });
+  }
+
+  try {
+    await sendWebhookReport(
+      { webhookUrl, webhookPlatform },
+      { added: [], bankSyncIssue: null, totalBalance: 0, publicUrl: current.publicUrl }
+    );
+    logger.info('Webhook test message sent.');
+    res.json({ success: true });
+  } catch (err) {
+    logger.warn('Webhook test failed: ' + err.message);
+    res.json({ success: false, error: err.message });
+  }
+});
+
 // --- Sync ---
-router.post('/api/sync', (req, res) => {
+router.post('/api/sync', requireAdmin, (req, res) => {
   logger.info('Manual sync triggered via Web Dashboard.');
   syncAndReport();
   res.json({ success: true, message: 'Sync started' });
@@ -269,12 +300,17 @@ router.post('/api/auth/login', (req, res) => {
   if (!password) return res.status(400).json({ error: 'Password required' });
 
   const config = getConfig();
+  let role = 'admin';
 
   if (!config.dashboardPasswordHash) {
     config.dashboardPasswordHash = auth.hashPassword(password);
     saveConfig(config);
     logger.info('Dashboard password configured for the first time.');
-  } else if (!auth.verifyPassword(password, config.dashboardPasswordHash)) {
+  } else if (auth.verifyPassword(password, config.dashboardPasswordHash)) {
+    role = 'admin';
+  } else if (config.viewerPasswordHash && auth.verifyPassword(password, config.viewerPasswordHash)) {
+    role = 'viewer';
+  } else {
     auth.recordLoginFailure(ip);
     logger.warn(`Failed dashboard login attempt from ${ip}.`);
     return res.status(401).json({ error: 'Invalid password' });
@@ -282,15 +318,31 @@ router.post('/api/auth/login', (req, res) => {
 
   auth.recordLoginSuccess(ip);
   const expiresAt = Date.now() + auth.SESSION_TTL_MS;
-  const token = auth.signSession(config.sessionSecret, expiresAt);
+  const token = auth.signSession(config.sessionSecret, expiresAt, role);
   const secureFlag = req.secure ? '; Secure' : '';
   res.setHeader('Set-Cookie', `${auth.SESSION_COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${Math.floor(auth.SESSION_TTL_MS / 1000)}${secureFlag}`);
-  res.json({ success: true });
+  res.json({ success: true, role });
 });
 
 router.post('/api/auth/logout', (req, res) => {
   res.setHeader('Set-Cookie', `${auth.SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
   res.json({ success: true });
+});
+
+router.get('/api/auth/session', (req, res) => {
+  res.json({ role: req.sessionRole });
+});
+
+// Sets or clears (empty password) the read-only viewer login. Kept separate
+// from POST /api/config so it always requires re-entering a value rather
+// than round-tripping a hash through the settings form.
+router.post('/api/auth/viewer-password', requireAdmin, (req, res) => {
+  const { password } = req.body || {};
+  const current = getConfig();
+  current.viewerPasswordHash = password ? auth.hashPassword(password) : '';
+  saveConfig(current);
+  logger.info(password ? 'Read-only viewer access enabled.' : 'Read-only viewer access disabled.');
+  res.json({ success: true, enabled: !!password });
 });
 
 module.exports = router;

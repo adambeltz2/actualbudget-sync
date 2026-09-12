@@ -2,6 +2,7 @@ const _ = require('lodash');
 const { logger } = require('./logger');
 const actualService = require('./actualService');
 const { buildReportHtml, sendReport } = require('./emailReport');
+const { sendWebhookReport } = require('./webhookReport');
 const { getConfig, saveConfig } = require('./config');
 
 let isSyncing = false;
@@ -71,12 +72,13 @@ async function syncAndReport() {
     }
 
     const added = _.differenceBy(newTransactions, oldTransactions, 'id');
+    const totalBalance = Object.values(accountBalances).reduce((sum, b) => sum + b, 0);
+    const hasReportableChange = added.length > 0 || bankSyncIssue;
 
-    if (config.enableEmail && (added.length > 0 || bankSyncIssue)) {
+    if (config.enableEmail && hasReportableChange) {
       logger.info('Compiling HTML email report...');
       const includeBudget = config.emailSections?.budgetVsActual !== false;
       const budgetVsActual = includeBudget ? await actualService.getBudgetVsActual() : [];
-      const totalBalance = Object.values(accountBalances).reduce((sum, b) => sum + b, 0);
       const { subject, html } = buildReportHtml({
         accounts, accountBalances, accountMap, categoryMap, added, bankSyncIssue,
         totalBalance, budgetVsActual, publicUrl: config.publicUrl,
@@ -86,6 +88,15 @@ async function syncAndReport() {
       logger.info('Email report successfully dispatched.');
     } else {
       logger.info('Sync completed. No emails required or enabled.');
+    }
+
+    if (config.webhookEnabled && config.webhookUrl && hasReportableChange) {
+      try {
+        await sendWebhookReport(config, { added, bankSyncIssue, totalBalance, publicUrl: config.publicUrl });
+        logger.info('Webhook report successfully dispatched.');
+      } catch (webhookErr) {
+        logger.warn('Webhook report failed to send: ' + webhookErr.message);
+      }
     }
 
     recordSyncResult(bankSyncIssue ? 'warning' : 'success', bankSyncIssue);

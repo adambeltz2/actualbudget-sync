@@ -22,12 +22,16 @@ function verifyPassword(password, stored) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-function signSession(secret, expiresAt) {
-  const payload = String(expiresAt);
+// role is embedded in the signed payload (not just looked up from config
+// after the fact) so a viewer session can never be reinterpreted as admin
+// even if the admin password changes later.
+function signSession(secret, expiresAt, role = 'admin') {
+  const payload = `${expiresAt}:${role}`;
   const sig = crypto.createHmac('sha256', secret).update(payload).digest('hex');
   return `${payload}.${sig}`;
 }
 
+// Returns the session's role ('admin' | 'viewer') on success, or false.
 function verifySession(secret, token) {
   if (!token || !token.includes('.')) return false;
   const [payload, sig] = token.split('.');
@@ -35,7 +39,9 @@ function verifySession(secret, token) {
   const sigBuf = Buffer.from(sig, 'hex');
   const expBuf = Buffer.from(expected, 'hex');
   if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return false;
-  return Number(payload) > Date.now();
+  const [expiresAt, role] = payload.split(':');
+  if (!(Number(expiresAt) > Date.now())) return false;
+  return role === 'viewer' ? 'viewer' : 'admin';
 }
 
 // In-memory login rate limiting, keyed by client IP. Resets on process
@@ -90,8 +96,13 @@ function requireAuth(req, res, next) {
   const config = getConfig();
   const cookies = parseCookies(req.headers.cookie);
   const token = cookies[SESSION_COOKIE];
+  let role = config.dashboardPasswordHash && verifySession(config.sessionSecret, token);
+  // Revoking viewer access should take effect immediately, not just block
+  // future logins — a still-valid viewer token must not outlive the password.
+  if (role === 'viewer' && !config.viewerPasswordHash) role = false;
 
-  if (config.dashboardPasswordHash && verifySession(config.sessionSecret, token)) {
+  if (role) {
+    req.sessionRole = role;
     return next();
   }
 
@@ -101,9 +112,16 @@ function requireAuth(req, res, next) {
   return res.redirect('/login.html');
 }
 
+// Gates routes that change state or expose secrets. Must run after
+// requireAuth so req.sessionRole is set.
+function requireAdmin(req, res, next) {
+  if (req.sessionRole === 'admin') return next();
+  return res.status(403).json({ error: 'This action requires admin access.' });
+}
+
 module.exports = {
   SESSION_COOKIE, SESSION_TTL_MS,
   hashPassword, verifyPassword, signSession, verifySession, parseCookies,
-  requireAuth,
+  requireAuth, requireAdmin,
   isLoginLocked, loginLockRemainingMs, recordLoginFailure, recordLoginSuccess
 };
