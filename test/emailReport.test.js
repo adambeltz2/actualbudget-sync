@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { buildReportHtml } = require('../src/emailReport');
+const { buildReportHtml, parseRecipients } = require('../src/emailReport');
 
 const accounts = [{ id: 'acc-1', name: 'Checking' }, { id: 'acc-2', name: 'Savings' }];
 const accountBalances = { 'acc-1': 1250.50, 'acc-2': -42.00 };
@@ -62,5 +62,44 @@ describe('buildReportHtml', () => {
     });
     assert.doesNotMatch(html, /<script>alert/);
     assert.match(html, /&lt;script&gt;/);
+  });
+});
+
+describe('parseRecipients', () => {
+  test('passes a single address through unchanged', () => {
+    assert.equal(parseRecipients('alice@example.com'), 'alice@example.com');
+  });
+
+  test('splits comma-separated addresses and trims whitespace', () => {
+    assert.equal(
+      parseRecipients('alice@example.com,   bob@example.com'),
+      'alice@example.com, bob@example.com'
+    );
+  });
+
+  test('also accepts semicolon-separated addresses', () => {
+    assert.equal(
+      parseRecipients('alice@example.com; bob@example.com'),
+      'alice@example.com, bob@example.com'
+    );
+  });
+
+  test('drops empty entries from trailing/duplicate separators', () => {
+    assert.equal(
+      parseRecipients('alice@example.com,, bob@example.com,'),
+      'alice@example.com, bob@example.com'
+    );
+  });
+
+  test('de-duplicates repeated addresses', () => {
+    assert.equal(
+      parseRecipients('alice@example.com, alice@example.com'),
+      'alice@example.com'
+    );
+  });
+
+  test('handles empty or missing input without throwing', () => {
+    assert.equal(parseRecipients(''), '');
+    assert.equal(parseRecipients(undefined), '');
   });
 });

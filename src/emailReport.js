@@ -53,12 +53,23 @@ function buildReportHtml({ accounts, accountBalances, accountMap, added, bankSyn
   return { subject, html };
 }
 
+// Accepts comma- or semicolon-separated addresses (the field's placeholder
+// documents commas) and tolerates stray whitespace, trailing separators,
+// and duplicates rather than passing them straight to nodemailer.
+function parseRecipients(emailTo) {
+  const addresses = (emailTo || '')
+    .split(/[,;]/)
+    .map(addr => addr.trim())
+    .filter(Boolean);
+  return [...new Set(addresses)].join(', ');
+}
+
 async function sendReport(config, { subject, html }) {
   const transporter = nodemailer.createTransport({
     host: config.smtpHost, port: parseInt(config.smtpPort), secure: parseInt(config.smtpPort) === 465,
     auth: { user: config.emailUser, pass: config.emailPass }
   });
-  await transporter.sendMail({ from: config.emailUser, to: config.emailTo, subject, html });
+  await transporter.sendMail({ from: config.emailUser, to: parseRecipients(config.emailTo), subject, html });
 }
 
-module.exports = { buildReportHtml, sendReport };
+module.exports = { buildReportHtml, sendReport, parseRecipients };
