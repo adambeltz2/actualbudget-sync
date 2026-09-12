@@ -109,3 +109,40 @@ The sync email got the same "Spend vs Budget" section (compact bars, capped to 6
 `dashboardWidgets` and `emailSections` gained matching new toggle keys (`incomeVsSpend`, `incomeVsSpendYTD`, `budgetVsActual`); `netWorth` was dropped from the defaults for new installs (existing installs are unaffected since the frontend already treats a missing key as "shown," per the `!== false` convention established when these toggles were first built).
 Verified via `npm test` (46/46, including new `summarizeBudgetCategory` and `emailReport` budget-section tests) and, since this environment can't reach a live Actual Budget server, via Playwright driving a real headless browser against the app with the Actual/Chart.js-dependent endpoints mocked — confirming zero console/page errors and correct rendering across light and dark mode on all three pages.
 Affected files: `src/actualService.js`, `src/routes.js`, `src/config.js`, `src/syncJob.js`, `src/emailReport.js`, `public/index.html`, `public/explorer.html`, `public/login.html`, `test/actualService.test.js`, `test/emailReport.test.js`
+
+## P8 — Product review findings (2026-09-12)
+
+Grouped by technical dependency, not by how they were raised. Merge after each group.
+
+### Group 1 — Security & sync health — DONE
+Foundational and low-risk; shipped first.
+
+#### [BUG] No brute-force protection on login — DONE
+Added in-memory rate limiting in `src/auth.js` keyed by client IP (`isLoginLocked`/`recordLoginFailure`/`recordLoginSuccess`): 5 failed attempts within 15 minutes locks that IP out for 15 minutes, returning `429` with a "try again in N minutes" message; a successful login clears the counter. `index.js` now sets `trust proxy` so the real client IP is used behind a reverse proxy (Pikapod, nginx) rather than the proxy's own address. State is in-memory and resets on restart — the goal is slowing an automated guesser, not surviving a restart.
+Affected files: `src/auth.js`, `src/routes.js`, `index.js`, `test/auth.test.js`
+
+#### [FEATURE] Surface last sync status on the dashboard — DONE
+`syncJob.js` now records `lastSyncAt`/`lastSyncStatus` (`success`/`warning`/`error`)/`lastSyncError` to config after every sync (re-reading config immediately before the write so a settings change made mid-sync isn't clobbered); a bank-connection issue that doesn't throw is recorded as `warning` rather than a silent `success`. The dashboard shows a colored pill next to the "Dashboard" heading ("✓ Synced 2 hours ago" / "⚠ Synced with a warning..." / "✕ Sync failed..."), with the error detail in its hover tooltip, and refreshes automatically after a manual sync completes.
+Affected files: `src/syncJob.js`, `src/config.js`, `src/routes.js`, `public/index.html`
+
+### Group 2 — Setup UX & data safety
+Builds on Group 1's connection-check/status plumbing where useful.
+
+#### [FEATURE] "Test Connection" button before saving
+Currently the only way to find out the Actual URL/Sync ID was wrong is to save, trigger a sync, and read the logs. A pre-save connection check (reusing the same probe Group 1's status indicator establishes) would catch typos immediately.
+Affected files: `src/routes.js`, `src/actualService.js`, `public/index.html`
+
+#### [FEATURE] Config export/import (backup/restore)
+`config.json` holds the dashboard password hash, session secret, and (optionally encrypted) Actual/SMTP credentials, with no export/import path. Losing `./data` without a manual backup means re-entering everything from scratch.
+Affected files: `src/routes.js`, `public/index.html`
+
+### Group 3 — Access & notifications
+Bigger, more novel surface area; ship last.
+
+#### [FEATURE] Shareable read-only access
+No way to give a second person (e.g. a spouse) visibility into the dashboard without handing them the same credential that can change config. A read-only login or link would fit now that the dashboard is worth looking at.
+Affected files: `src/auth.js`, `src/routes.js`, `public/login.html`, `public/index.html`, `public/explorer.html`
+
+#### [FEATURE] Alternative notification channels (Discord/Slack webhook)
+Email is the only sync-report channel. A webhook-based channel (Discord/Slack) alongside it would suit users who don't want another email.
+Affected files: `src/config.js`, `src/syncJob.js`, `public/index.html`, new `src/webhookReport.js`

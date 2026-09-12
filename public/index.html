@@ -116,7 +116,10 @@
     <!-- Dashboard Widgets -->
     <div id="dashboardWidgetsSection" hidden style="margin-bottom:32px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
-        <div class="num" style="font-size:18px; font-weight:700;">Dashboard</div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div class="num" style="font-size:18px; font-weight:700;">Dashboard</div>
+          <span id="lastSyncPill" hidden style="font-size:12px; font-weight:600; padding:4px 10px; border-radius:999px;"></span>
+        </div>
         <div style="display:flex; align-items:center; gap:14px;">
           <select id="summaryDays" style="font-size:13px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); padding:6px 8px;">
             <option value="7">Last 7 days</option>
@@ -409,8 +412,38 @@
       const isConfigured = !!(config.actualUrl && config.actualPasswordSet && config.syncId);
       if (isConfigured) {
         document.getElementById('dashboardWidgetsSection').hidden = false;
+        renderLastSyncPill(config.lastSyncAt, config.lastSyncStatus, config.lastSyncError);
         loadDashboardWidgets(widgets, document.getElementById('summaryDays').value);
       }
+    }
+
+    function relativeTime(isoString) {
+      const diffMs = Date.now() - new Date(isoString).getTime();
+      const minutes = Math.round(diffMs / 60000);
+      if (minutes < 1) return 'just now';
+      if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+      const hours = Math.round(minutes / 60);
+      if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+      const days = Math.round(hours / 24);
+      return `${days} day${days === 1 ? '' : 's'} ago`;
+    }
+
+    function renderLastSyncPill(lastSyncAt, status, errorMessage) {
+      const pill = document.getElementById('lastSyncPill');
+      if (!lastSyncAt) { pill.hidden = true; return; }
+
+      const styles = {
+        success: { bg: 'color-mix(in srgb, var(--positive) 15%, transparent)', color: 'var(--positive)', icon: '✓' },
+        warning: { bg: 'color-mix(in srgb, #E8A33D 20%, transparent)', color: '#B8791F', icon: '⚠' },
+        error: { bg: 'color-mix(in srgb, var(--negative) 15%, transparent)', color: 'var(--negative)', icon: '✕' }
+      };
+      const style = styles[status] || styles.success;
+      pill.style.background = style.bg;
+      pill.style.color = style.color;
+      const label = status === 'success' ? 'Synced' : status === 'warning' ? 'Synced with a warning' : 'Sync failed';
+      pill.title = errorMessage || '';
+      pill.innerText = `${style.icon} ${label} ${relativeTime(lastSyncAt)}`;
+      pill.hidden = false;
     }
 
     // --- Dashboard Widgets ---
@@ -626,6 +659,7 @@
           if (!status.syncing || polls >= MAX_POLLS) {
             clearInterval(syncPollInterval);
             setSyncButtonBusy(btnElement, false);
+            if (!status.syncing) loadConfig();
           }
         } catch (err) {
           clearInterval(syncPollInterval);

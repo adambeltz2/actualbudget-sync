@@ -2,9 +2,16 @@ const _ = require('lodash');
 const { logger } = require('./logger');
 const actualService = require('./actualService');
 const { buildReportHtml, sendReport } = require('./emailReport');
-const { getConfig } = require('./config');
+const { getConfig, saveConfig } = require('./config');
 
 let isSyncing = false;
+
+// Re-reads config immediately before writing so a settings change made while
+// a sync was running isn't clobbered by the stale copy syncAndReport started with.
+function recordSyncResult(status, errorMessage = null) {
+  const latest = getConfig();
+  saveConfig({ ...latest, lastSyncAt: new Date().toISOString(), lastSyncStatus: status, lastSyncError: errorMessage });
+}
 
 async function syncAndReport() {
   if (isSyncing) {
@@ -81,8 +88,10 @@ async function syncAndReport() {
       logger.info('Sync completed. No emails required or enabled.');
     }
 
+    recordSyncResult(bankSyncIssue ? 'warning' : 'success', bankSyncIssue);
     logger.info('Sync Process Finished Cleanly');
   } catch (err) {
+    recordSyncResult('error', err.message);
     logger.error('Critical script failure: ' + err.message);
   } finally {
     isSyncing = false;

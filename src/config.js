@@ -16,7 +16,8 @@ function defaultConfig() {
     publicUrl: '',
     dashboardPasswordHash: '', sessionSecret: crypto.randomBytes(32).toString('hex'),
     dashboardWidgets: { incomeVsSpend: true, incomeVsSpendYTD: true, spendByCategory: true, balanceTrend: true, budgetVsActual: true },
-    emailSections: { balances: true, transactions: true, budgetVsActual: true }
+    emailSections: { balances: true, transactions: true, budgetVsActual: true },
+    lastSyncAt: null, lastSyncStatus: null, lastSyncError: null
   };
 }
 

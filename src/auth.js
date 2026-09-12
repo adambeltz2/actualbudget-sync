@@ -38,6 +38,41 @@ function verifySession(secret, token) {
   return Number(payload) > Date.now();
 }
 
+// In-memory login rate limiting, keyed by client IP. Resets on process
+// restart — acceptable for a single-instance, single-user dashboard; the
+// goal is slowing down an automated guesser, not surviving a restart.
+const LOGIN_ATTEMPT_LIMIT = 5;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
+const loginAttempts = new Map();
+
+function isLoginLocked(ip) {
+  const state = loginAttempts.get(ip);
+  return !!(state && state.lockedUntil > Date.now());
+}
+
+function loginLockRemainingMs(ip) {
+  const state = loginAttempts.get(ip);
+  return state ? Math.max(0, state.lockedUntil - Date.now()) : 0;
+}
+
+function recordLoginFailure(ip) {
+  const now = Date.now();
+  let state = loginAttempts.get(ip);
+  if (!state || now - state.windowStart > LOGIN_WINDOW_MS) {
+    state = { count: 0, windowStart: now, lockedUntil: 0 };
+  }
+  state.count += 1;
+  if (state.count >= LOGIN_ATTEMPT_LIMIT) {
+    state.lockedUntil = now + LOGIN_LOCKOUT_MS;
+  }
+  loginAttempts.set(ip, state);
+}
+
+function recordLoginSuccess(ip) {
+  loginAttempts.delete(ip);
+}
+
 function parseCookies(header) {
   const out = {};
   if (!header) return out;
@@ -69,5 +104,6 @@ function requireAuth(req, res, next) {
 module.exports = {
   SESSION_COOKIE, SESSION_TTL_MS,
   hashPassword, verifyPassword, signSession, verifySession, parseCookies,
-  requireAuth
+  requireAuth,
+  isLoginLocked, loginLockRemainingMs, recordLoginFailure, recordLoginSuccess
 };
