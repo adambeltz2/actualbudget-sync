@@ -2,6 +2,7 @@ const api = require('@actual-app/api');
 const { q } = require('@actual-app/api');
 const { logger } = require('./logger');
 const { buildSpendingInsights, buildBalanceProjection } = require('./insights');
+const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations } = require('./financialHealth');
 
 // Kept open across sync cycles instead of init()/shutdown() per run, so the
 // downloaded budget stays queryable between syncs (needed by the data
@@ -387,6 +388,41 @@ async function getFinancialInsights({ months = 6, annualReturnRatePct = 7 } = {}
   };
 }
 
+// Combines account balances (which accounts count as liquid savings is a
+// user setting, not something Actual's data can tell us — it only has
+// names and balances, no checking/savings/investment distinction) with
+// recent income/spend to produce the Financial Health Check widget's data.
+async function getFinancialHealthData({ emergencyFundAccountIds = [], targetMonths = 6, targetSavingsPct = 20 } = {}) {
+  const accounts = await getAccounts();
+  const balances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
+
+  const liquidBalance = Math.max(
+    balances.filter(b => emergencyFundAccountIds.includes(b.id)).reduce((sum, b) => sum + b.balance, 0),
+    0
+  );
+  const debtTotal = balances.reduce((sum, b) => sum + (b.balance < 0 ? -b.balance : 0), 0);
+
+  // Averaged over the last 3 complete calendar months (excluding the
+  // current, possibly-partial month) so checking this on the 2nd of the
+  // month doesn't make the emergency fund look artificially huge.
+  const now = new Date();
+  const recentMonths = [1, 2, 3].map(i => {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const monthlyFigures = await Promise.all(recentMonths.map(m => getIncomeVsSpend({ month: m })));
+  const monthlyIncome = monthlyFigures.reduce((sum, m) => sum + m.income, 0) / monthlyFigures.length;
+  const monthlyAvgSpend = monthlyFigures.reduce((sum, m) => sum + m.spend, 0) / monthlyFigures.length;
+
+  const emergencyFund = computeEmergencyFund({ liquidBalance, monthlyAvgSpend, targetMonths });
+  const savingsRate = computeSavingsRate({ income: monthlyIncome, spend: monthlyAvgSpend, targetPct: targetSavingsPct });
+  const debtLoad = computeDebtLoad({ debtTotal, monthlyIncome });
+  const { overall, label } = computeOverallScore({ emergencyFund, savingsRate, debtLoad });
+  const recommendations = buildRecommendations({ emergencyFund, savingsRate, debtLoad });
+
+  return { overall, label, emergencyFund, savingsRate, debtLoad, recommendations, liquidBalance, monthlyIncome, monthlyAvgSpend };
+}
+
 async function runBankSync() {
   return api.runBankSync();
 }
@@ -407,7 +443,7 @@ module.exports = {
   getTransactionsForAccount, getCategories, getPayees, queryTransactions, queryAllTransactions,
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
-  getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights,
+  getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getFinancialHealthData,
   testConnection,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).

@@ -124,3 +124,9 @@ Use **Access & Sharing** on the dashboard to set a separate viewer password for 
 ## Financial Insights
 
 The **Financial Insights** dashboard widget looks for meaningful spending trends (e.g. "Groceries spending has increased 35% over the last 6 months") by comparing the first half of your recent spend history against the second half per category — each with its own small trend sparkline — and projects your balance forward 1/5/10 years two ways: a straight-line continuation of your recent average monthly savings pace (shown with a shaded "typical range" band based on how volatile your balance has historically been, the way Wealthfront and Personal Capital show a range rather than a single overconfident number), and compound growth at a return rate you choose (0%/4%/7%/10%) from your dropdown. A projection chart plots your real balance history alongside both projected paths. These are simple math projections from your own historical data, not financial advice — treat them as a starting point for a conversation with an actual advisor, not a guarantee.
+
+## Financial Health Check
+
+The **Financial Health Check** widget scores three fundamentals — an emergency fund (months of coverage vs. your target), a savings rate (% of income saved vs. your target), and debt load (total debt expressed as months of income, since Actual only tracks balances, not monthly payments) — into a single 0-100 score with plain-language, rule-based recommendations (never LLM-generated) for anything below target.
+
+Actual Budget doesn't distinguish checking/savings/investment accounts, so **Emergency Fund Accounts** on the dashboard lets you manually check which of your accounts should count as liquid savings for this widget. Adjust your emergency-fund and savings-rate targets directly on the widget; the score refetches immediately.
