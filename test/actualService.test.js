@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames } = require('../src/actualService');
+const { buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange } = require('../src/actualService');
 
 describe('buildTransactionFilters', () => {
   test('returns an empty array when no filters are given', () => {
@@ -117,5 +117,48 @@ describe('resolvePayeeNames', () => {
     const original = { id: 't1', payee: 'p1' };
     resolvePayeeNames([original], payees);
     assert.equal(original.payee_name, undefined);
+  });
+});
+
+describe('monthDateRange', () => {
+  // A month safely in the past relative to whenever the suite runs, so its
+  // end date is never clamped to "today" — avoids the tests depending on
+  // the actual current date the way the "This Month" case must.
+  function pastMonthStr() {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 3);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  test('a fully past month returns its own natural start and end dates', () => {
+    const month = pastMonthStr();
+    const [year, mo] = month.split('-').map(Number);
+    const { startStr, endStr } = monthDateRange(month);
+    assert.equal(startStr, `${month}-01`);
+    const expectedEnd = new Date(year, mo, 0); // last day of that month
+    assert.equal(endStr, expectedEnd.toISOString().split('T')[0]);
+  });
+
+  test('the current month is clamped to today, not the end of the month', () => {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const { endStr } = monthDateRange(currentMonth);
+    const todayStr = now.toISOString().split('T')[0];
+    assert.equal(endStr, todayStr);
+  });
+
+  test('omitting month defaults to the current month', () => {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const withMonth = monthDateRange(currentMonth);
+    const withoutMonth = monthDateRange();
+    assert.equal(withoutMonth.startStr, withMonth.startStr);
+    assert.equal(withoutMonth.endStr, withMonth.endStr);
+  });
+
+  test('handles a December month correctly (year rollover)', () => {
+    const { startStr, endStr } = monthDateRange('2025-12');
+    assert.equal(startStr, '2025-12-01');
+    assert.equal(endStr, '2025-12-31');
   });
 });

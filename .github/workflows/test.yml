@@ -23,3 +23,21 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  docker-build:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      # Build-only (no push) validation that the Dockerfile still produces a
+      # working image — publish.yml only runs on pushes to main, so without
+      # this, a broken Dockerfile wouldn't surface until after it's merged.
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}

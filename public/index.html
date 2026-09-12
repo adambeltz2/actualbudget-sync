@@ -126,12 +126,7 @@
           <span id="lastSyncPill" hidden style="font-size:12px; font-weight:600; padding:4px 10px; border-radius:999px;"></span>
         </div>
         <div style="display:flex; align-items:center; gap:14px;">
-          <select id="summaryDays" style="font-size:13px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); padding:6px 8px;">
-            <option value="7">Last 7 days</option>
-            <option value="30" selected>Last 30 days</option>
-            <option value="90">Last 90 days</option>
-            <option value="365">Last year</option>
-          </select>
+          <select id="summaryMonth" style="font-size:13px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); padding:6px 8px;"></select>
           <button id="customizeWidgetsBtn" style="background:none; border:none; cursor:pointer; font-size:13px; color:var(--text-muted); font-family:inherit;">⚙ Customize</button>
           <a href="/explorer.html" style="font-size:13px; text-decoration:none;">View all transactions →</a>
         </div>
@@ -148,7 +143,7 @@
 
       <!-- Income vs Spend (month) -->
       <div id="incomeVsSpendWidget" hidden class="card" style="padding:28px 32px; margin-bottom:20px;">
-        <div class="label-caps">Income vs Spend · This Month</div>
+        <div class="label-caps">Income vs Spend · <span id="incomeVsSpendMonthLabel">This Month</span></div>
         <div style="display:flex; align-items:stretch; gap:32px; margin-top:12px; flex-wrap:wrap;">
           <div style="flex:1; min-width:140px;">
             <div style="font-size:12px; font-weight:600; color:var(--text-muted);">Income</div>
@@ -199,7 +194,7 @@
       <!-- Two-up row -->
       <div class="grid-2" style="margin-bottom:20px;">
         <div id="spendByCategoryWidget" hidden class="card" style="padding:22px; display:flex; flex-direction:column;">
-          <div class="label-caps" style="margin-bottom:12px;">Spend by Category</div>
+          <div class="label-caps" style="margin-bottom:12px;">Spend by Category · <span id="spendByCategoryMonthLabel">This Month</span></div>
           <div style="position:relative; flex:1; display:flex; align-items:center; justify-content:center; min-height:150px;">
             <canvas id="spendByCategoryChart"></canvas>
             <div id="donutCenter" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none;">
@@ -211,7 +206,7 @@
         </div>
 
         <div id="balanceTrendWidget" hidden class="card" style="padding:22px; display:flex; flex-direction:column;">
-          <div class="label-caps" style="margin-bottom:12px;">Balance Trend</div>
+          <div class="label-caps" style="margin-bottom:12px;">Balance Trend · <span id="balanceTrendMonthLabel">This Month</span></div>
           <div style="flex:1; min-height:100px;"><canvas id="balanceTrendChart"></canvas></div>
           <div id="trendDelta" style="font-size:13px; margin-top:8px;"></div>
         </div>
@@ -220,7 +215,7 @@
       <!-- Spend vs Budget -->
       <div id="budgetVsActualWidget" hidden class="card" style="padding:26px 32px;">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
-          <div class="label-caps">Spend vs Budget · This Month</div>
+          <div class="label-caps">Spend vs Budget · <span id="budgetVsActualMonthLabel">This Month</span></div>
           <div style="display:flex; align-items:center; gap:16px; font-size:12.5px;">
             <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:var(--accent);"></span>On track</span>
             <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:var(--negative);"></span>Over budget</span>
@@ -494,6 +489,34 @@
       return amount < 0 ? `-$${text}` : `$${text}`;
     }
 
+    // --- Month picker: budgets live in calendar-month buckets, not rolling
+    // day windows, so the dashboard's time selector works in months. ---
+    function currentMonthStr() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+    function shiftMonthStr(monthStr, delta) {
+      const [y, m] = monthStr.split('-').map(Number);
+      const d = new Date(y, m - 1 + delta, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+    function monthLabelFull(monthStr) {
+      const [y, m] = monthStr.split('-').map(Number);
+      return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+    function monthDisplayLabel(monthStr) {
+      if (monthStr === currentMonthStr()) return 'This Month';
+      if (monthStr === shiftMonthStr(currentMonthStr(), -1)) return 'Last Month';
+      return monthLabelFull(monthStr);
+    }
+    function initMonthSelector() {
+      const select = document.getElementById('summaryMonth');
+      const thisMonth = currentMonthStr();
+      const lastMonth = shiftMonthStr(thisMonth, -1);
+      select.innerHTML = `<option value="${thisMonth}">This Month</option><option value="${lastMonth}">Last Month</option>`;
+    }
+    initMonthSelector();
+
     // --- Email toggle switch ---
     const emailToggle = document.getElementById('enableEmail');
     const emailSettingsDiv = document.getElementById('emailSettingsDiv');
@@ -591,7 +614,7 @@
       if (isConfigured) {
         document.getElementById('dashboardWidgetsSection').hidden = false;
         renderLastSyncPill(config.lastSyncAt, config.lastSyncStatus, config.lastSyncError);
-        loadDashboardWidgets(widgets, document.getElementById('summaryDays').value);
+        loadDashboardWidgets(widgets, document.getElementById('summaryMonth').value);
       }
     }
 
@@ -662,10 +685,15 @@
       }).join('') || `<p style="color:var(--text-muted); font-size:13px;">No budgeted categories yet.</p>`;
     }
 
-    async function loadDashboardWidgets(widgets, days) {
+    async function loadDashboardWidgets(widgets, month) {
+      const monthLabel = monthDisplayLabel(month);
+      ['incomeVsSpendMonthLabel', 'budgetVsActualMonthLabel', 'spendByCategoryMonthLabel', 'balanceTrendMonthLabel'].forEach(id => {
+        document.getElementById(id).innerText = monthLabel;
+      });
+
       let res;
       try {
-        res = await fetch(`/api/data/summary?days=${encodeURIComponent(days)}`);
+        res = await fetch(`/api/data/summary?month=${encodeURIComponent(month)}`);
       } catch (err) {
         showError('Could not reach the server while loading the dashboard.');
         return;
@@ -772,7 +800,7 @@
 
         const delta = points[points.length - 1].balance - points[0].balance;
         const deltaColor = delta >= 0 ? 'var(--positive)' : 'var(--negative)';
-        document.getElementById('trendDelta').innerHTML = `<span style="color:${deltaColor}; font-weight:700;">${delta >= 0 ? '+' : ''}${formatCurrency(delta)}</span> <span style="color:var(--text-muted);">past ${points.length} days</span>`;
+        document.getElementById('trendDelta').innerHTML = `<span style="color:${deltaColor}; font-weight:700;">${delta >= 0 ? '+' : ''}${formatCurrency(delta)}</span> <span style="color:var(--text-muted);">${monthDisplayLabel(month).toLowerCase()}</span>`;
         document.getElementById('balanceTrendWidget').hidden = false;
       });
 
@@ -937,7 +965,7 @@
       loadInsights(e.target.value);
     });
 
-    document.getElementById('summaryDays').addEventListener('change', (e) => {
+    document.getElementById('summaryMonth').addEventListener('change', (e) => {
       const widgets = {
         incomeVsSpend: document.getElementById('widgetIncomeVsSpend').checked,
         incomeVsSpendYTD: document.getElementById('widgetIncomeVsSpendYTD').checked,
