@@ -77,6 +77,8 @@
       font-family: 'Source Sans 3', system-ui, sans-serif;
     }
     .info-tip:hover .info-tip-content, .info-tip:focus .info-tip-content, .info-tip:focus-within .info-tip-content { display: block; }
+    .metric-clickable { cursor: pointer; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px; transition: text-decoration-color 0.15s; }
+    .metric-clickable:hover { text-decoration-color: currentColor; }
     .btn {
       display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer;
       padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 14px;
@@ -171,12 +173,12 @@
         <div style="display:flex; align-items:stretch; gap:32px; margin-top:12px; flex-wrap:wrap;">
           <div style="flex:1; min-width:140px;">
             <div style="font-size:12px; font-weight:600; color:var(--text-muted);">Income</div>
-            <div id="ivsIncome" class="num" style="font-size:40px; font-weight:800; color:var(--positive); line-height:1.1; margin-top:4px;">—</div>
+            <div id="ivsIncome" class="num metric-clickable" title="Click to see the underlying transactions" style="font-size:40px; font-weight:800; color:var(--positive); line-height:1.1; margin-top:4px;">—</div>
           </div>
           <div style="width:1px; background:var(--border);"></div>
           <div style="flex:1; min-width:140px;">
             <div style="font-size:12px; font-weight:600; color:var(--text-muted);">Spend</div>
-            <div id="ivsSpend" class="num" style="font-size:40px; font-weight:800; color:var(--text); line-height:1.1; margin-top:4px;">—</div>
+            <div id="ivsSpend" class="num metric-clickable" title="Click to see the underlying transactions" style="font-size:40px; font-weight:800; color:var(--text); line-height:1.1; margin-top:4px;">—</div>
           </div>
         </div>
         <div id="ivsNetRow" style="display:flex; align-items:center; gap:6px; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
@@ -190,12 +192,12 @@
         <div style="display:flex; align-items:stretch; gap:32px; flex-wrap:wrap;">
           <div style="flex:1; min-width:120px;">
             <div style="font-size:12px; font-weight:600; color:var(--text-muted);">Income YTD</div>
-            <div id="ytdIncome" class="num" style="font-size:22px; font-weight:800; color:var(--positive); margin-top:4px;">—</div>
+            <div id="ytdIncome" class="num metric-clickable" title="Click to see the underlying transactions" style="font-size:22px; font-weight:800; color:var(--positive); margin-top:4px;">—</div>
           </div>
           <div style="width:1px; background:var(--border);"></div>
           <div style="flex:1; min-width:120px;">
             <div style="font-size:12px; font-weight:600; color:var(--text-muted);">Spend YTD</div>
-            <div id="ytdSpend" class="num" style="font-size:22px; font-weight:800; margin-top:4px;">—</div>
+            <div id="ytdSpend" class="num metric-clickable" title="Click to see the underlying transactions" style="font-size:22px; font-weight:800; margin-top:4px;">—</div>
           </div>
           <div style="width:1px; background:var(--border);"></div>
           <div style="flex:1; min-width:120px;">
@@ -602,6 +604,28 @@
       <a href="https://github.com/adambeltz2/actualbudget-sync" target="_blank" rel="noopener" style="color:var(--text-muted);">GitHub</a>
       <a href="https://www.buymeacoffee.com/adambeltz" target="_blank" rel="noopener" style="color:var(--text-muted);">☕ Buy Me a Coffee</a>
     </footer>
+  </div>
+
+  <!-- Metric Drill-Down Modal -->
+  <div id="metricModalOverlay" hidden style="position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:100; display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto;">
+    <div class="card" style="width:100%; max-width:680px; padding:26px; max-height:calc(100vh - 80px); display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:4px;">
+        <div>
+          <div id="metricModalTitle" class="num" style="font-size:18px; font-weight:800;">—</div>
+          <div id="metricModalSubtitle" style="font-size:12.5px; color:var(--text-muted); margin-top:2px;"></div>
+        </div>
+        <button type="button" id="metricModalClose" class="btn btn-ghost" style="padding:6px 12px; font-size:13px;">Close</button>
+      </div>
+      <p class="field-hint" style="margin:6px 0 14px;">On-budget, categorized transactions only — matches how the budget engine computes this figure. Transfers and off-budget accounts are excluded.</p>
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border); margin-bottom:10px;">
+        <span style="font-size:13px; color:var(--text-secondary);"><span id="metricModalCount">0</span> transactions</span>
+        <span style="display:flex; align-items:center; gap:12px;">
+          <span id="metricModalTotal" class="num" style="font-weight:800; font-size:16px;">—</span>
+          <button type="button" id="metricModalExport" class="btn btn-ghost" style="padding:6px 12px; font-size:13px;">Export CSV</button>
+        </span>
+      </div>
+      <div id="metricModalList" style="overflow-y:auto; flex:1;"></div>
+    </div>
   </div>
 
   <script>
@@ -1263,6 +1287,72 @@
 
     document.getElementById('fhEfTarget').addEventListener('change', loadFinancialHealth);
     document.getElementById('fhSrTarget').addEventListener('change', loadFinancialHealth);
+
+    // --- Metric Drill-Down Modal ---
+    // Lets a user click an Income/Spend figure and see the actual
+    // transactions behind it, so they can verify the number themselves
+    // instead of just trusting the budget engine's total.
+    let metricModalCurrentQuery = '';
+
+    async function openMetricModal(metric, params) {
+      const overlay = document.getElementById('metricModalOverlay');
+      const query = new URLSearchParams({ metric, ...params }).toString();
+      metricModalCurrentQuery = query;
+
+      document.getElementById('metricModalTitle').innerText = metric === 'income' ? 'Income' : 'Spend';
+      document.getElementById('metricModalSubtitle').innerText = params.range === 'ytd' ? 'Year to date' : monthDisplayLabel(params.month);
+      document.getElementById('metricModalCount').innerText = '…';
+      document.getElementById('metricModalTotal').innerText = '—';
+      document.getElementById('metricModalList').innerHTML = `<p class="field-hint" style="margin:20px 0; text-align:center;">Loading…</p>`;
+      overlay.hidden = false;
+
+      let res;
+      try {
+        res = await fetch(`/api/data/metric-transactions?${query}`);
+      } catch (err) {
+        document.getElementById('metricModalList').innerHTML = `<p class="field-hint" style="margin:20px 0; text-align:center;">Could not load transactions.</p>`;
+        return;
+      }
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      const data = await res.json();
+      if (data.error) {
+        document.getElementById('metricModalList').innerHTML = `<p class="field-hint" style="margin:20px 0; text-align:center;">${data.error}</p>`;
+        return;
+      }
+
+      document.getElementById('metricModalCount').innerText = data.count;
+      document.getElementById('metricModalTotal').innerText = formatCurrency(data.total);
+      document.getElementById('metricModalTotal').style.color = metric === 'income' ? 'var(--positive)' : 'var(--text)';
+
+      document.getElementById('metricModalList').innerHTML = data.transactions.map(t => `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px solid var(--border);">
+          <div style="min-width:0;">
+            <div style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t.payee_name || 'Unknown'}</div>
+            <div style="font-size:11.5px; color:var(--text-muted); margin-top:1px;">${t.date} · ${t.category} · ${t.account}</div>
+          </div>
+          <span class="num" style="font-weight:700; font-size:13.5px; color:${t.amount < 0 ? 'var(--negative)' : 'var(--positive)'}; flex-shrink:0;">${formatCurrency(t.amount)}</span>
+        </div>`).join('') || `<p class="field-hint" style="margin:20px 0; text-align:center;">No matching transactions in this period.</p>`;
+    }
+
+    function closeMetricModal() {
+      document.getElementById('metricModalOverlay').hidden = true;
+    }
+
+    document.getElementById('metricModalClose').addEventListener('click', closeMetricModal);
+    document.getElementById('metricModalOverlay').addEventListener('click', (e) => {
+      if (e.target.id === 'metricModalOverlay') closeMetricModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !document.getElementById('metricModalOverlay').hidden) closeMetricModal();
+    });
+    document.getElementById('metricModalExport').addEventListener('click', () => {
+      window.location.href = `/api/data/metric-transactions/export?${metricModalCurrentQuery}`;
+    });
+
+    document.getElementById('ivsIncome').addEventListener('click', () => openMetricModal('income', { month: document.getElementById('summaryMonth').value }));
+    document.getElementById('ivsSpend').addEventListener('click', () => openMetricModal('spend', { month: document.getElementById('summaryMonth').value }));
+    document.getElementById('ytdIncome').addEventListener('click', () => openMetricModal('income', { range: 'ytd' }));
+    document.getElementById('ytdSpend').addEventListener('click', () => openMetricModal('spend', { range: 'ytd' }));
 
     async function loadInsights(annualReturnPct) {
       let res;

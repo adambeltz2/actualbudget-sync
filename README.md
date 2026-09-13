@@ -113,6 +113,8 @@ Use **Test Connection** in the Actual Budget Configuration card to verify your S
 
 The **Data Explorer** (linked from the dashboard) lists account balances and lets you filter transactions by account, category, date range, and payee, with pagination and a CSV export of the current filter.
 
+Click any **Income**, **Spend**, **Income YTD**, or **Spend YTD** figure to see exactly which transactions make it up, with an Export CSV button — the same on-budget, categorized transactions the budget engine itself uses (transfers and off-budget accounts are excluded), so you can verify the number independently instead of just trusting it.
+
 ## Read-Only Access
 
 Use **Access & Sharing** on the dashboard to set a separate viewer password for a second person (e.g. a spouse) who should be able to see the dashboard and Data Explorer without being able to change settings, trigger a sync, or export/import a backup. Logging in with the viewer password shows a "Read-only access" badge and hides everything else. Clearing the viewer password immediately signs out any active viewer sessions.
