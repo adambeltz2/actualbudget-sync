@@ -276,6 +276,7 @@ router.get('/api/data/financial-health', async (req, res) => {
     const health = await actualService.getFinancialHealthData({
       emergencyFundAccountIds: config.emergencyFundAccountIds || [],
       investmentAccountIds: config.investmentAccountIds || [],
+      liabilityAccountIds: config.liabilityAccountIds || [],
       targetMonths, targetSavingsPct
     });
     res.json(health);
@@ -299,6 +300,7 @@ router.get('/api/data/financial-health/history', async (req, res) => {
     const months = Math.min(Math.max(parseInt(req.query.months, 10) || 6, 3), 24);
     const history = await actualService.getFinancialHealthHistory({
       emergencyFundAccountIds: config.emergencyFundAccountIds || [],
+      liabilityAccountIds: config.liabilityAccountIds || [],
       targetMonths, targetSavingsPct, months
     });
     res.json(history);

@@ -117,6 +117,10 @@ The **Data Explorer** (linked from the dashboard) lists account balances and let
 
 Use **Access & Sharing** on the dashboard to set a separate viewer password for a second person (e.g. a spouse) who should be able to see the dashboard and Data Explorer without being able to change settings, trigger a sync, or export/import a backup. Logging in with the viewer password shows a "Read-only access" badge and hides everything else. Clearing the viewer password immediately signs out any active viewer sessions.
 
+## Account Classification
+
+Actual Budget doesn't distinguish checking/savings/investment/liability accounts — it only knows names and balances. **Account Classification** on the dashboard (right after the Actual Budget connection settings, since it's usually a one-time setup) lets you tag each account as **Emergency Fund**, **Investment**, **Liability**, or leave it unclassified — an account can only be one of these at a time. These tags drive the Financial Health Check widget, its Net Worth Breakdown, the Financial Insights projection, and the "Liability Accounts" section of sync emails. Until you classify anything, Liability falls back to "any account with a negative balance" so the app still works sensibly out of the box.
+
 ## Webhook Notifications
 
 **Webhook Notifications** on the dashboard sends the same sync summary as the email report to a Discord or Slack channel via an incoming webhook, instead of (or alongside) email. Use "Send Test Message" to confirm the URL works before relying on it. Like your Actual Budget and SMTP passwords, the webhook URL is encrypted at rest when `CONFIG_ENCRYPTION_KEY` is set.
@@ -125,13 +129,13 @@ Use **Access & Sharing** on the dashboard to set a separate viewer password for 
 
 The **Financial Insights** dashboard widget looks for meaningful spending trends (e.g. "Groceries spending has increased 35% over the last 6 months") by comparing the first half of your recent spend history against the second half per category — each with its own small trend sparkline — and projects your balance forward 1/5/10 years two ways: a straight-line continuation of your recent average monthly savings pace (shown with a shaded "typical range" band based on how volatile your balance has historically been, the way Wealthfront and Personal Capital show a range rather than a single overconfident number), and compound growth at a return rate you choose (0%/4%/7%/10%) from your dropdown. A projection chart plots your real balance history alongside both projected paths. These are simple math projections from your own historical data, not financial advice — treat them as a starting point for a conversation with an actual advisor, not a guarantee.
 
-If you've tagged accounts under **Investment Accounts** (see Financial Health Check below), the "invested at assumed return" projection only compounds that tagged balance at your chosen rate — your remaining (liquid) balance keeps growing at its own recent, uncompounded pace instead of assuming cash in checking also earns a market return. Without any accounts tagged, it falls back to compounding your whole balance, same as before.
+If you've tagged accounts as **Investment** under Account Classification, the "invested at assumed return" projection only compounds that tagged balance at your chosen rate — your remaining (liquid) balance keeps growing at its own recent, uncompounded pace instead of assuming cash in checking also earns a market return. Without any accounts tagged, it falls back to compounding your whole balance, same as before.
 
 ## Financial Health Check
 
 The **Financial Health Check** widget scores three fundamentals — an emergency fund (months of coverage vs. your target), a savings rate (% of income saved vs. your target), and debt load (total debt expressed as months of income, since Actual only tracks balances, not monthly payments) — into a single 0-100 score with plain-language, rule-based recommendations (never LLM-generated) for anything below target.
 
-Actual Budget doesn't distinguish checking/savings/investment accounts, so **Emergency Fund Accounts** and **Investment Accounts** on the dashboard let you manually tag which of your accounts count as liquid savings vs. investments (an account can be only one or the other). Adjust your emergency-fund and savings-rate targets directly on the widget; the score refetches immediately. The widget's **Net Worth Breakdown** shows your liquid, investment, and debt balances as a proportional bar based on those tags.
+Which accounts count as liquid savings, investments, or liabilities is set once under **Account Classification** (above). Adjust your emergency-fund and savings-rate targets directly on the widget; the score refetches immediately. The widget's **Net Worth Breakdown** shows your liquid, investment, and debt balances as a proportional bar based on those tags.
 
 A small **Score Trend** sparkline next to the score shows how it's moved over the last several months (reconstructed from your existing transaction history — no separate tracking needed) with a "▲/▼ vs N months ago" delta, so you can tell if you're actually improving rather than just seeing a single snapshot.
 

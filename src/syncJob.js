@@ -87,7 +87,7 @@ async function syncAndReport() {
       const { subject, html } = buildReportHtml({
         accounts, accountBalances, accountMap, categoryMap, added, bankSyncIssue,
         totalBalance, budgetVsActual, publicUrl: config.publicUrl,
-        sections: config.emailSections
+        sections: config.emailSections, liabilityAccountIds: config.liabilityAccountIds || []
       });
       await sendReport(config, { subject, html });
       logger.info('Email report successfully dispatched.');

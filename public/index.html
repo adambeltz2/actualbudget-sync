@@ -353,7 +353,7 @@
         <div class="label-caps" style="margin-bottom:8px;">What This Means</div>
         <div id="fhRecommendations" style="display:flex; flex-direction:column;"></div>
 
-        <p class="field-hint" style="margin-top:14px; margin-bottom:0;">Emergency Fund and Debt Load use simplified proxies — average recent spend stands in for "essential" expenses, and Debt Load measures account balances rather than actual monthly payments. Set which accounts count as liquid savings or investments under <strong>Emergency Fund Accounts</strong> and <strong>Investment Accounts</strong> below. These are a starting point for your own judgment, not financial advice.</p>
+        <p class="field-hint" style="margin-top:14px; margin-bottom:0;">Emergency Fund and Debt Load use simplified proxies — average recent spend stands in for "essential" expenses, and Debt Load measures account balances rather than actual monthly payments. Classify your accounts under <strong>Account Classification</strong> in settings. These are a starting point for your own judgment, not financial advice.</p>
       </div>
 
       <!-- Financial Insights -->
@@ -456,6 +456,15 @@
             <input type="text" id="cronSchedule" style="font-family:monospace;" placeholder="0 6,12 * * *">
             <p class="field-hint">Cron format: <code>0 6,12 * * *</code> syncs at 6:00 AM and 12:00 PM (Noon) daily.</p>
           </div>
+        </div>
+      </div>
+
+      <!-- Account Classification -->
+      <div class="card" style="padding:22px;">
+        <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Account Classification</div>
+        <p class="field-hint" style="margin-top:0; margin-bottom:14px;">Actual doesn't distinguish checking/savings/investment/liability accounts — it only knows names and balances. Classify each account once here; it drives the Financial Health Check widget, Net Worth Breakdown, Financial Insights projections, and the Liability Accounts section of sync emails. Usually a one-time setup — revisit only when you add or close an account.</p>
+        <div id="accountClassificationList" style="display:flex; flex-direction:column;">
+          <p class="field-hint" style="margin:0;">Configure Actual Budget above and save to see your accounts here.</p>
         </div>
       </div>
 
@@ -564,24 +573,6 @@
           </div>
         </div>
         <p id="viewerPasswordResult" hidden style="font-size:13px; padding:9px 12px; border-radius:8px; margin:14px 0 0;"></p>
-      </div>
-
-      <!-- Emergency Fund Accounts -->
-      <div class="card" style="padding:22px;">
-        <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Emergency Fund Accounts</div>
-        <p class="field-hint" style="margin-top:0; margin-bottom:14px;">Actual doesn't distinguish checking/savings/investment accounts — it only knows names and balances. Check which accounts should count as liquid emergency savings for the Financial Health Check widget.</p>
-        <div id="emergencyFundAccountList" style="display:flex; flex-direction:column;">
-          <p class="field-hint" style="margin:0;">Configure Actual Budget above and save to see your accounts here.</p>
-        </div>
-      </div>
-
-      <!-- Investment Accounts -->
-      <div class="card" style="padding:22px;">
-        <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Investment Accounts</div>
-        <p class="field-hint" style="margin-top:0; margin-bottom:14px;">Same limitation as above — check which accounts (brokerage, 401k, IRA, etc.) should count as investments for the Net Worth Breakdown on the Financial Health Check widget. An account can't be both liquid and investment.</p>
-        <div id="investmentAccountList" style="display:flex; flex-direction:column;">
-          <p class="field-hint" style="margin:0;">Configure Actual Budget above and save to see your accounts here.</p>
-        </div>
       </div>
 
       <!-- Backup & Restore -->
@@ -773,6 +764,7 @@
       document.getElementById('fhSrTarget').value = config.financialHealthTargetSavingsPct ?? 20;
       emergencyFundAccountIds = config.emergencyFundAccountIds || [];
       investmentAccountIds = config.investmentAccountIds || [];
+      liabilityAccountIds = config.liabilityAccountIds || [];
 
       const sections = config.emailSections || {};
       document.getElementById('emailSectionBalances').checked = sections.balances !== false;
@@ -784,8 +776,7 @@
         document.getElementById('dashboardWidgetsSection').hidden = false;
         renderLastSyncPill(config.lastSyncAt, config.lastSyncStatus, config.lastSyncError);
         loadDashboardWidgets(widgets, document.getElementById('summaryMonth').value);
-        loadEmergencyFundAccountList();
-        loadInvestmentAccountList();
+        loadAccountClassificationList();
       }
     }
 
@@ -823,6 +814,7 @@
     let trendChart = null;
     let emergencyFundAccountIds = [];
     let investmentAccountIds = [];
+    let liabilityAccountIds = [];
 
     function renderAccounts(accounts) {
       const list = document.getElementById('accountsList');
@@ -836,7 +828,7 @@
         </div>`).join('') || `<p style="color:var(--text-muted); font-size:13px;">No accounts yet.</p>`;
     }
 
-    async function loadEmergencyFundAccountList() {
+    async function loadAccountClassificationList() {
       let accounts;
       try {
         const res = await fetch('/api/data/accounts');
@@ -846,62 +838,36 @@
         return;
       }
 
-      const container = document.getElementById('emergencyFundAccountList');
-      container.innerHTML = accounts.map(a => `
-        <label style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid var(--border); cursor:pointer;">
-          <span style="display:flex; align-items:center; gap:10px; min-width:0;">
-            <input type="checkbox" class="emergencyFundCheckbox" data-account-id="${a.id}" ${emergencyFundAccountIds.includes(a.id) ? 'checked' : ''}>
-            <span title="${a.name}" style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</span>
-          </span>
+      const classificationFor = (id) => emergencyFundAccountIds.includes(id) ? 'emergencyFund'
+        : investmentAccountIds.includes(id) ? 'investment'
+        : liabilityAccountIds.includes(id) ? 'liability' : '';
+
+      const container = document.getElementById('accountClassificationList');
+      container.innerHTML = accounts.map(a => {
+        const current = classificationFor(a.id);
+        const option = (value, label) => `<option value="${value}" ${current === value ? 'selected' : ''}>${label}</option>`;
+        return `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px solid var(--border);">
+          <span title="${a.name}" style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0;">${a.name}</span>
           <span class="num" style="font-weight:700; font-size:13.5px; color:${a.balance < 0 ? 'var(--negative)' : 'var(--text)'}; flex-shrink:0;">${formatCurrency(a.balance)}</span>
-        </label>`).join('') || `<p class="field-hint" style="margin:0;">No accounts yet.</p>`;
+          <select class="accountClassSelect" data-account-id="${a.id}" style="padding:5px 8px; font-size:12.5px; border-radius:6px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); flex-shrink:0;">
+            ${option('', 'Unclassified')}
+            ${option('emergencyFund', 'Emergency Fund')}
+            ${option('investment', 'Investment')}
+            ${option('liability', 'Liability')}
+          </select>
+        </div>`;
+      }).join('') || `<p class="field-hint" style="margin:0;">No accounts yet.</p>`;
 
-      document.querySelectorAll('.emergencyFundCheckbox').forEach(cb => {
-        cb.addEventListener('change', (e) => {
+      document.querySelectorAll('.accountClassSelect').forEach(sel => {
+        sel.addEventListener('change', (e) => {
           const id = e.target.dataset.accountId;
-          if (e.target.checked) {
-            if (!emergencyFundAccountIds.includes(id)) emergencyFundAccountIds.push(id);
-            investmentAccountIds = investmentAccountIds.filter(existing => existing !== id);
-            const investmentCb = document.querySelector(`.investmentCheckbox[data-account-id="${id}"]`);
-            if (investmentCb) investmentCb.checked = false;
-          } else {
-            emergencyFundAccountIds = emergencyFundAccountIds.filter(existing => existing !== id);
-          }
-        });
-      });
-    }
-
-    async function loadInvestmentAccountList() {
-      let accounts;
-      try {
-        const res = await fetch('/api/data/accounts');
-        accounts = await res.json();
-        if (accounts.error) return;
-      } catch (err) {
-        return;
-      }
-
-      const container = document.getElementById('investmentAccountList');
-      container.innerHTML = accounts.map(a => `
-        <label style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid var(--border); cursor:pointer;">
-          <span style="display:flex; align-items:center; gap:10px; min-width:0;">
-            <input type="checkbox" class="investmentCheckbox" data-account-id="${a.id}" ${investmentAccountIds.includes(a.id) ? 'checked' : ''}>
-            <span title="${a.name}" style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</span>
-          </span>
-          <span class="num" style="font-weight:700; font-size:13.5px; color:${a.balance < 0 ? 'var(--negative)' : 'var(--text)'}; flex-shrink:0;">${formatCurrency(a.balance)}</span>
-        </label>`).join('') || `<p class="field-hint" style="margin:0;">No accounts yet.</p>`;
-
-      document.querySelectorAll('.investmentCheckbox').forEach(cb => {
-        cb.addEventListener('change', (e) => {
-          const id = e.target.dataset.accountId;
-          if (e.target.checked) {
-            if (!investmentAccountIds.includes(id)) investmentAccountIds.push(id);
-            emergencyFundAccountIds = emergencyFundAccountIds.filter(existing => existing !== id);
-            const efCb = document.querySelector(`.emergencyFundCheckbox[data-account-id="${id}"]`);
-            if (efCb) efCb.checked = false;
-          } else {
-            investmentAccountIds = investmentAccountIds.filter(existing => existing !== id);
-          }
+          const value = e.target.value;
+          emergencyFundAccountIds = emergencyFundAccountIds.filter(existing => existing !== id);
+          investmentAccountIds = investmentAccountIds.filter(existing => existing !== id);
+          liabilityAccountIds = liabilityAccountIds.filter(existing => existing !== id);
+          if (value === 'emergencyFund') emergencyFundAccountIds.push(id);
+          else if (value === 'investment') investmentAccountIds.push(id);
+          else if (value === 'liability') liabilityAccountIds.push(id);
         });
       });
     }
@@ -1180,12 +1146,12 @@
         : `spending down an average of ${formatCurrency(Math.abs(projection.avgMonthlyNetChange))}/month`;
       const investedExplanation = data.usesInvestmentTagging
         ? '"Invested at assumed return" compounds only your tagged Investment Accounts at the selected rate; your remaining (liquid) balance keeps growing at its own recent pace, uncompounded.'
-        : '"Invested at assumed return" compounds that pace monthly at the selected rate. Tag accounts under Investment Accounts in settings to compound only your actual investments instead of your whole balance.';
+        : '"Invested at assumed return" compounds that pace monthly at the selected rate. Classify accounts as Investment under Account Classification in settings to compound only your actual investments instead of your whole balance.';
       document.getElementById('projectionFootnote').innerText =
         `Based on your recent history, you've been ${netText}. The shaded range reflects how much your monthly change has historically varied; ${investedExplanation}`;
       const investedTooltip = data.usesInvestmentTagging
         ? 'Compounds only your tagged Investment Accounts at the selected rate; your remaining (liquid) balance keeps growing at its own recent pace, uncompounded.'
-        : 'Compounds your whole balance monthly at the selected rate. Tag accounts under Investment Accounts in settings to compound only your actual investments instead.';
+        : 'Compounds your whole balance monthly at the selected rate. Classify accounts as Investment under Account Classification in settings to compound only your actual investments instead.';
       document.getElementById('investedTooltipText').innerText = investedTooltip;
       document.getElementById('investedTooltipTextTable').innerText = investedTooltip;
 
@@ -1362,6 +1328,7 @@
         insightsAnnualReturnPct: parseFloat(document.getElementById('insightsReturnRate').value),
         emergencyFundAccountIds: emergencyFundAccountIds,
         investmentAccountIds: investmentAccountIds,
+        liabilityAccountIds: liabilityAccountIds,
         financialHealthTargetMonths: parseInt(document.getElementById('fhEfTarget').value, 10),
         financialHealthTargetSavingsPct: parseFloat(document.getElementById('fhSrTarget').value),
         emailSections: {

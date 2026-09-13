@@ -53,7 +53,7 @@ function computeBudgetTotalRow(budgetVsActual) {
 
 function buildReportHtml({
   accounts, accountBalances, accountMap, categoryMap = {}, added, bankSyncIssue,
-  totalBalance = 0, budgetVsActual = [], publicUrl = '', sections = {}
+  totalBalance = 0, budgetVsActual = [], publicUrl = '', sections = {}, liabilityAccountIds = []
 }) {
   const includeBalances = sections.balances !== false;
   const includeTransactions = sections.transactions !== false;
@@ -121,7 +121,11 @@ function buildReportHtml({
 
       <div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:4px;">Liability Accounts</div>
       <div style="margin-bottom:24px;">`;
-    const liabilityAccounts = accounts.filter(acc => accountBalances[acc.id] < 0);
+    // Prefer explicit Liability Account tags when set; fall back to "any
+    // account with a negative balance" for installs that haven't tagged yet.
+    const liabilityAccounts = liabilityAccountIds.length > 0
+      ? accounts.filter(acc => liabilityAccountIds.includes(acc.id))
+      : accounts.filter(acc => accountBalances[acc.id] < 0);
     if (liabilityAccounts.length > 0) {
       liabilityAccounts.forEach((acc, i) => {
         html += renderAccountRow(acc, accountBalances[acc.id], DOT_PALETTE[i % DOT_PALETTE.length]);

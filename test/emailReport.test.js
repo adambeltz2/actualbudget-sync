@@ -48,6 +48,18 @@ describe('buildReportHtml', () => {
     assert.match(html, /No accounts with a negative balance/);
   });
 
+  test('explicit liabilityAccountIds override the negative-balance heuristic', () => {
+    // Checking has a positive balance but is explicitly tagged as a
+    // liability (e.g. a line of credit currently paid to zero); Savings is
+    // negative but untagged, so it should be excluded once tags are set.
+    const { html } = buildReportHtml({
+      accounts, accountBalances, accountMap, added: [], bankSyncIssue: null,
+      liabilityAccountIds: ['acc-1']
+    });
+    assert.match(html, /Checking/);
+    assert.doesNotMatch(html, /Savings/);
+  });
+
   test('transactions section is included by default and omitted when disabled', () => {
     const withTx = buildReportHtml({ accounts, accountBalances, accountMap, added, bankSyncIssue: null });
     assert.match(withTx.html, /Coffee Shop/);
