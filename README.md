@@ -134,3 +134,5 @@ The **Financial Health Check** widget scores three fundamentals — an emergency
 Actual Budget doesn't distinguish checking/savings/investment accounts, so **Emergency Fund Accounts** and **Investment Accounts** on the dashboard let you manually tag which of your accounts count as liquid savings vs. investments (an account can be only one or the other). Adjust your emergency-fund and savings-rate targets directly on the widget; the score refetches immediately. The widget's **Net Worth Breakdown** shows your liquid, investment, and debt balances as a proportional bar based on those tags.
 
 A small **Score Trend** sparkline next to the score shows how it's moved over the last several months (reconstructed from your existing transaction history — no separate tracking needed) with a "▲/▼ vs N months ago" delta, so you can tell if you're actually improving rather than just seeing a single snapshot.
+
+Small "i" icons next to calculated figures throughout Financial Health Check and Financial Insights show exactly how each one is computed on hover or keyboard focus — no need to scroll to a footnote to understand what a number means.

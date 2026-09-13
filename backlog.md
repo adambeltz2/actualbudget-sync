@@ -231,6 +231,12 @@ Affected files (if confirmed): `src/actualService.js` (`buildTransactionFilters`
 The `docker-build` CI job (added alongside the multi-stage Dockerfile optimization) confirms the image builds successfully, but doesn't confirm the resulting container actually boots and serves traffic. A smoke-test step (start the built image, curl `/healthz`, fail the job if it doesn't return 200 within a few seconds) would close that gap.
 Affected files: `.github/workflows/test.yml`
 
+## P20 — Calculation tooltips — DONE
+
+### [FEATURE] Info tooltips explaining how each calculated figure works — DONE
+User asked for a way to show how the app's various calculations work, since the Financial Health and Financial Insights widgets now surface several derived figures (score weighting, emergency fund months, savings rate, debt load, net worth breakdown, score trend, projection bands) that were previously only explained in a single footnote paragraph at the bottom of each widget. Added a small reusable `.info-tip` component (a circled italic "i", CSS-only hover/focus popover styled with the app's existing card/border/shadow tokens — no JS, works via `:hover`/`:focus`/`:focus-within` so it's keyboard- and touch-accessible) and attached one to every calculated label across both widgets: the overall score's weighting formula, Emergency Fund/Savings Rate/Debt Load's exact formulas and status thresholds, Net Worth Breakdown's liquid/investment/debt identity, Score Trend's reconstruction caveat, and Financial Insights' "current pace" vs "invested at assumed return" distinction (both in the chart legend and the projection table headers) plus the Spending Trends methodology. The "invested at assumed return" tooltip text updates dynamically based on `usesInvestmentTagging`, mirroring the existing footnote's behavior, so it never contradicts what the projection is actually doing. One bug caught and fixed before shipping: the tooltip content initially inherited `text-transform: uppercase` and an italic serif font from its `.label-caps` ancestor / the icon's own styling, rendering full sentences in illegible all-caps italic — fixed by explicitly resetting `text-transform`, `letter-spacing`, and `font-style`/`font-family` on the tooltip content itself. Verified via Playwright (hover and keyboard-focus both reveal the tooltip; content renders in normal sentence case) and a screenshot review.
+Affected files: `public/index.html`
+
 ## P19 — Financial Health Check — DONE
 
 ### [FEATURE] "Financial advisor" view: emergency fund, savings rate, debt load score — DONE
