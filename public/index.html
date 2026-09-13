@@ -135,6 +135,7 @@
         <span id="viewerBadge" hidden style="font-size:12px; font-weight:700; padding:5px 10px; border-radius:999px; background:color-mix(in srgb, var(--accent) 15%, transparent); color:var(--accent-dark);">Read-only access</span>
         <button id="themeToggleBtn" title="Toggle dark mode" class="btn btn-ghost">🌙</button>
         <a href="/explorer.html" class="btn btn-ghost">Data Explorer</a>
+        <a href="/wrapped.html" class="btn btn-ghost">🎉 Wrapped</a>
         <a id="settingsLink" href="/settings.html" class="btn btn-ghost">⚙ Settings</a>
         <button id="triggerSyncBtn" class="btn btn-primary">Trigger Manual Sync</button>
         <button id="logoutBtn" class="btn btn-ghost">Logout</button>
@@ -165,6 +166,7 @@
         <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetBudgetVsActual"> Spend vs Budget</label>
         <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetInsights"> Financial Insights</label>
         <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetFinancialHealth"> Financial Health Check</label>
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetFire"> Financial Independence</label>
       </div>
 
       <!-- Income vs Spend (month) -->
@@ -356,6 +358,55 @@
         <div id="fhRecommendations" style="display:flex; flex-direction:column;"></div>
 
         <p class="field-hint" style="margin-top:14px; margin-bottom:0;">Emergency Fund and Debt Load use simplified proxies — average recent spend stands in for "essential" expenses, and Debt Load measures account balances rather than actual monthly payments. Classify your accounts under <strong>Account Classification</strong> in settings. These are a starting point for your own judgment, not financial advice.</p>
+      </div>
+
+      <!-- Financial Independence (FIRE) -->
+      <div id="fireWidget" hidden class="card" style="padding:26px 32px; margin-top:20px;">
+        <div class="label-caps" style="margin-bottom:16px; display:flex; align-items:center; gap:6px;">Financial Independence
+          <span class="info-tip" tabindex="0">i<span class="info-tip-content">FIRE Number = Annual Expenses × (100 ÷ withdrawal rate) — the classic "4% rule" is a 25x multiple. % Reached = your net worth ÷ that number. Years to FI projects your current savings pace compounding at your Financial Insights return rate until net worth reaches the FIRE Number. There's no way to derive a personal FIRE target from your data — set your own Annual Expenses below, or leave it blank to use your trailing 12-month average spend, annualized.</span></span>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:28px; flex-wrap:wrap; margin-bottom:22px; padding-bottom:22px; border-bottom:1px solid var(--border);">
+          <div style="position:relative; width:96px; height:96px; flex-shrink:0;">
+            <svg width="96" height="96" viewBox="0 0 96 96" style="transform:rotate(-90deg);">
+              <circle cx="48" cy="48" r="40" fill="none" stroke="var(--track)" stroke-width="9"/>
+              <circle id="fireRing" cx="48" cy="48" r="40" fill="none" stroke="var(--accent)" stroke-width="9" stroke-linecap="round" stroke-dasharray="251.3" stroke-dashoffset="251.3"/>
+            </svg>
+            <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+              <div id="firePctNumber" class="num" style="font-size:20px; font-weight:800;">—</div>
+              <div style="font-size:9px; color:var(--text-muted); text-align:center;">of FIRE<br>reached</div>
+            </div>
+          </div>
+          <div style="flex:1; min-width:200px;">
+            <div id="fireYearsText" class="num" style="font-size:18px; font-weight:800; margin-bottom:4px;">—</div>
+            <div style="font-size:13px; color:var(--text-secondary); line-height:1.5;">to reach financial independence, at your current savings pace compounding at your Insights return rate.</div>
+          </div>
+        </div>
+
+        <div class="grid-3" style="margin-bottom:8px;">
+          <div class="card-soft" style="padding:16px;">
+            <div class="label-caps" style="margin-bottom:8px;">Net Worth</div>
+            <div id="fireNetWorth" class="num" style="font-size:20px; font-weight:800;">—</div>
+          </div>
+          <div class="card-soft" style="padding:16px;">
+            <div class="label-caps" style="margin-bottom:8px;">FIRE Number</div>
+            <div id="fireNumberValue" class="num" style="font-size:20px; font-weight:800;">—</div>
+          </div>
+          <div class="card-soft" style="padding:16px;">
+            <div class="label-caps" style="margin-bottom:8px;">Annual Expenses</div>
+            <div id="fireExpensesValue" class="num" style="font-size:20px; font-weight:800; margin-bottom:8px;">—</div>
+            <div style="display:flex; gap:6px;">
+              <input type="number" id="fireExpensesOverride" placeholder="auto" title="Override annual expenses (leave blank to auto-calculate from your trailing 12-month average spend)" style="width:100%; padding:5px 7px; font-size:12px; border-radius:6px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+              <select id="fireWithdrawalRate" title="Withdrawal rate" style="padding:5px 6px; font-size:12px; border-radius:6px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); flex-shrink:0;">
+                <option value="3">3% (33x)</option>
+                <option value="3.5">3.5% (29x)</option>
+                <option value="4">4% (25x)</option>
+                <option value="4.5">4.5% (22x)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <p class="field-hint" style="margin-top:8px; margin-bottom:0;">This is a simple math projection from your own historical data, not financial advice.</p>
       </div>
 
       <!-- Financial Insights -->
@@ -559,6 +610,9 @@
       document.getElementById('widgetFinancialHealth').checked = widgets.financialHealth !== false;
       document.getElementById('fhEfTarget').value = config.financialHealthTargetMonths ?? 6;
       document.getElementById('fhSrTarget').value = config.financialHealthTargetSavingsPct ?? 20;
+      document.getElementById('widgetFire').checked = widgets.fire !== false;
+      document.getElementById('fireExpensesOverride').value = config.fireAnnualExpenses || '';
+      document.getElementById('fireWithdrawalRate').value = config.fireWithdrawalRatePct ?? 4;
 
       const isConfigured = !!(config.actualUrl && config.actualPasswordSet && config.syncId);
       if (isConfigured) {
@@ -592,6 +646,7 @@
         budgetVsActual: document.getElementById('widgetBudgetVsActual').checked,
         insights: document.getElementById('widgetInsights').checked,
         financialHealth: document.getElementById('widgetFinancialHealth').checked,
+        fire: document.getElementById('widgetFire').checked,
       };
     }
 
@@ -801,6 +856,12 @@
         if (widgets.financialHealth === false) return;
         document.getElementById('financialHealthWidget').hidden = false;
         loadFinancialHealth();
+      });
+
+      safeRenderWidget('fire', () => {
+        if (widgets.fire === false) return;
+        document.getElementById('fireWidget').hidden = false;
+        loadFireProgress();
       });
 
       safeRenderWidget('insights', () => {
@@ -1046,6 +1107,54 @@
     document.getElementById('fhSrTarget').addEventListener('change', (e) => {
       saveDashboardPreference({ financialHealthTargetSavingsPct: parseFloat(e.target.value) });
       loadFinancialHealth();
+    });
+
+    // --- Financial Independence (FIRE) ---
+    function renderFireProgress(data) {
+      const circumference = 2 * Math.PI * 40;
+      document.getElementById('firePctNumber').innerText = `${Math.round(data.pctReached)}%`;
+      document.getElementById('fireRing').style.strokeDashoffset = circumference - (data.pctReached / 100) * circumference;
+
+      document.getElementById('fireYearsText').innerText = data.yearsToFI === null
+        ? 'Not on track at your current pace'
+        : data.yearsToFI === 0 && data.monthsRemainderToFI === 0
+          ? 'You\'ve reached FIRE!'
+          : `${data.yearsToFI} yr ${data.monthsRemainderToFI} mo`;
+
+      document.getElementById('fireNetWorth').innerText = formatCurrency(data.netWorth);
+      document.getElementById('fireNumberValue').innerText = formatCurrency(data.fireNumber);
+      document.getElementById('fireExpensesValue').innerText = formatCurrency(data.annualExpenses)
+        + (data.usesCustomExpenses ? '' : '/yr (auto)');
+      document.getElementById('fireExpensesOverride').placeholder = `auto: ${formatCurrency(data.autoAnnualExpenses)}`;
+    }
+
+    async function loadFireProgress() {
+      const fireAnnualExpenses = document.getElementById('fireExpensesOverride').value;
+      const fireWithdrawalRatePct = document.getElementById('fireWithdrawalRate').value;
+      let res;
+      try {
+        res = await fetch(`/api/data/fire-progress?fireAnnualExpenses=${encodeURIComponent(fireAnnualExpenses)}&fireWithdrawalRatePct=${encodeURIComponent(fireWithdrawalRatePct)}`);
+      } catch (err) {
+        return;
+      }
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      const data = await res.json();
+      if (data.error) return;
+      try {
+        renderFireProgress(data);
+      } catch (err) {
+        console.error('Financial Independence widget failed to render:', err);
+      }
+    }
+
+    document.getElementById('fireExpensesOverride').addEventListener('change', (e) => {
+      const value = parseFloat(e.target.value) || null;
+      saveDashboardPreference({ fireAnnualExpenses: value });
+      loadFireProgress();
+    });
+    document.getElementById('fireWithdrawalRate').addEventListener('change', (e) => {
+      saveDashboardPreference({ fireWithdrawalRatePct: parseFloat(e.target.value) });
+      loadFireProgress();
     });
 
     // --- Metric Drill-Down Modal ---

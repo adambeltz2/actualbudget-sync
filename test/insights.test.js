@@ -2,7 +2,7 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   linearRegression, projectFutureValue, classifySpendTrend, standardDeviation,
-  buildSpendingInsights, buildBalanceProjection
+  buildSpendingInsights, buildBalanceProjection, monthsToReachTarget
 } = require('../src/insights');
 
 describe('linearRegression', () => {
@@ -266,5 +266,27 @@ describe('buildBalanceProjection', () => {
     const result = buildBalanceProjection(history, [], []);
     const plain = buildBalanceProjection(history);
     assert.deepEqual(result, plain);
+  });
+});
+
+describe('monthsToReachTarget', () => {
+  test('returns 0 when the target is already met', () => {
+    assert.equal(monthsToReachTarget({ currentBalance: 100000, monthlyContribution: 500, annualReturnRate: 0.07, target: 90000 }), 0);
+  });
+
+  test('a positive monthly contribution eventually reaches the target', () => {
+    const months = monthsToReachTarget({ currentBalance: 10000, monthlyContribution: 1000, annualReturnRate: 0, target: 22000 });
+    assert.equal(months, 12); // 10000 + 1000*12 = 22000 exactly
+  });
+
+  test('compounding growth reaches the target sooner than a zero return rate', () => {
+    const withGrowth = monthsToReachTarget({ currentBalance: 10000, monthlyContribution: 500, annualReturnRate: 0.07, target: 200000 });
+    const noGrowth = monthsToReachTarget({ currentBalance: 10000, monthlyContribution: 500, annualReturnRate: 0, target: 200000 });
+    assert.ok(withGrowth < noGrowth);
+  });
+
+  test('a negative or zero monthly contribution with no growth never reaches a higher target', () => {
+    const months = monthsToReachTarget({ currentBalance: 10000, monthlyContribution: -50, annualReturnRate: 0, target: 200000, maxMonths: 60 });
+    assert.equal(months, null);
   });
 });
