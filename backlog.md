@@ -231,6 +231,14 @@ Affected files (if confirmed): `src/actualService.js` (`buildTransactionFilters`
 The `docker-build` CI job (added alongside the multi-stage Dockerfile optimization) confirms the image builds successfully, but doesn't confirm the resulting container actually boots and serves traffic. A smoke-test step (start the built image, curl `/healthz`, fail the job if it doesn't return 200 within a few seconds) would close that gap.
 Affected files: `.github/workflows/test.yml`
 
+## P26 — Wrapped year-in-review page — DONE
+
+### [FEATURE] Spotify-Wrapped-style year-in-review, live instead of upload-based — DONE
+User asked to incorporate `actualbudget/wrapped` "since it's the same data." That project is a standalone browser tool requiring an exported `.zip`/`db.sqlite` upload (it has no server of its own); since this app is already connected live, built the same experience — a full-screen slide carousel covering Income vs. Expenses, Top Spending Categories, Top Payees, transaction activity stats (busiest day/month), and a GitHub-style calendar heatmap of daily transaction counts — reading directly from the synced budget with no export/upload step.
+Added `actualService.getWrappedData({ year })`: income/expenses and the category/payee rankings use the same on-budget, category-type classification established for the metric drill-down (P23) for consistency with the rest of the app's numbers, while the activity stats (total count, busiest day/month, the heatmap) intentionally count every transaction regardless of category or on-budget status, since those describe real account activity rather than budget totals. New `GET /api/data/wrapped` route.
+Built as a new standalone page (`public/wrapped.html`) rather than a dashboard widget, since a full-screen slide-by-slide presentation is a fundamentally different interaction than the card-grid dashboard — arrow-key/click-edge/dot navigation between 7 slides, in the app's own design tokens and fonts rather than a copy of the original's visual style. Linked from the dashboard nav ("🎉 Wrapped"). One bug caught and fixed before shipping: the invisible prev/next nav buttons left a default browser focus outline visible after being clicked, fixed with `outline: none`. Verified via a stubbed-`@actual-app/api` dry run (confirming an off-budget account and a transfer are correctly excluded from income/expenses while still counting toward activity stats) and a full Playwright pass through every slide via both click and keyboard navigation, zero console errors.
+Affected files: `src/actualService.js`, `src/routes.js`, `public/wrapped.html` (new), `public/index.html`
+
 ## P25 — Financial Independence (FIRE) widget — DONE
 
 ### [FEATURE] FIRE progress gauge + Years to Financial Independence — DONE

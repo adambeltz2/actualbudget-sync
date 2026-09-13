@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wrapped — Actual Budget Smart Sync</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap">
+  <style>
+    :root {
+      --bg: #F1F0EC; --card-bg: #FFFFFF; --card-bg-soft: #FAF9F6; --border: #F0EFEB;
+      --text: #1E2A32; --text-secondary: #33404A; --text-muted: #8A93A0;
+      --accent: #0EA894; --accent-dark: #0C8E7D;
+      --positive: #1C8C74; --negative: #C4573F;
+      --shadow: 0 1px 2px rgba(30,42,50,0.04), 0 8px 24px rgba(30,42,50,0.06);
+    }
+    html.dark {
+      --bg: #171D21; --card-bg: #1F262B; --card-bg-soft: #232B31; --border: #2C363D;
+      --text: #EDEFF0; --text-secondary: #C7CDD1; --text-muted: #7C8890;
+      --accent: #14BFA8; --accent-dark: #0EA894;
+      --positive: #2FBF9B; --negative: #E0806A;
+      --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px rgba(0,0,0,0.3);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%; overflow: hidden;
+      background: var(--bg); color: var(--text);
+      font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
+    }
+    .num { font-family: 'Sora', system-ui, sans-serif; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer;
+      padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 14px;
+      font-family: inherit; transition: opacity 0.15s; text-decoration: none;
+    }
+    .btn-ghost { background: var(--card-bg); color: var(--text-secondary); box-shadow: var(--shadow); }
+    .btn-ghost:hover { opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #FFFFFF; }
+    .btn-primary:hover { background: var(--accent-dark); }
+    [hidden] { display: none !important; }
+
+    #topBar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 24px;
+    }
+    #dots { display: flex; gap: 7px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); transition: background 0.2s, transform 0.2s; }
+    .dot.active { background: var(--accent); transform: scale(1.3); }
+
+    .slideTrack { height: 100%; position: relative; }
+    .slide {
+      position: absolute; inset: 0; display: none; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center;
+      padding: 100px 24px 90px; opacity: 0; transition: opacity 0.35s ease;
+    }
+    .slide.active { display: flex; opacity: 1; }
+    .slideLabel { font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+    .slideTitle { font-family: 'Sora', system-ui, sans-serif; font-weight: 800; font-size: 44px; line-height: 1.15; margin: 0 0 14px; max-width: 720px; }
+    .slideSub { font-size: 16px; color: var(--text-secondary); max-width: 560px; line-height: 1.5; margin: 0; }
+    .bigNum { font-family: 'Sora', system-ui, sans-serif; font-weight: 800; font-size: 64px; line-height: 1.1; }
+    @media (max-width: 640px) {
+      .slideTitle { font-size: 30px; }
+      .bigNum { font-size: 44px; }
+    }
+
+    .rankList { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 480px; margin-top: 24px; }
+    .rankRow { display: flex; align-items: center; gap: 14px; background: var(--card-bg); border-radius: 12px; padding: 12px 18px; box-shadow: var(--shadow); text-align: left; }
+    .rankNum { font-family: 'Sora', system-ui, sans-serif; font-weight: 800; font-size: 15px; color: var(--accent); width: 22px; flex-shrink: 0; }
+    .rankName { flex: 1; min-width: 0; font-weight: 600; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rankValue { font-family: 'Sora', system-ui, sans-serif; font-weight: 700; font-size: 14.5px; flex-shrink: 0; }
+
+    #navPrev, #navNext {
+      position: fixed; top: 0; bottom: 0; width: 15%; z-index: 5; cursor: pointer;
+      background: transparent; border: none; outline: none;
+    }
+    #navPrev { left: 0; } #navNext { right: 0; }
+
+    .heatmapWrap { overflow-x: auto; max-width: 100%; padding: 4px; }
+    .heatmapGrid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 12px); gap: 3px; }
+    .heatCell { width: 12px; height: 12px; border-radius: 3px; background: var(--border); }
+  </style>
+</head>
+<body>
+  <div id="topBar">
+    <a href="/" class="btn btn-ghost">← Dashboard</a>
+    <div id="dots"></div>
+    <button id="themeToggleBtn" title="Toggle dark mode" class="btn btn-ghost">🌙</button>
+  </div>
+
+  <div id="errorOverlay" hidden style="position:fixed; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:24px;">
+    <div>
+      <div class="slideTitle" style="font-size:26px;">Couldn't load your Wrapped</div>
+      <p id="errorMessage" class="slideSub"></p>
+    </div>
+  </div>
+
+  <button id="navPrev" aria-label="Previous slide"></button>
+  <button id="navNext" aria-label="Next slide"></button>
+
+  <div class="slideTrack" id="slideTrack">
+    <div class="slide active" data-slide="0">
+      <div class="slideLabel">Your Year in Review</div>
+      <div class="slideTitle" id="introTitle">Your Wrapped</div>
+      <p class="slideSub">A look back at your money this year — reconstructed live from your synced data, not an export you have to upload.</p>
+      <p class="slideSub" style="margin-top:24px; font-size:13px; color:var(--text-muted);">Use → or click the right edge to continue</p>
+    </div>
+
+    <div class="slide" data-slide="1">
+      <div class="slideLabel">Income vs. Expenses</div>
+      <div style="display:flex; gap:56px; flex-wrap:wrap; justify-content:center; margin-bottom:18px;">
+        <div>
+          <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;">Income</div>
+          <div class="bigNum" id="wIncome" style="color:var(--positive);">—</div>
+        </div>
+        <div>
+          <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;">Expenses</div>
+          <div class="bigNum" id="wExpenses">—</div>
+        </div>
+      </div>
+      <p class="slideSub" id="wNetText"></p>
+    </div>
+
+    <div class="slide" data-slide="2">
+      <div class="slideLabel">Top Spending Categories</div>
+      <div class="slideTitle" style="font-size:28px;">Where it went</div>
+      <div class="rankList" id="wCategoriesList"></div>
+    </div>
+
+    <div class="slide" data-slide="3">
+      <div class="slideLabel">Top Payees</div>
+      <div class="slideTitle" style="font-size:28px;">Who you paid the most</div>
+      <div class="rankList" id="wPayeesList"></div>
+    </div>
+
+    <div class="slide" data-slide="4">
+      <div class="slideLabel">Activity</div>
+      <div class="bigNum" id="wTxCount">—</div>
+      <p class="slideSub" style="margin-bottom:20px;">transactions this year</p>
+      <div style="display:flex; gap:40px; flex-wrap:wrap; justify-content:center;">
+        <div>
+          <div style="font-size:13px; color:var(--text-muted);">Busiest day</div>
+          <div class="num" id="wBusiestDay" style="font-weight:700; font-size:20px;">—</div>
+        </div>
+        <div>
+          <div style="font-size:13px; color:var(--text-muted);">Busiest month</div>
+          <div class="num" id="wBusiestMonth" style="font-weight:700; font-size:20px;">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="slide" data-slide="5">
+      <div class="slideLabel">A Year of Activity</div>
+      <div class="slideTitle" style="font-size:28px; margin-bottom:20px;">Every transaction, mapped</div>
+      <div class="heatmapWrap"><div class="heatmapGrid" id="wHeatmap"></div></div>
+      <p class="slideSub" style="margin-top:16px; font-size:12.5px;">Darker = more transactions that day.</p>
+    </div>
+
+    <div class="slide" data-slide="6">
+      <div class="slideLabel">That's a Wrap</div>
+      <div class="slideTitle">See you next year 👋</div>
+      <p class="slideSub">These numbers are estimates from your own synced data, not financial advice.</p>
+      <a href="/" class="btn btn-primary" style="margin-top:20px;">Back to Dashboard</a>
+    </div>
+  </div>
+
+  <script>
+    function applyTheme(isDark) {
+      document.documentElement.classList.toggle('dark', isDark);
+      document.getElementById('themeToggleBtn').innerText = isDark ? '☀️' : '🌙';
+    }
+    try {
+      const stored = localStorage.getItem('theme');
+      applyTheme(stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
+    } catch (e) { /* localStorage may be unavailable */ }
+    document.getElementById('themeToggleBtn').addEventListener('click', () => {
+      const isDark = !document.documentElement.classList.contains('dark');
+      applyTheme(isDark);
+      try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch (e) { /* ignore */ }
+    });
+
+    function formatCurrency(amount) {
+      const text = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+      return amount < 0 ? `-$${text}` : `$${text}`;
+    }
+
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    let current = 0;
+
+    function renderDots() {
+      const dots = document.getElementById('dots');
+      dots.innerHTML = slides.map((_, i) => `<span class="dot${i === current ? ' active' : ''}"></span>`).join('');
+    }
+
+    function goTo(index) {
+      if (index < 0 || index >= slides.length) return;
+      slides[current].classList.remove('active');
+      current = index;
+      slides[current].classList.add('active');
+      renderDots();
+    }
+
+    document.getElementById('navPrev').addEventListener('click', () => goTo(current - 1));
+    document.getElementById('navNext').addEventListener('click', () => goTo(current + 1));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') goTo(current + 1);
+      if (e.key === 'ArrowLeft') goTo(current - 1);
+    });
+    renderDots();
+
+    function monthName(monthStr) {
+      const [y, m] = monthStr.split('-');
+      return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+    function dayName(dateStr) {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    }
+
+    function renderRankList(elementId, items, formatValue) {
+      const el = document.getElementById(elementId);
+      el.innerHTML = items.map((item, i) => `
+        <div class="rankRow">
+          <span class="rankNum">#${i + 1}</span>
+          <span class="rankName" title="${item.name}">${item.name}</span>
+          <span class="rankValue">${formatValue(item)}</span>
+        </div>`).join('') || `<p class="slideSub">Not enough data yet.</p>`;
+    }
+
+    function renderHeatmap(dailyHeatmap, year) {
+      const counts = new Map(dailyHeatmap.map(d => [d.date, d.count]));
+      const maxCount = Math.max(1, ...dailyHeatmap.map(d => d.count));
+      const start = new Date(year, 0, 1);
+      const startPad = start.getDay(); // align first column to the correct weekday row
+      const end = new Date(year, 11, 31);
+
+      const cells = [];
+      for (let i = 0; i < startPad; i++) cells.push(null);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        cells.push(d.toISOString().slice(0, 10));
+      }
+
+      const grid = document.getElementById('wHeatmap');
+      grid.innerHTML = cells.map(dateStr => {
+        if (!dateStr) return `<div class="heatCell" style="background:transparent;"></div>`;
+        const count = counts.get(dateStr) || 0;
+        const opacity = count === 0 ? 0 : 0.25 + (count / maxCount) * 0.75;
+        const bg = count === 0 ? 'var(--border)' : `color-mix(in srgb, var(--accent) ${Math.round(opacity * 100)}%, var(--card-bg))`;
+        return `<div class="heatCell" title="${dateStr}: ${count} transaction${count === 1 ? '' : 's'}" style="background:${bg};"></div>`;
+      }).join('');
+    }
+
+    async function loadWrapped() {
+      let res;
+      try {
+        res = await fetch('/api/data/wrapped');
+      } catch (err) {
+        document.getElementById('errorMessage').innerText = 'Could not reach the server.';
+        document.getElementById('errorOverlay').hidden = false;
+        return;
+      }
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      const data = await res.json();
+      if (data.error) {
+        document.getElementById('errorMessage').innerText = data.error;
+        document.getElementById('errorOverlay').hidden = false;
+        return;
+      }
+
+      document.getElementById('introTitle').innerText = `Your ${data.year} Wrapped`;
+
+      document.getElementById('wIncome').innerText = formatCurrency(data.income);
+      document.getElementById('wExpenses').innerText = formatCurrency(data.expenses);
+      const net = data.income - data.expenses;
+      document.getElementById('wNetText').innerHTML = net >= 0
+        ? `You saved <strong style="color:var(--positive);">${formatCurrency(net)}</strong> in ${data.year}.`
+        : `You spent <strong style="color:var(--negative);">${formatCurrency(Math.abs(net))}</strong> more than you earned in ${data.year}.`;
+
+      renderRankList('wCategoriesList', data.topCategories, (c) => formatCurrency(c.total));
+      renderRankList('wPayeesList', data.topPayees, (p) => formatCurrency(p.total));
+
+      document.getElementById('wTxCount').innerText = data.totalTransactions.toLocaleString('en-US');
+      document.getElementById('wBusiestDay').innerText = data.busiestDay
+        ? `${dayName(data.busiestDay.date)} (${data.busiestDay.count})` : '—';
+      document.getElementById('wBusiestMonth').innerText = data.busiestMonth
+        ? `${monthName(data.busiestMonth.month)} (${data.busiestMonth.count})` : '—';
+
+      renderHeatmap(data.dailyHeatmap, data.year);
+    }
+
+    loadWrapped();
+  </script>
+</body>
+</html>

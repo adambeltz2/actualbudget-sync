@@ -381,6 +381,20 @@ router.get('/api/data/fire-progress', async (req, res) => {
   }
 });
 
+router.get('/api/data/wrapped', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const year = req.query.year ? parseInt(req.query.year, 10) : undefined;
+    const wrapped = await actualService.getWrappedData({ year });
+    res.json(wrapped);
+  } catch (err) {
+    logger.error('Wrapped request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to compute your Wrapped.' });
+  }
+});
+
 router.get('/api/data/transactions/export', async (req, res) => {
   const config = requireActualConfigured(req, res);
   if (!config) return;

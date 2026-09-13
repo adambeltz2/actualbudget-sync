@@ -146,3 +146,7 @@ Small "i" icons next to calculated figures throughout Financial Health Check and
 ## Financial Independence (FIRE)
 
 The **Financial Independence** widget shows a gauge for what % of your "FIRE number" your net worth has reached, and how many years at your current savings pace (compounding at the same return rate as Financial Insights) it'll take to get the rest of the way. Actual can't tell us your personal FIRE target, so set an **Annual Expenses** override directly on the widget — leave it blank and it auto-calculates from your trailing 12-month average spend — and pick a withdrawal rate (3–4.5%, the standard "4% rule" is the default 25x multiple). Both save immediately, no need to visit Settings.
+
+## Wrapped
+
+**🎉 Wrapped** (linked from the dashboard) is a Spotify-Wrapped-style year-in-review: a full-screen slide carousel — arrow keys, click the screen edges, or the dot indicators to navigate — covering your income vs. expenses, top spending categories and payees, transaction activity stats, and a GitHub-style calendar heatmap of transaction frequency for the year. It's built directly against your live synced data, so there's no export-and-upload step.

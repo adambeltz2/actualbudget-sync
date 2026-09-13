@@ -358,6 +358,81 @@ async function getFireProgress({ fireAnnualExpenses, fireWithdrawalRatePct = 4, 
   };
 }
 
+// A Spotify-Wrapped-style year-in-review, inspired by actualbudget/wrapped
+// (a standalone tool that requires exporting and uploading your budget
+// file) — built as a live view against the already-synced data instead,
+// since this app is already connected. Income/expenses use the same
+// on-budget, category-type classification as getMetricTransactions, for
+// consistency with the rest of the app's numbers; the activity stats
+// (top payees, busiest day/month, the heatmap) intentionally use every
+// transaction in the year regardless of category or on-budget status,
+// since those describe real account activity, not the budget totals.
+async function getWrappedData({ year } = {}) {
+  const y = year || new Date().getFullYear();
+  const startStr = `${y}-01-01`;
+  const endStr = `${y}-12-31`;
+
+  const [accounts, categories, transactions] = await Promise.all([
+    getAccounts(),
+    getCategories(),
+    queryAllTransactions({ startDate: startStr, endDate: endStr }, { sort: 'date_asc' })
+  ]);
+  const onBudgetAccountIds = new Set(accounts.filter(a => !a.offbudget).map(a => a.id));
+  const incomeCategoryIds = new Set(categories.filter(c => c.is_income).map(c => c.id));
+  const categoryName = Object.fromEntries(categories.map(c => [c.id, c.name]));
+
+  const budgetTx = transactions.filter(t => onBudgetAccountIds.has(t.account) && t.category);
+  const incomeTx = budgetTx.filter(t => incomeCategoryIds.has(t.category));
+  const expenseTx = budgetTx.filter(t => !incomeCategoryIds.has(t.category));
+
+  const income = incomeTx.reduce((sum, t) => sum + t.amount, 0) / 100;
+  const expenses = Math.abs(expenseTx.reduce((sum, t) => sum + t.amount, 0)) / 100;
+
+  const categoryTotals = new Map();
+  for (const t of expenseTx) {
+    const name = categoryName[t.category] || 'Uncategorized';
+    categoryTotals.set(name, (categoryTotals.get(name) || 0) + Math.abs(t.amount) / 100);
+  }
+  const topCategories = [...categoryTotals.entries()]
+    .map(([name, total]) => ({ name, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 8);
+
+  const payeeTotals = new Map();
+  for (const t of expenseTx) {
+    const name = t.payee_name || 'Unknown';
+    const existing = payeeTotals.get(name) || { total: 0, count: 0 };
+    existing.total += Math.abs(t.amount) / 100;
+    existing.count += 1;
+    payeeTotals.set(name, existing);
+  }
+  const topPayees = [...payeeTotals.entries()]
+    .map(([name, v]) => ({ name, total: v.total, count: v.count }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 8);
+
+  const dayCounts = new Map();
+  const monthCounts = new Map();
+  for (const t of transactions) {
+    dayCounts.set(t.date, (dayCounts.get(t.date) || 0) + 1);
+    const month = t.date.slice(0, 7);
+    monthCounts.set(month, (monthCounts.get(month) || 0) + 1);
+  }
+  const dailyHeatmap = [...dayCounts.entries()].map(([date, count]) => ({ date, count }));
+  const busiestDay = dailyHeatmap.reduce((best, d) => (!best || d.count > best.count) ? d : best, null);
+  const busiestMonthEntry = [...monthCounts.entries()].reduce(
+    (best, [month, count]) => (!best || count > best.count) ? { month, count } : best, null
+  );
+
+  return {
+    year: y, income, expenses,
+    topCategories, topPayees,
+    totalTransactions: transactions.length,
+    busiestDay, busiestMonth: busiestMonthEntry,
+    dailyHeatmap
+  };
+}
+
 // Pure — takes one category object from getBudgetMonth()'s categoryGroups
 // (amounts still in cents, spend as a negative sum like transaction amounts)
 // and derives the display-ready stats. Exported for unit testing.
@@ -629,7 +704,7 @@ module.exports = {
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getFinancialHealthData, getFinancialHealthHistory,
-  getMetricTransactions, getFireProgress,
+  getMetricTransactions, getFireProgress, getWrappedData,
   testConnection,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
