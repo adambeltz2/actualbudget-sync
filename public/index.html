@@ -101,7 +101,6 @@
     .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 20px; }
     .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 20px; }
     @media (max-width: 760px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
-    textarea#logViewer { background: #10151A; color: #4ADE94; border: 1px solid var(--border); }
     .error-banner {
       background: color-mix(in srgb, var(--negative) 12%, var(--card-bg));
       border: 1px solid color-mix(in srgb, var(--negative) 35%, var(--card-bg));
@@ -136,6 +135,7 @@
         <span id="viewerBadge" hidden style="font-size:12px; font-weight:700; padding:5px 10px; border-radius:999px; background:color-mix(in srgb, var(--accent) 15%, transparent); color:var(--accent-dark);">Read-only access</span>
         <button id="themeToggleBtn" title="Toggle dark mode" class="btn btn-ghost">🌙</button>
         <a href="/explorer.html" class="btn btn-ghost">Data Explorer</a>
+        <a id="settingsLink" href="/settings.html" class="btn btn-ghost">⚙ Settings</a>
         <button id="triggerSyncBtn" class="btn btn-primary">Trigger Manual Sync</button>
         <button id="logoutBtn" class="btn btn-ghost">Logout</button>
       </div>
@@ -233,7 +233,7 @@
 
         <div id="balanceTrendWidget" hidden class="card" style="padding:22px; display:flex; flex-direction:column;">
           <div class="label-caps" style="margin-bottom:12px;">Balance Trend · <span id="balanceTrendMonthLabel">This Month</span></div>
-          <div style="flex:1; min-height:100px;"><canvas id="balanceTrendChart"></canvas></div>
+          <div style="position:relative; flex:1; min-height:150px;"><canvas id="balanceTrendChart"></canvas></div>
           <div id="trendDelta" style="font-size:13px; margin-top:8px;"></div>
         </div>
       </div>
@@ -427,178 +427,6 @@
       </div>
     </div>
 
-    <form id="configForm" style="display:flex; flex-direction:column; gap:20px;">
-      <!-- Actual Budget Section -->
-      <div class="card" style="padding:22px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
-          <div class="num" style="font-size:16px; font-weight:700;">Actual Budget Configuration</div>
-          <button type="button" id="testConnectionBtn" class="btn btn-ghost" style="padding:7px 14px; font-size:13px;">Test Connection</button>
-        </div>
-        <p id="testConnectionResult" hidden style="font-size:13px; padding:9px 12px; border-radius:8px; margin:-4px 0 16px;"></p>
-        <div class="grid-2">
-          <div>
-            <label class="field-label">Server URL</label>
-            <input type="text" id="actualUrl" placeholder="https://your-budget.pikapod.net">
-            <p class="field-hint">The web address of your Actual Budget instance.</p>
-          </div>
-          <div>
-            <label class="field-label">Password</label>
-            <input type="password" id="actualPassword" autocomplete="new-password">
-            <p id="actualPasswordHint" class="field-hint">Your master login password.</p>
-          </div>
-          <div style="grid-column:1/-1;">
-            <label class="field-label">Sync ID</label>
-            <input type="text" id="syncId">
-            <p style="font-size:12px; color:var(--accent-dark); margin-top:6px; background:color-mix(in srgb, var(--accent) 10%, var(--card-bg)); padding:8px 10px; border-radius:8px;">
-              <strong>How to find this:</strong> Open Actual Budget in your browser -> Go to <strong>Settings</strong> -> Click <strong>Show advanced settings</strong> -> Copy the long <strong>Sync ID</strong> string.
-            </p>
-          </div>
-          <div style="grid-column:1/-1;">
-            <label class="field-label">Cron Schedule</label>
-            <input type="text" id="cronSchedule" style="font-family:monospace;" placeholder="0 6,12 * * *">
-            <p class="field-hint">Cron format: <code>0 6,12 * * *</code> syncs at 6:00 AM and 12:00 PM (Noon) daily.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Account Classification -->
-      <div class="card" style="padding:22px;">
-        <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Account Classification</div>
-        <p class="field-hint" style="margin-top:0; margin-bottom:14px;">Actual doesn't distinguish checking/savings/investment/liability accounts — it only knows names and balances. Classify each account once here; it drives the Financial Health Check widget, Net Worth Breakdown, Financial Insights projections, and the Liability Accounts section of sync emails. Usually a one-time setup — revisit only when you add or close an account.</p>
-        <div id="accountClassificationList" style="display:flex; flex-direction:column;">
-          <p class="field-hint" style="margin:0;">Configure Actual Budget above and save to see your accounts here.</p>
-        </div>
-      </div>
-
-      <!-- Email Section -->
-      <div class="card" style="padding:22px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:10px;">
-          <div>
-            <div class="num" style="font-size:16px; font-weight:700;">Email Notifications</div>
-            <p class="field-hint" style="margin-top:2px;">Send an HTML summary of new transactions.</p>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="enableEmail">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div id="emailSettingsDiv" class="grid-2" style="opacity:0.5; pointer-events:none; transition:opacity 0.2s;">
-          <div style="grid-column:1/-1;">
-            <label class="field-label">Dashboard URL <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
-            <input type="text" id="publicUrl" placeholder="https://sync.yourdomain.com">
-            <p class="field-hint">If set, the email report includes a "View Full Report" button linking here.</p>
-          </div>
-          <div>
-            <label class="field-label">SMTP Host</label>
-            <input type="text" id="smtpHost" placeholder="smtp.gmail.com">
-          </div>
-          <div>
-            <label class="field-label">SMTP Port</label>
-            <input type="number" id="smtpPort" placeholder="465">
-          </div>
-          <div>
-            <label class="field-label">Email Username</label>
-            <input type="email" id="emailUser" placeholder="youremail@gmail.com">
-          </div>
-          <div>
-            <label class="field-label">App Password</label>
-            <input type="password" id="emailPass" autocomplete="new-password">
-            <p id="emailPassHint" class="field-hint">If using Gmail, use a 16-digit App Password.</p>
-          </div>
-          <div style="grid-column:1/-1;">
-            <label class="field-label">Send Reports To:</label>
-            <input type="email" id="emailTo" multiple
-              title="Separate multiple addresses with commas, e.g. alice@example.com, bob@example.com"
-              placeholder="alice@example.com, bob@example.com">
-            <p class="field-hint">Separate multiple addresses with commas — e.g. <code>alice@example.com, bob@example.com</code>.</p>
-          </div>
-          <div style="grid-column:1/-1;">
-            <label class="field-label">Include in report:</label>
-            <div style="display:flex; flex-wrap:wrap; gap:18px; font-size:13.5px; color:var(--text-secondary);">
-              <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="emailSectionBalances"> Account balances</label>
-              <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="emailSectionTransactions"> New transactions</label>
-              <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="emailSectionBudgetVsActual"> Spend vs budget</label>
-            </div>
-            <p class="field-hint">Connection issue alerts are always included regardless of these settings.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Webhook Section -->
-      <div class="card" style="padding:22px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:10px;">
-          <div>
-            <div class="num" style="font-size:16px; font-weight:700;">Webhook Notifications</div>
-            <p class="field-hint" style="margin-top:2px;">Post a sync summary to a Discord or Slack channel instead of (or alongside) email.</p>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="enableWebhook">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div id="webhookSettingsDiv" class="grid-2" style="opacity:0.5; pointer-events:none; transition:opacity 0.2s;">
-          <div>
-            <label class="field-label">Platform</label>
-            <select id="webhookPlatform" style="width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-family:inherit; font-size:14px;">
-              <option value="discord">Discord</option>
-              <option value="slack">Slack</option>
-              <option value="generic">Generic (raw JSON)</option>
-            </select>
-          </div>
-          <div>
-            <label class="field-label">Webhook URL</label>
-            <input type="password" id="webhookUrl" autocomplete="new-password" placeholder="https://discord.com/api/webhooks/...">
-            <p id="webhookUrlHint" class="field-hint">Discord: channel &gt; Edit Channel &gt; Integrations &gt; Webhooks. Slack: create an Incoming Webhook app.</p>
-          </div>
-          <div style="grid-column:1/-1; display:flex; align-items:center; gap:12px;">
-            <button type="button" id="testWebhookBtn" class="btn btn-ghost" style="padding:7px 14px; font-size:13px;">Send Test Message</button>
-            <p id="testWebhookResult" hidden style="font-size:13px; padding:9px 12px; border-radius:8px; margin:0;"></p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Access & Sharing -->
-      <div class="card" style="padding:22px;">
-        <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Access &amp; Sharing</div>
-        <p class="field-hint" style="margin-top:0; margin-bottom:14px;">Give someone else (e.g. a spouse) a read-only login that can view the dashboard and Data Explorer but can't change settings or trigger syncs.</p>
-        <div class="grid-2">
-          <div>
-            <label class="field-label">Viewer Password</label>
-            <input type="password" id="viewerPassword" autocomplete="new-password">
-            <p id="viewerPasswordHint" class="field-hint">Read-only access is currently disabled.</p>
-          </div>
-          <div style="display:flex; align-items:flex-end; gap:10px;">
-            <button type="button" id="setViewerPasswordBtn" class="btn btn-ghost">Save Viewer Password</button>
-            <button type="button" id="disableViewerAccessBtn" class="btn btn-ghost" hidden>Disable Access</button>
-          </div>
-        </div>
-        <p id="viewerPasswordResult" hidden style="font-size:13px; padding:9px 12px; border-radius:8px; margin:14px 0 0;"></p>
-      </div>
-
-      <!-- Backup & Restore -->
-      <div class="card" style="padding:22px;">
-        <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Backup &amp; Restore</div>
-        <p class="field-hint" style="margin-top:0; margin-bottom:14px;">Download your settings to restore them later, or after moving to a new host. The backup file contains your Actual Budget and SMTP credentials in plain text — store it somewhere safe.</p>
-        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-          <button type="button" id="exportConfigBtn" class="btn btn-ghost">Export Config</button>
-          <button type="button" id="importConfigBtn" class="btn btn-ghost">Import Config</button>
-          <input type="file" id="importConfigFile" accept="application/json" hidden>
-        </div>
-      </div>
-
-      <div style="display:flex; justify-content:flex-end; align-items:center; gap:12px;">
-        <button type="button" id="postSaveSyncBtn" class="btn btn-accent-soft" hidden>Test Connection & Sync Now</button>
-        <button type="submit" class="btn btn-primary" style="padding:10px 28px;">Save Configuration</button>
-      </div>
-    </form>
-
-    <div style="margin-top:32px; padding-top:24px; border-top:1px solid var(--border);">
-      <div class="num" style="font-size:16px; font-weight:700; margin-bottom:10px;">Live System Logs</div>
-      <textarea id="logViewer" style="width:100%; height:280px; font-family:monospace; font-size:12px; padding:14px; border-radius:10px; line-height:1.5;" readonly></textarea>
-    </div>
-
     <footer style="display:flex; align-items:center; justify-content:center; gap:14px; font-size:12px; color:var(--text-muted); margin-top:28px; padding-top:20px; border-top:1px solid var(--border);">
       <span>Actual Budget Smart Sync <span id="appVersion"></span></span>
       <a href="https://github.com/adambeltz2/actualbudget-sync" target="_blank" rel="noopener" style="color:var(--text-muted);">GitHub</a>
@@ -696,24 +524,6 @@
     }
     initMonthSelector();
 
-    // --- Email toggle switch ---
-    const emailToggle = document.getElementById('enableEmail');
-    const emailSettingsDiv = document.getElementById('emailSettingsDiv');
-    function updateToggleUI(isEnabled) {
-      emailSettingsDiv.style.opacity = isEnabled ? '1' : '0.5';
-      emailSettingsDiv.style.pointerEvents = isEnabled ? 'auto' : 'none';
-    }
-    emailToggle.addEventListener('change', (e) => updateToggleUI(e.target.checked));
-
-    // --- Webhook toggle switch ---
-    const webhookToggle = document.getElementById('enableWebhook');
-    const webhookSettingsDiv = document.getElementById('webhookSettingsDiv');
-    function updateWebhookToggleUI(isEnabled) {
-      webhookSettingsDiv.style.opacity = isEnabled ? '1' : '0.5';
-      webhookSettingsDiv.style.pointerEvents = isEnabled ? 'auto' : 'none';
-    }
-    webhookToggle.addEventListener('change', (e) => updateWebhookToggleUI(e.target.checked));
-
     document.getElementById('customizeWidgetsBtn').addEventListener('click', () => {
       document.getElementById('widgetVisibilityRow').hidden = !document.getElementById('widgetVisibilityRow').hidden;
     });
@@ -732,47 +542,10 @@
       const config = await res.json();
       hideError();
 
-      document.getElementById('actualUrl').value = config.actualUrl || '';
-      document.getElementById('actualPassword').value = '';
-      document.getElementById('actualPassword').placeholder = config.actualPasswordSet ? '•••••••• (unchanged)' : '';
-      document.getElementById('actualPasswordHint').innerText = config.actualPasswordSet
-        ? 'Your master login password is saved. Leave blank to keep it, or type a new one to change it.'
-        : 'Your master login password.';
-      document.getElementById('syncId').value = config.syncId || '';
-      document.getElementById('cronSchedule').value = config.cronSchedule || '0 6,12 * * *';
-      const isEmailEnabled = config.enableEmail || false;
-      emailToggle.checked = isEmailEnabled;
-      updateToggleUI(isEmailEnabled);
-      document.getElementById('publicUrl').value = config.publicUrl || '';
-      document.getElementById('smtpHost').value = config.smtpHost || '';
-      document.getElementById('smtpPort').value = config.smtpPort || '465';
-      document.getElementById('emailUser').value = config.emailUser || '';
-      document.getElementById('emailPass').value = '';
-      document.getElementById('emailPass').placeholder = config.emailPassSet ? '•••••••• (unchanged)' : '';
-      document.getElementById('emailPassHint').innerText = config.emailPassSet
-        ? 'App password is saved. Leave blank to keep it, or type a new one to change it.'
-        : 'If using Gmail, use a 16-digit App Password.';
-      document.getElementById('emailTo').value = config.emailTo || '';
-
-      const isWebhookEnabled = config.webhookEnabled || false;
-      webhookToggle.checked = isWebhookEnabled;
-      updateWebhookToggleUI(isWebhookEnabled);
-      document.getElementById('webhookPlatform').value = config.webhookPlatform || 'discord';
-      document.getElementById('webhookUrl').value = '';
-      document.getElementById('webhookUrl').placeholder = config.webhookUrlSet ? '•••••••• (unchanged)' : 'https://discord.com/api/webhooks/...';
-      document.getElementById('webhookUrlHint').innerText = config.webhookUrlSet
-        ? 'Webhook URL is saved. Leave blank to keep it, or paste a new one to change it.'
-        : 'Discord: channel > Edit Channel > Integrations > Webhooks. Slack: create an Incoming Webhook app.';
-
-      document.getElementById('viewerPasswordHint').innerText = config.viewerAccessEnabled
-        ? 'Read-only access is enabled. Enter a new password below to change it.'
-        : 'Read-only access is currently disabled.';
-      document.getElementById('disableViewerAccessBtn').hidden = !config.viewerAccessEnabled;
-
       const isViewer = config.role === 'viewer';
       document.getElementById('viewerBadge').hidden = !isViewer;
       document.getElementById('triggerSyncBtn').hidden = isViewer;
-      document.getElementById('configForm').hidden = isViewer;
+      document.getElementById('settingsLink').hidden = isViewer;
       document.getElementById('customizeWidgetsBtn').hidden = isViewer;
 
       const widgets = config.dashboardWidgets || {};
@@ -786,23 +559,49 @@
       document.getElementById('widgetFinancialHealth').checked = widgets.financialHealth !== false;
       document.getElementById('fhEfTarget').value = config.financialHealthTargetMonths ?? 6;
       document.getElementById('fhSrTarget').value = config.financialHealthTargetSavingsPct ?? 20;
-      emergencyFundAccountIds = config.emergencyFundAccountIds || [];
-      investmentAccountIds = config.investmentAccountIds || [];
-      liabilityAccountIds = config.liabilityAccountIds || [];
-
-      const sections = config.emailSections || {};
-      document.getElementById('emailSectionBalances').checked = sections.balances !== false;
-      document.getElementById('emailSectionTransactions').checked = sections.transactions !== false;
-      document.getElementById('emailSectionBudgetVsActual').checked = sections.budgetVsActual !== false;
 
       const isConfigured = !!(config.actualUrl && config.actualPasswordSet && config.syncId);
       if (isConfigured) {
         document.getElementById('dashboardWidgetsSection').hidden = false;
         renderLastSyncPill(config.lastSyncAt, config.lastSyncStatus, config.lastSyncError);
         loadDashboardWidgets(widgets, document.getElementById('summaryMonth').value);
-        loadAccountClassificationList();
+      } else if (!isViewer) {
+        showError('Actual Budget isn\'t configured yet. Head to Settings to get started.');
       }
     }
+
+    // Persists a small piece of dashboard preference (widget visibility,
+    // Financial Health targets, Insights return rate) without needing the
+    // full Settings form — POST /api/config merges into existing config
+    // rather than replacing it, so this can safely send just the one field
+    // that changed.
+    function saveDashboardPreference(partial) {
+      fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(partial)
+      }).catch(() => { /* best-effort; the live view already reflects the change */ });
+    }
+
+    function currentWidgetVisibility() {
+      return {
+        incomeVsSpend: document.getElementById('widgetIncomeVsSpend').checked,
+        incomeVsSpendYTD: document.getElementById('widgetIncomeVsSpendYTD').checked,
+        spendByCategory: document.getElementById('widgetSpendByCategory').checked,
+        balanceTrend: document.getElementById('widgetBalanceTrend').checked,
+        budgetVsActual: document.getElementById('widgetBudgetVsActual').checked,
+        insights: document.getElementById('widgetInsights').checked,
+        financialHealth: document.getElementById('widgetFinancialHealth').checked,
+      };
+    }
+
+    document.querySelectorAll('#widgetVisibilityRow input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const widgets = currentWidgetVisibility();
+        saveDashboardPreference({ dashboardWidgets: widgets });
+        loadDashboardWidgets(widgets, document.getElementById('summaryMonth').value);
+      });
+    });
 
     function relativeTime(isoString) {
       const diffMs = Date.now() - new Date(isoString).getTime();
@@ -836,9 +635,6 @@
     // --- Dashboard Widgets ---
     let spendChart = null;
     let trendChart = null;
-    let emergencyFundAccountIds = [];
-    let investmentAccountIds = [];
-    let liabilityAccountIds = [];
 
     function renderAccounts(accounts) {
       const list = document.getElementById('accountsList');
@@ -850,50 +646,6 @@
           </div>
           <span class="num" style="font-weight:700; font-size:13.5px; color:${a.balance < 0 ? 'var(--negative)' : 'var(--text)'}; flex-shrink:0;">${formatCurrency(a.balance)}</span>
         </div>`).join('') || `<p style="color:var(--text-muted); font-size:13px;">No accounts yet.</p>`;
-    }
-
-    async function loadAccountClassificationList() {
-      let accounts;
-      try {
-        const res = await fetch('/api/data/accounts');
-        accounts = await res.json();
-        if (accounts.error) return;
-      } catch (err) {
-        return;
-      }
-
-      const classificationFor = (id) => emergencyFundAccountIds.includes(id) ? 'emergencyFund'
-        : investmentAccountIds.includes(id) ? 'investment'
-        : liabilityAccountIds.includes(id) ? 'liability' : '';
-
-      const container = document.getElementById('accountClassificationList');
-      container.innerHTML = accounts.map(a => {
-        const current = classificationFor(a.id);
-        const option = (value, label) => `<option value="${value}" ${current === value ? 'selected' : ''}>${label}</option>`;
-        return `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px solid var(--border);">
-          <span title="${a.name}" style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0;">${a.name}</span>
-          <span class="num" style="font-weight:700; font-size:13.5px; color:${a.balance < 0 ? 'var(--negative)' : 'var(--text)'}; flex-shrink:0;">${formatCurrency(a.balance)}</span>
-          <select class="accountClassSelect" data-account-id="${a.id}" style="padding:5px 8px; font-size:12.5px; border-radius:6px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); flex-shrink:0;">
-            ${option('', 'Unclassified')}
-            ${option('emergencyFund', 'Emergency Fund')}
-            ${option('investment', 'Investment')}
-            ${option('liability', 'Liability')}
-          </select>
-        </div>`;
-      }).join('') || `<p class="field-hint" style="margin:0;">No accounts yet.</p>`;
-
-      document.querySelectorAll('.accountClassSelect').forEach(sel => {
-        sel.addEventListener('change', (e) => {
-          const id = e.target.dataset.accountId;
-          const value = e.target.value;
-          emergencyFundAccountIds = emergencyFundAccountIds.filter(existing => existing !== id);
-          investmentAccountIds = investmentAccountIds.filter(existing => existing !== id);
-          liabilityAccountIds = liabilityAccountIds.filter(existing => existing !== id);
-          if (value === 'emergencyFund') emergencyFundAccountIds.push(id);
-          else if (value === 'investment') investmentAccountIds.push(id);
-          else if (value === 'liability') liabilityAccountIds.push(id);
-        });
-      });
     }
 
     function renderBudgetRows(categories) {
@@ -1025,6 +777,8 @@
             }]
           },
           options: {
+            responsive: true,
+            maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: { x: { display: false }, y: { display: false } },
             elements: { line: { capBezierPoints: true } }
@@ -1285,8 +1039,14 @@
       }
     }
 
-    document.getElementById('fhEfTarget').addEventListener('change', loadFinancialHealth);
-    document.getElementById('fhSrTarget').addEventListener('change', loadFinancialHealth);
+    document.getElementById('fhEfTarget').addEventListener('change', (e) => {
+      saveDashboardPreference({ financialHealthTargetMonths: parseInt(e.target.value, 10) });
+      loadFinancialHealth();
+    });
+    document.getElementById('fhSrTarget').addEventListener('change', (e) => {
+      saveDashboardPreference({ financialHealthTargetSavingsPct: parseFloat(e.target.value) });
+      loadFinancialHealth();
+    });
 
     // --- Metric Drill-Down Modal ---
     // Lets a user click an Income/Spend figure and see the actual
@@ -1373,73 +1133,13 @@
     }
 
     document.getElementById('insightsReturnRate').addEventListener('change', (e) => {
+      saveDashboardPreference({ insightsAnnualReturnPct: parseFloat(e.target.value) });
       loadInsights(e.target.value);
     });
 
     document.getElementById('summaryMonth').addEventListener('change', (e) => {
-      const widgets = {
-        incomeVsSpend: document.getElementById('widgetIncomeVsSpend').checked,
-        incomeVsSpendYTD: document.getElementById('widgetIncomeVsSpendYTD').checked,
-        spendByCategory: document.getElementById('widgetSpendByCategory').checked,
-        balanceTrend: document.getElementById('widgetBalanceTrend').checked,
-        budgetVsActual: document.getElementById('widgetBudgetVsActual').checked,
-        insights: document.getElementById('widgetInsights').checked,
-        financialHealth: document.getElementById('widgetFinancialHealth').checked,
-      };
+      const widgets = currentWidgetVisibility();
       loadDashboardWidgets(widgets, e.target.value);
-    });
-
-    document.getElementById('configForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const config = {
-        actualUrl: document.getElementById('actualUrl').value,
-        actualPassword: document.getElementById('actualPassword').value,
-        syncId: document.getElementById('syncId').value,
-        cronSchedule: document.getElementById('cronSchedule').value,
-        enableEmail: emailToggle.checked,
-        publicUrl: document.getElementById('publicUrl').value,
-        smtpHost: document.getElementById('smtpHost').value,
-        smtpPort: document.getElementById('smtpPort').value,
-        emailUser: document.getElementById('emailUser').value,
-        emailPass: document.getElementById('emailPass').value,
-        emailTo: document.getElementById('emailTo').value,
-        webhookEnabled: webhookToggle.checked,
-        webhookPlatform: document.getElementById('webhookPlatform').value,
-        webhookUrl: document.getElementById('webhookUrl').value,
-        dashboardWidgets: {
-          incomeVsSpend: document.getElementById('widgetIncomeVsSpend').checked,
-          incomeVsSpendYTD: document.getElementById('widgetIncomeVsSpendYTD').checked,
-          spendByCategory: document.getElementById('widgetSpendByCategory').checked,
-          balanceTrend: document.getElementById('widgetBalanceTrend').checked,
-          budgetVsActual: document.getElementById('widgetBudgetVsActual').checked,
-          insights: document.getElementById('widgetInsights').checked,
-          financialHealth: document.getElementById('widgetFinancialHealth').checked,
-        },
-        insightsAnnualReturnPct: parseFloat(document.getElementById('insightsReturnRate').value),
-        emergencyFundAccountIds: emergencyFundAccountIds,
-        investmentAccountIds: investmentAccountIds,
-        liabilityAccountIds: liabilityAccountIds,
-        financialHealthTargetMonths: parseInt(document.getElementById('fhEfTarget').value, 10),
-        financialHealthTargetSavingsPct: parseFloat(document.getElementById('fhSrTarget').value),
-        emailSections: {
-          balances: document.getElementById('emailSectionBalances').checked,
-          transactions: document.getElementById('emailSectionTransactions').checked,
-          budgetVsActual: document.getElementById('emailSectionBudgetVsActual').checked,
-        },
-      };
-      try {
-        const res = await fetch('/api/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(config)
-        });
-        if (!res.ok) { showError('Failed to save configuration.'); return; }
-      } catch (err) {
-        showError('Could not reach the server. Configuration was not saved.');
-        return;
-      }
-      document.getElementById('postSaveSyncBtn').hidden = false;
-      loadConfig();
     });
 
     // --- Sync Trigger ---
@@ -1485,190 +1185,11 @@
       pollSyncStatus(btnElement);
     }
     document.getElementById('triggerSyncBtn').addEventListener('click', function() { triggerSync(this); });
-    document.getElementById('postSaveSyncBtn').addEventListener('click', function() { triggerSync(this); });
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
       await fetch('/api/auth/logout', { method: 'POST' });
       window.location.href = '/login.html';
     });
-
-    // --- Test Connection ---
-    document.getElementById('testConnectionBtn').addEventListener('click', async function() {
-      const resultEl = document.getElementById('testConnectionResult');
-      const btn = this;
-      btn.disabled = true;
-      btn.innerText = 'Testing…';
-      resultEl.hidden = true;
-
-      try {
-        const res = await fetch('/api/config/test-connection', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            actualUrl: document.getElementById('actualUrl').value,
-            actualPassword: document.getElementById('actualPassword').value,
-            syncId: document.getElementById('syncId').value,
-          })
-        });
-        const data = await res.json();
-        resultEl.hidden = false;
-        if (data.success) {
-          resultEl.style.background = 'color-mix(in srgb, var(--positive) 12%, var(--card-bg))';
-          resultEl.style.color = 'var(--positive)';
-          resultEl.innerText = `✓ Connected — found ${data.accountCount} account${data.accountCount === 1 ? '' : 's'}.`;
-        } else {
-          resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
-          resultEl.style.color = 'var(--negative)';
-          resultEl.innerText = `✕ ${data.error || 'Connection failed.'}`;
-        }
-      } catch (err) {
-        resultEl.hidden = false;
-        resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
-        resultEl.style.color = 'var(--negative)';
-        resultEl.innerText = '✕ Could not reach the server.';
-      } finally {
-        btn.disabled = false;
-        btn.innerText = 'Test Connection';
-      }
-    });
-
-    // --- Test Webhook ---
-    document.getElementById('testWebhookBtn').addEventListener('click', async function() {
-      const resultEl = document.getElementById('testWebhookResult');
-      const btn = this;
-      btn.disabled = true;
-      btn.innerText = 'Sending…';
-      resultEl.hidden = true;
-
-      try {
-        const res = await fetch('/api/config/test-webhook', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            webhookUrl: document.getElementById('webhookUrl').value,
-            webhookPlatform: document.getElementById('webhookPlatform').value,
-          })
-        });
-        const data = await res.json();
-        resultEl.hidden = false;
-        if (data.success) {
-          resultEl.style.background = 'color-mix(in srgb, var(--positive) 12%, var(--card-bg))';
-          resultEl.style.color = 'var(--positive)';
-          resultEl.innerText = '✓ Test message sent — check the channel.';
-        } else {
-          resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
-          resultEl.style.color = 'var(--negative)';
-          resultEl.innerText = `✕ ${data.error || 'Failed to send test message.'}`;
-        }
-      } catch (err) {
-        resultEl.hidden = false;
-        resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
-        resultEl.style.color = 'var(--negative)';
-        resultEl.innerText = '✕ Could not reach the server.';
-      } finally {
-        btn.disabled = false;
-        btn.innerText = 'Send Test Message';
-      }
-    });
-
-    // --- Viewer (read-only) access ---
-    function showViewerPasswordResult(success, message) {
-      const resultEl = document.getElementById('viewerPasswordResult');
-      resultEl.hidden = false;
-      resultEl.style.background = success
-        ? 'color-mix(in srgb, var(--positive) 12%, var(--card-bg))'
-        : 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
-      resultEl.style.color = success ? 'var(--positive)' : 'var(--negative)';
-      resultEl.innerText = message;
-    }
-
-    async function setViewerPassword(password) {
-      try {
-        const res = await fetch('/api/auth/viewer-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password })
-        });
-        const data = await res.json();
-        if (!res.ok) { showViewerPasswordResult(false, data.error || 'Failed to update viewer access.'); return; }
-        showViewerPasswordResult(true, data.enabled ? '✓ Viewer access saved.' : '✓ Viewer access disabled.');
-        document.getElementById('viewerPassword').value = '';
-        loadConfig();
-      } catch (err) {
-        showViewerPasswordResult(false, 'Could not reach the server.');
-      }
-    }
-
-    document.getElementById('setViewerPasswordBtn').addEventListener('click', () => {
-      const password = document.getElementById('viewerPassword').value;
-      if (!password) { showViewerPasswordResult(false, 'Enter a password first.'); return; }
-      setViewerPassword(password);
-    });
-
-    document.getElementById('disableViewerAccessBtn').addEventListener('click', () => {
-      if (!confirm('Disable read-only viewer access? Anyone using the viewer password will be logged out.')) return;
-      setViewerPassword('');
-    });
-
-    // --- Backup & Restore ---
-    document.getElementById('exportConfigBtn').addEventListener('click', () => {
-      window.location.href = '/api/config/export';
-    });
-
-    document.getElementById('importConfigBtn').addEventListener('click', () => {
-      document.getElementById('importConfigFile').click();
-    });
-
-    document.getElementById('importConfigFile').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      e.target.value = '';
-      if (!file) return;
-
-      if (!confirm('This will replace your current settings with the ones in this backup file. Continue?')) return;
-
-      let parsed;
-      try {
-        parsed = JSON.parse(await file.text());
-      } catch (err) {
-        showError('That file is not valid JSON.');
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/config/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(parsed)
-        });
-        const data = await res.json();
-        if (!res.ok) { showError(data.error || 'Failed to import configuration.'); return; }
-        hideError();
-        alert('Configuration restored. The page will now reload.');
-        window.location.reload();
-      } catch (err) {
-        showError('Could not reach the server. Configuration was not imported.');
-      }
-    });
-
-    // --- LIVE LOG STREAMING ---
-    const viewer = document.getElementById('logViewer');
-    const evtSource = new EventSource("/api/logs/stream");
-
-    evtSource.onmessage = (event) => {
-      const logs = JSON.parse(event.data);
-      if (viewer.value !== logs) {
-        viewer.value = logs;
-        viewer.scrollTop = viewer.scrollHeight;
-      }
-    };
-    let logStreamErrorShown = false;
-    evtSource.onerror = () => {
-      if (!logStreamErrorShown) { showError('Live log stream disconnected. Reconnecting…'); logStreamErrorShown = true; }
-    };
-    evtSource.onopen = () => {
-      if (logStreamErrorShown) { hideError(); logStreamErrorShown = false; }
-    };
-
     loadConfig();
   </script>
 </body>

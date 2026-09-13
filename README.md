@@ -62,7 +62,7 @@ You don't need to clone this repo — the image is prebuilt and published to bot
 
    You'll land on a login screen first. Since no dashboard password exists yet, whatever you enter there becomes the password — pick something you'll remember. Every visit after that requires it, and sessions last 7 days.
 
-   Once logged in, fill in:
+   Once logged in, head to **Settings** (top nav) and fill in:
    * **Actual Budget URL** — your server's address (e.g., `https://your-pikapod.pikapod.net`)
    * **Password** — your Actual Budget password
    * **Sync ID** — from *Settings > Show advanced settings > Sync ID*
@@ -103,13 +103,13 @@ docker compose up -d
 
 ## Data Explorer & Dashboard
 
-The dashboard (`/`) shows Income vs Spend for the current month and year-to-date, a Spend-by-Category donut, a Balance Trend sparkline, and a Spend vs Budget breakdown per category, once Actual Budget is configured. Toggle which widgets appear under **⚙ Customize** on the dashboard itself.
+Configuration and analytics live on separate pages. **Settings** (`/settings.html`) is where you connect Actual Budget, set up email/webhook notifications, classify accounts, manage access, and back up/restore your config — usually visited once during setup and rarely after. The **Dashboard** (`/`) is the analytics view: Income vs Spend for the current month and year-to-date, a Spend-by-Category donut, a Balance Trend sparkline, a Spend vs Budget breakdown per category, Financial Health Check, and Financial Insights, once Actual Budget is configured. Toggle which widgets appear under **⚙ Customize** on the dashboard itself — changes there save immediately, no need to visit Settings.
 
-Set an optional **Dashboard URL** in the Email Notifications section to add a "View Full Report" button to sync emails, linking back to this dashboard.
+Set an optional **Dashboard URL** in Settings' Email Notifications section to add a "View Full Report" button to sync emails, linking back to the dashboard.
 
-Use **Test Connection** in the Actual Budget Configuration card to verify your Server URL/Sync ID before saving — it reports back immediately instead of requiring a save-and-sync-then-check-logs cycle.
+Use **Test Connection** in Settings' Actual Budget Configuration card to verify your Server URL/Sync ID before saving — it reports back immediately instead of requiring a save-and-sync-then-check-logs cycle.
 
-**Backup & Restore** on the dashboard lets you download your full configuration as JSON and restore it later (e.g. after moving to a new host). The backup file contains your Actual Budget and SMTP credentials in plain text regardless of `CONFIG_ENCRYPTION_KEY` — it's meant to be stored securely by you, not left lying around.
+**Backup & Restore** in Settings lets you download your full configuration as JSON and restore it later (e.g. after moving to a new host). The backup file contains your Actual Budget and SMTP credentials in plain text regardless of `CONFIG_ENCRYPTION_KEY` — it's meant to be stored securely by you, not left lying around.
 
 The **Data Explorer** (linked from the dashboard) lists account balances and lets you filter transactions by account, category, date range, and payee, with pagination and a CSV export of the current filter.
 
@@ -117,15 +117,15 @@ Click any **Income**, **Spend**, **Income YTD**, or **Spend YTD** figure to see 
 
 ## Read-Only Access
 
-Use **Access & Sharing** on the dashboard to set a separate viewer password for a second person (e.g. a spouse) who should be able to see the dashboard and Data Explorer without being able to change settings, trigger a sync, or export/import a backup. Logging in with the viewer password shows a "Read-only access" badge and hides everything else. Clearing the viewer password immediately signs out any active viewer sessions.
+Use **Access & Sharing** in Settings to set a separate viewer password for a second person (e.g. a spouse) who should be able to see the dashboard and Data Explorer without being able to change settings, trigger a sync, or export/import a backup. Logging in with the viewer password shows a "Read-only access" badge and hides everything else. Clearing the viewer password immediately signs out any active viewer sessions.
 
 ## Account Classification
 
-Actual Budget doesn't distinguish checking/savings/investment/liability accounts — it only knows names and balances. **Account Classification** on the dashboard (right after the Actual Budget connection settings, since it's usually a one-time setup) lets you tag each account as **Emergency Fund**, **Investment**, **Liability**, or leave it unclassified — an account can only be one of these at a time. These tags drive the Financial Health Check widget, its Net Worth Breakdown, the Financial Insights projection, and the "Liability Accounts" section of sync emails. Until you classify anything, Liability falls back to "any account with a negative balance" so the app still works sensibly out of the box.
+Actual Budget doesn't distinguish checking/savings/investment/liability accounts — it only knows names and balances. **Account Classification** in Settings (right after the Actual Budget connection settings, since it's usually a one-time setup) lets you tag each account as **Emergency Fund**, **Investment**, **Liability**, or leave it unclassified — an account can only be one of these at a time. These tags drive the Financial Health Check widget, its Net Worth Breakdown, the Financial Insights projection, and the "Liability Accounts" section of sync emails. Until you classify anything, Liability falls back to "any account with a negative balance" so the app still works sensibly out of the box.
 
 ## Webhook Notifications
 
-**Webhook Notifications** on the dashboard sends the same sync summary as the email report to a Discord or Slack channel via an incoming webhook, instead of (or alongside) email. Use "Send Test Message" to confirm the URL works before relying on it. Like your Actual Budget and SMTP passwords, the webhook URL is encrypted at rest when `CONFIG_ENCRYPTION_KEY` is set.
+**Webhook Notifications** in Settings sends the same sync summary as the email report to a Discord or Slack channel via an incoming webhook, instead of (or alongside) email. Use "Send Test Message" to confirm the URL works before relying on it. Like your Actual Budget and SMTP passwords, the webhook URL is encrypted at rest when `CONFIG_ENCRYPTION_KEY` is set.
 
 ## Financial Insights
 
