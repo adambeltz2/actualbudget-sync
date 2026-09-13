@@ -454,6 +454,52 @@ async function getFinancialHealthData({ emergencyFundAccountIds = [], investment
   return { overall, label, emergencyFund, savingsRate, debtLoad, recommendations, liquidBalance, monthlyIncome, monthlyAvgSpend, netWorthBreakdown };
 }
 
+// Reconstructs the Financial Health score for each of the last `months`
+// calendar months, so the widget can show a trend instead of just today's
+// snapshot — without persisting anything new. Actual already retains full
+// transaction history, and this app already replays it backward to
+// reconstruct a balance at any past date (getMonthlyBalanceHistory /
+// getMonthlyBalanceHistoryForAccounts); a past month's income/spend is
+// always directly queryable too. The one thing that ISN'T historical is
+// which accounts are tagged — Actual has no "tagged starting on this date"
+// concept, so today's Emergency Fund/Investment Account tags are applied to
+// every past month's balances. That's an approximation ("what would my
+// score have been if I'd tagged accounts the way I do today"), not a
+// limitation worth building new persisted state to avoid. "Debt" accounts
+// for this trend are simply whichever accounts have a negative balance
+// today — an account that carried debt in the past but is paid off now
+// won't show that old debt, the same approximation as above.
+async function getFinancialHealthHistory({ emergencyFundAccountIds = [], targetMonths = 6, targetSavingsPct = 20, months = 6 } = {}) {
+  const accounts = await getAccounts();
+  const currentBalances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
+  const debtAccountIds = currentBalances.filter(b => b.balance < 0).map(b => b.id);
+
+  const [totalHistory, liquidHistory, debtHistory] = await Promise.all([
+    getMonthlyBalanceHistory({ months }),
+    getMonthlyBalanceHistoryForAccounts(emergencyFundAccountIds, { months }),
+    getMonthlyBalanceHistoryForAccounts(debtAccountIds, { months })
+  ]);
+  const liquidByMonth = new Map(liquidHistory.map(m => [m.month, m.balance]));
+  const debtByMonth = new Map(debtHistory.map(m => [m.month, m.balance]));
+
+  // totalHistory's month list is always populated (it doesn't depend on any
+  // tagging), so it drives which months appear in the trend.
+  const monthlyFigures = await Promise.all(totalHistory.map(m => getIncomeVsSpend({ month: m.month })));
+
+  return totalHistory.map((m, i) => {
+    const liquidBalance = Math.max(liquidByMonth.get(m.month) || 0, 0);
+    const debtTotal = Math.max(-(debtByMonth.get(m.month) || 0), 0);
+    const { income, spend } = monthlyFigures[i];
+
+    const emergencyFund = computeEmergencyFund({ liquidBalance, monthlyAvgSpend: spend, targetMonths });
+    const savingsRate = computeSavingsRate({ income, spend, targetPct: targetSavingsPct });
+    const debtLoad = computeDebtLoad({ debtTotal, monthlyIncome: income });
+    const { overall, label } = computeOverallScore({ emergencyFund, savingsRate, debtLoad });
+
+    return { month: m.month, overall, label, emergencyFundMonths: emergencyFund.months, savingsRatePct: savingsRate.ratePct, debtTotal };
+  });
+}
+
 async function runBankSync() {
   return api.runBankSync();
 }
@@ -474,7 +520,7 @@ module.exports = {
   getTransactionsForAccount, getCategories, getPayees, queryTransactions, queryAllTransactions,
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
-  getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getFinancialHealthData,
+  getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getFinancialHealthData, getFinancialHealthHistory,
   testConnection,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).

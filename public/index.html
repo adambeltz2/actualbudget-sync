@@ -62,6 +62,21 @@
     .pill-good { background: color-mix(in srgb, var(--positive) 15%, transparent); color: var(--positive); }
     .pill-watch { background: color-mix(in srgb, var(--warning-bg) 20%, transparent); color: var(--warning); }
     .pill-action { background: color-mix(in srgb, var(--negative) 15%, transparent); color: var(--negative); }
+    .info-tip {
+      position: relative; display: inline-flex; align-items: center; justify-content: center;
+      width: 14px; height: 14px; border-radius: 50%; background: var(--track); color: var(--text-secondary);
+      font-family: Georgia, 'Times New Roman', serif; font-size: 10.5px; font-weight: 700; font-style: italic;
+      cursor: help; flex-shrink: 0; vertical-align: middle; line-height: 1; text-transform: none; letter-spacing: normal;
+    }
+    .info-tip-content {
+      display: none; position: absolute; z-index: 20; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+      width: max-content; max-width: 240px; background: var(--card-bg); color: var(--text-secondary);
+      border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow);
+      padding: 9px 11px; font-size: 12px; font-weight: 400; line-height: 1.45; text-align: left;
+      white-space: normal; text-transform: none; letter-spacing: normal; font-style: normal;
+      font-family: 'Source Sans 3', system-ui, sans-serif;
+    }
+    .info-tip:hover .info-tip-content, .info-tip:focus .info-tip-content, .info-tip:focus-within .info-tip-content { display: block; }
     .btn {
       display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer;
       padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 14px;
@@ -235,7 +250,9 @@
 
       <!-- Financial Health Check -->
       <div id="financialHealthWidget" hidden class="card" style="padding:26px 32px; margin-top:20px;">
-        <div class="label-caps" style="margin-bottom:16px;">Financial Health Check</div>
+        <div class="label-caps" style="margin-bottom:16px; display:flex; align-items:center; gap:6px;">Financial Health Check
+          <span class="info-tip" tabindex="0">i<span class="info-tip-content">Overall score = Emergency Fund (40%) + Savings Rate (40%) + Debt Load (20%), each scored 0–100% of its target and weighted, then rounded. Emergency Fund and Savings Rate count more because they reflect ongoing resilience; Debt Load counts less since it's balance-based, not payment-based.</span></span>
+        </div>
 
         <div style="display:flex; align-items:center; gap:28px; flex-wrap:wrap; margin-bottom:22px; padding-bottom:22px; border-bottom:1px solid var(--border);">
           <div style="position:relative; width:96px; height:96px; flex-shrink:0;">
@@ -252,12 +269,21 @@
             <div id="fhScoreLabel" class="num" style="font-size:18px; font-weight:800; margin-bottom:4px;">—</div>
             <div style="font-size:13px; color:var(--text-secondary); line-height:1.5;">Based on emergency fund coverage, savings rate, and debt load over the last 3 months.</div>
           </div>
+          <div style="min-width:150px; flex-shrink:0;">
+            <div class="label-caps" style="font-size:10.5px; margin-bottom:6px; display:flex; align-items:center; gap:5px;">Score Trend
+              <span class="info-tip" tabindex="0">i<span class="info-tip-content">Reconstructed from your transaction history for each of the last several months — today's account tags and targets are applied to each past month's balances, so this shows "what your score would have been," not a stored snapshot.</span></span>
+            </div>
+            <div id="fhScoreTrendSparkline"></div>
+            <div id="fhScoreTrendDelta" style="font-size:11.5px; color:var(--text-muted); margin-top:6px;"></div>
+          </div>
         </div>
 
         <div class="grid-3" style="margin-bottom:20px;">
           <div class="card-soft" style="padding:16px;">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-              <div class="label-caps">Emergency Fund</div>
+              <div class="label-caps" style="display:flex; align-items:center; gap:6px;">Emergency Fund
+                <span class="info-tip" tabindex="0">i<span class="info-tip-content">Months of coverage = balance of your tagged Emergency Fund Accounts ÷ your average monthly spend over the last 3 complete months. "On track" once you reach your target; "Watch" at half; below that, "Action needed."</span></span>
+              </div>
               <span id="fhEfPill"></span>
             </div>
             <div id="fhEfMonths" class="num" style="font-size:22px; font-weight:800; margin-bottom:8px;">—</div>
@@ -276,7 +302,9 @@
 
           <div class="card-soft" style="padding:16px;">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-              <div class="label-caps">Savings Rate</div>
+              <div class="label-caps" style="display:flex; align-items:center; gap:6px;">Savings Rate
+                <span class="info-tip" tabindex="0">i<span class="info-tip-content">(Income − Spend) ÷ Income, averaged over the last 3 complete months. "On track" at or above your target; "Watch" if positive but below target; "Action needed" if you're spending more than you earn.</span></span>
+              </div>
               <span id="fhSrPill"></span>
             </div>
             <div id="fhSrValue" class="num" style="font-size:22px; font-weight:800; margin-bottom:8px;">—</div>
@@ -295,7 +323,9 @@
 
           <div class="card-soft" style="padding:16px;">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-              <div class="label-caps">Debt Load</div>
+              <div class="label-caps" style="display:flex; align-items:center; gap:6px;">Debt Load
+                <span class="info-tip" tabindex="0">i<span class="info-tip-content">Total balance owed across accounts with a negative balance, shown as months of income (debt ÷ monthly income). This is a balance-based approximation — Actual doesn't expose actual monthly payment amounts, so it's not a true debt-to-income ratio.</span></span>
+              </div>
               <span id="fhDlPill"></span>
             </div>
             <div id="fhDlValue" class="num" style="font-size:22px; font-weight:800; margin-bottom:4px;">—</div>
@@ -303,7 +333,9 @@
           </div>
         </div>
 
-        <div class="label-caps" style="margin-bottom:8px;">Net Worth Breakdown</div>
+        <div class="label-caps" style="margin-bottom:8px; display:flex; align-items:center; gap:6px;">Net Worth Breakdown
+          <span class="info-tip" tabindex="0">i<span class="info-tip-content">Liquid + Investments − Debt = Net Worth. Investments are your tagged Investment Accounts; Debt is the total of any negative account balances; Liquid is everything else (including untagged accounts).</span></span>
+        </div>
         <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px;">
           <div id="fhNetWorthValue" class="num" style="font-size:20px; font-weight:800;">—</div>
         </div>
@@ -351,12 +383,18 @@
         <div style="height:220px; margin-bottom:8px;"><canvas id="projectionChart"></canvas></div>
         <div style="display:flex; flex-wrap:wrap; gap:16px; font-size:12px; color:var(--text-muted); margin-bottom:24px;">
           <span style="display:flex; align-items:center; gap:6px;"><span style="width:14px;height:2px;background:var(--text-secondary); display:inline-block;"></span>History</span>
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:14px;height:2px;background:var(--text-muted); display:inline-block; border-top:2px dashed var(--text-muted);"></span>Current pace (typical range)</span>
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:14px;height:2px;background:var(--accent); display:inline-block;"></span>Invested at assumed return</span>
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:14px;height:2px;background:var(--text-muted); display:inline-block; border-top:2px dashed var(--text-muted);"></span>Current pace (typical range)
+            <span class="info-tip" tabindex="0">i<span class="info-tip-content">A straight-line continuation of your recent average monthly change, with no assumed investment return. The shaded band widens with the square root of time, based on how much your monthly change has historically varied.</span></span>
+          </span>
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:14px;height:2px;background:var(--accent); display:inline-block;"></span>Invested at assumed return
+            <span class="info-tip" tabindex="0">i<span class="info-tip-content" id="investedTooltipText">Compounds your balance monthly at the selected assumed return rate.</span></span>
+          </span>
         </div>
 
         <div id="spendingTrendsSection" style="margin-bottom:22px;">
-          <div style="font-size:13px; font-weight:700; color:var(--text-secondary); margin-bottom:10px;">Spending Trends</div>
+          <div style="font-size:13px; font-weight:700; color:var(--text-secondary); margin-bottom:10px; display:flex; align-items:center; gap:6px;">Spending Trends
+            <span class="info-tip" tabindex="0">i<span class="info-tip-content">Compares the first half of a category's recent monthly spend against the second half. Flagged only when the change is 15% or more across at least 4 months of data, so a single unusual month doesn't read as a trend.</span></span>
+          </div>
           <div id="spendingTrendsList" style="display:flex; flex-direction:column; gap:12px;"></div>
         </div>
 
@@ -367,8 +405,16 @@
               <thead>
                 <tr>
                   <th style="text-align:left; padding:8px 10px; color:var(--text-muted); font-weight:700; border-bottom:1px solid var(--border);">Horizon</th>
-                  <th style="text-align:right; padding:8px 10px; color:var(--text-muted); font-weight:700; border-bottom:1px solid var(--border);">Current pace (typical range)</th>
-                  <th style="text-align:right; padding:8px 10px; color:var(--text-muted); font-weight:700; border-bottom:1px solid var(--border);">Invested at assumed return</th>
+                  <th style="text-align:right; padding:8px 10px; color:var(--text-muted); font-weight:700; border-bottom:1px solid var(--border);">
+                    <span style="display:inline-flex; align-items:center; gap:5px;">Current pace (typical range)
+                      <span class="info-tip" tabindex="0">i<span class="info-tip-content">A straight-line continuation of your recent average monthly change, with no assumed investment return. The range reflects how much your monthly change has historically varied.</span></span>
+                    </span>
+                  </th>
+                  <th style="text-align:right; padding:8px 10px; color:var(--text-muted); font-weight:700; border-bottom:1px solid var(--border);">
+                    <span style="display:inline-flex; align-items:center; gap:5px;">Invested at assumed return
+                      <span class="info-tip" tabindex="0">i<span class="info-tip-content" id="investedTooltipTextTable">Compounds your balance monthly at the selected assumed return rate.</span></span>
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody id="projectionRows"></tbody>
@@ -1137,6 +1183,11 @@
         : '"Invested at assumed return" compounds that pace monthly at the selected rate. Tag accounts under Investment Accounts in settings to compound only your actual investments instead of your whole balance.';
       document.getElementById('projectionFootnote').innerText =
         `Based on your recent history, you've been ${netText}. The shaded range reflects how much your monthly change has historically varied; ${investedExplanation}`;
+      const investedTooltip = data.usesInvestmentTagging
+        ? 'Compounds only your tagged Investment Accounts at the selected rate; your remaining (liquid) balance keeps growing at its own recent pace, uncompounded.'
+        : 'Compounds your whole balance monthly at the selected rate. Tag accounts under Investment Accounts in settings to compound only your actual investments instead.';
+      document.getElementById('investedTooltipText').innerText = investedTooltip;
+      document.getElementById('investedTooltipTextTable').innerText = investedTooltip;
 
       const tenYear = projection.projections.find(p => p.years === 10);
       document.getElementById('headlineProjection').innerText = tenYear ? formatCurrency(tenYear.compoundGrowth) : '—';
@@ -1196,6 +1247,26 @@
       if (lastRec) lastRec.style.borderBottom = 'none';
     }
 
+    function renderScoreTrend(history) {
+      const sparklineEl = document.getElementById('fhScoreTrendSparkline');
+      const deltaEl = document.getElementById('fhScoreTrendDelta');
+      if (!history || history.length < 2) {
+        sparklineEl.innerHTML = '';
+        deltaEl.innerText = 'Not enough history yet';
+        return;
+      }
+
+      const scores = history.map(h => h.overall);
+      const delta = scores[scores.length - 1] - scores[0];
+      const color = delta > 0 ? 'var(--positive)' : delta < 0 ? 'var(--negative)' : 'var(--text-muted)';
+      sparklineEl.innerHTML = renderSparkline(scores, color);
+
+      const months = history.length - 1;
+      deltaEl.innerHTML = delta === 0
+        ? `No change vs ${months} mo ago`
+        : `<span style="color:${color}; font-weight:700;">${delta > 0 ? '▲' : '▼'} ${Math.abs(delta)}</span> vs ${months} mo ago`;
+    }
+
     async function loadFinancialHealth() {
       const targetMonths = document.getElementById('fhEfTarget').value;
       const targetSavingsPct = document.getElementById('fhSrTarget').value;
@@ -1212,6 +1283,15 @@
         renderFinancialHealth(data);
       } catch (err) {
         console.error('Financial Health widget failed to render:', err);
+      }
+
+      try {
+        const historyRes = await fetch(`/api/data/financial-health/history?targetMonths=${encodeURIComponent(targetMonths)}&targetSavingsPct=${encodeURIComponent(targetSavingsPct)}`);
+        if (historyRes.status === 401) return;
+        const history = await historyRes.json();
+        if (!history.error) renderScoreTrend(history);
+      } catch (err) {
+        console.error('Financial Health score trend failed to render:', err);
       }
     }
 
