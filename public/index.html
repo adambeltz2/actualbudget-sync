@@ -252,6 +252,11 @@
             <div id="fhScoreLabel" class="num" style="font-size:18px; font-weight:800; margin-bottom:4px;">—</div>
             <div style="font-size:13px; color:var(--text-secondary); line-height:1.5;">Based on emergency fund coverage, savings rate, and debt load over the last 3 months.</div>
           </div>
+          <div style="min-width:150px; flex-shrink:0;">
+            <div class="label-caps" style="font-size:10.5px; margin-bottom:6px;">Score Trend</div>
+            <div id="fhScoreTrendSparkline"></div>
+            <div id="fhScoreTrendDelta" style="font-size:11.5px; color:var(--text-muted); margin-top:6px;"></div>
+          </div>
         </div>
 
         <div class="grid-3" style="margin-bottom:20px;">
@@ -1196,6 +1201,26 @@
       if (lastRec) lastRec.style.borderBottom = 'none';
     }
 
+    function renderScoreTrend(history) {
+      const sparklineEl = document.getElementById('fhScoreTrendSparkline');
+      const deltaEl = document.getElementById('fhScoreTrendDelta');
+      if (!history || history.length < 2) {
+        sparklineEl.innerHTML = '';
+        deltaEl.innerText = 'Not enough history yet';
+        return;
+      }
+
+      const scores = history.map(h => h.overall);
+      const delta = scores[scores.length - 1] - scores[0];
+      const color = delta > 0 ? 'var(--positive)' : delta < 0 ? 'var(--negative)' : 'var(--text-muted)';
+      sparklineEl.innerHTML = renderSparkline(scores, color);
+
+      const months = history.length - 1;
+      deltaEl.innerHTML = delta === 0
+        ? `No change vs ${months} mo ago`
+        : `<span style="color:${color}; font-weight:700;">${delta > 0 ? '▲' : '▼'} ${Math.abs(delta)}</span> vs ${months} mo ago`;
+    }
+
     async function loadFinancialHealth() {
       const targetMonths = document.getElementById('fhEfTarget').value;
       const targetSavingsPct = document.getElementById('fhSrTarget').value;
@@ -1212,6 +1237,15 @@
         renderFinancialHealth(data);
       } catch (err) {
         console.error('Financial Health widget failed to render:', err);
+      }
+
+      try {
+        const historyRes = await fetch(`/api/data/financial-health/history?targetMonths=${encodeURIComponent(targetMonths)}&targetSavingsPct=${encodeURIComponent(targetSavingsPct)}`);
+        if (historyRes.status === 401) return;
+        const history = await historyRes.json();
+        if (!history.error) renderScoreTrend(history);
+      } catch (err) {
+        console.error('Financial Health score trend failed to render:', err);
       }
     }
 

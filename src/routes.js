@@ -285,6 +285,29 @@ router.get('/api/data/financial-health', async (req, res) => {
   }
 });
 
+router.get('/api/data/financial-health/history', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const targetMonths = req.query.targetMonths !== undefined
+      ? Math.min(Math.max(parseInt(req.query.targetMonths, 10) || 6, 1), 24)
+      : (config.financialHealthTargetMonths ?? 6);
+    const targetSavingsPct = req.query.targetSavingsPct !== undefined
+      ? Math.min(Math.max(parseFloat(req.query.targetSavingsPct), 0), 100)
+      : (config.financialHealthTargetSavingsPct ?? 20);
+    const months = Math.min(Math.max(parseInt(req.query.months, 10) || 6, 3), 24);
+    const history = await actualService.getFinancialHealthHistory({
+      emergencyFundAccountIds: config.emergencyFundAccountIds || [],
+      targetMonths, targetSavingsPct, months
+    });
+    res.json(history);
+  } catch (err) {
+    logger.error('Financial health history request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to compute financial health history.' });
+  }
+});
+
 function csvEscape(value) {
   const str = String(value ?? '');
   return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
