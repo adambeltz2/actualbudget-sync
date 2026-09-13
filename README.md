@@ -142,3 +142,7 @@ Which accounts count as liquid savings, investments, or liabilities is set once 
 A small **Score Trend** sparkline next to the score shows how it's moved over the last several months (reconstructed from your existing transaction history — no separate tracking needed) with a "▲/▼ vs N months ago" delta, so you can tell if you're actually improving rather than just seeing a single snapshot.
 
 Small "i" icons next to calculated figures throughout Financial Health Check and Financial Insights show exactly how each one is computed on hover or keyboard focus — no need to scroll to a footnote to understand what a number means.
+
+## Financial Independence (FIRE)
+
+The **Financial Independence** widget shows a gauge for what % of your "FIRE number" your net worth has reached, and how many years at your current savings pace (compounding at the same return rate as Financial Insights) it'll take to get the rest of the way. Actual can't tell us your personal FIRE target, so set an **Annual Expenses** override directly on the widget — leave it blank and it auto-calculates from your trailing 12-month average spend — and pick a withdrawal rate (3–4.5%, the standard "4% rule" is the default 25x multiple). Both save immediately, no need to visit Settings.

@@ -48,6 +48,23 @@ function projectFutureValue({ presentValue, monthlyContribution, annualReturnRat
   return presentValue * growth + monthlyContribution * ((growth - 1) / monthlyRate);
 }
 
+// Months until a compounding balance (current balance + monthly
+// contribution, growing at annualReturnRate) first reaches `target`.
+// Iterates month-by-month rather than solving the compound-interest formula
+// algebraically — with monthlyContribution <= 0 there may be no closed-form
+// solution (the balance can shrink toward zero without ever reaching a
+// positive target), and a bounded loop handles that case for free by simply
+// running out of months. Returns null if not reached within maxMonths.
+function monthsToReachTarget({ currentBalance, monthlyContribution, annualReturnRate, target, maxMonths = 1200 }) {
+  if (currentBalance >= target) return 0;
+  for (let m = 1; m <= maxMonths; m++) {
+    if (projectFutureValue({ presentValue: currentBalance, monthlyContribution, annualReturnRate, months: m }) >= target) {
+      return m;
+    }
+  }
+  return null;
+}
+
 // Splits a chronological series into an earlier and later half and compares
 // their averages — more robust to a single noisy month than comparing just
 // the first and last data points, while still reading naturally as
@@ -190,5 +207,5 @@ function buildBalanceProjection(monthlyBalances, investmentMonthlyBalances = [],
 
 module.exports = {
   linearRegression, projectFutureValue, classifySpendTrend, standardDeviation,
-  buildSpendingInsights, buildBalanceProjection
+  buildSpendingInsights, buildBalanceProjection, monthsToReachTarget
 };

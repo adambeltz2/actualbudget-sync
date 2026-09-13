@@ -1,7 +1,7 @@
 const api = require('@actual-app/api');
 const { q } = require('@actual-app/api');
 const { logger } = require('./logger');
-const { buildSpendingInsights, buildBalanceProjection } = require('./insights');
+const { buildSpendingInsights, buildBalanceProjection, monthsToReachTarget } = require('./insights');
 const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations, computeNetWorthBreakdown } = require('./financialHealth');
 
 // Kept open across sync cycles instead of init()/shutdown() per run, so the
@@ -314,6 +314,50 @@ async function getMetricTransactions({ metric, month, range } = {}) {
   return { transactions: rows, total, count: rows.length, startDate: startStr, endDate: endStr };
 }
 
+// FIRE ("Financial Independence, Retire Early") progress: what fraction of
+// your target nest egg (annual expenses × 100/withdrawal-rate — the
+// standard "4% rule" is withdrawalRatePct=4, i.e. a 25x multiple) your
+// current net worth represents, and how many months of compounding at your
+// current savings pace would close the gap. There's no way to derive a
+// FIRE target from Actual's data alone (it's a personal choice, not
+// something transactions can tell you), so annualExpenses is a user-set
+// override; left unset, it falls back to your trailing-12-month average
+// spend annualized, the same "use real history instead of a guess"
+// approach the rest of this app takes.
+async function getFireProgress({ fireAnnualExpenses, fireWithdrawalRatePct = 4, annualReturnRatePct = 7 } = {}) {
+  const accounts = await getAccounts();
+  const balances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
+  const netWorth = balances.reduce((sum, b) => sum + b.balance, 0);
+
+  const now = new Date();
+  const recentMonths = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (i + 1), 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const monthlyFigures = await Promise.all(recentMonths.map(m => getIncomeVsSpend({ month: m })));
+  const validMonths = monthlyFigures.filter(m => m.income > 0 || m.spend > 0);
+  const avgMonthlyIncome = validMonths.length > 0 ? validMonths.reduce((sum, m) => sum + m.income, 0) / validMonths.length : 0;
+  const avgMonthlySpend = validMonths.length > 0 ? validMonths.reduce((sum, m) => sum + m.spend, 0) / validMonths.length : 0;
+
+  const autoAnnualExpenses = avgMonthlySpend * 12;
+  const annualExpenses = fireAnnualExpenses > 0 ? fireAnnualExpenses : autoAnnualExpenses;
+  const fireNumber = annualExpenses * (100 / fireWithdrawalRatePct);
+  const pctReached = fireNumber > 0 ? Math.min((netWorth / fireNumber) * 100, 100) : 0;
+
+  const monthlyContribution = avgMonthlyIncome - avgMonthlySpend;
+  const monthsToFI = monthsToReachTarget({
+    currentBalance: netWorth, monthlyContribution, annualReturnRate: annualReturnRatePct / 100, target: fireNumber
+  });
+
+  return {
+    netWorth, fireNumber, annualExpenses, autoAnnualExpenses,
+    usesCustomExpenses: fireAnnualExpenses > 0,
+    fireWithdrawalRatePct, pctReached, monthlyContribution,
+    yearsToFI: monthsToFI === null ? null : Math.floor(monthsToFI / 12),
+    monthsRemainderToFI: monthsToFI === null ? null : monthsToFI % 12
+  };
+}
+
 // Pure — takes one category object from getBudgetMonth()'s categoryGroups
 // (amounts still in cents, spend as a negative sum like transaction amounts)
 // and derives the display-ready stats. Exported for unit testing.
@@ -585,7 +629,7 @@ module.exports = {
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getFinancialHealthData, getFinancialHealthHistory,
-  getMetricTransactions,
+  getMetricTransactions, getFireProgress,
   testConnection,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).

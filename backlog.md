@@ -231,6 +231,14 @@ Affected files (if confirmed): `src/actualService.js` (`buildTransactionFilters`
 The `docker-build` CI job (added alongside the multi-stage Dockerfile optimization) confirms the image builds successfully, but doesn't confirm the resulting container actually boots and serves traffic. A smoke-test step (start the built image, curl `/healthz`, fail the job if it doesn't return 200 within a few seconds) would close that gap.
 Affected files: `.github/workflows/test.yml`
 
+## P25 — Financial Independence (FIRE) widget — DONE
+
+### [FEATURE] FIRE progress gauge + Years to Financial Independence — DONE
+User asked for the `actualbudget/browser-app-demo`-style FIRE gauge and "Years to Financial Independence" figure, in our own design rather than a copy of theirs. Actual's data can't produce a personal FIRE target on its own (it's a lifestyle choice, not something transactions reveal), so the widget takes an optional Annual Expenses override (new `fireAnnualExpenses` config field) and a withdrawal-rate selector (`fireWithdrawalRatePct`, default 4% — the classic "25x" rule); left blank, annual expenses auto-calculate from the trailing 12-month average spend, annualized, matching the "use real history over a guess" convention the rest of the app follows.
+Added `monthsToReachTarget()` to `src/insights.js` (pure, unit-tested) — iterates month-by-month via the existing `projectFutureValue()` compounding formula rather than solving algebraically, since a non-positive monthly contribution has no closed-form solution and a bounded loop handles that for free by simply not finding one within the cap. `actualService.getFireProgress()` combines current net worth, the FIRE Number (annual expenses × 100/withdrawal-rate), % reached, and Years to FI (reusing the existing Financial Insights return-rate assumption for compounding) into one payload. New `GET /api/data/fire-progress` route.
+The dashboard gained a "Financial Independence" widget (score-ring style gauge matching Financial Health Check's visual language, Net Worth/FIRE Number/Annual Expenses tiles, and the expenses-override input + withdrawal-rate selector inline) — both inputs self-persist via the same partial-`POST /api/config` pattern established for the other dashboard quick-controls in P24. Verified via a stubbed-`@actual-app/api` dry run confirming exact reconciliation against hand-calculated values (both auto and custom-expenses cases) and a Playwright pass confirming rendering, self-persistence, and refetch on both controls, with zero console errors.
+Affected files: `src/insights.js`, `src/actualService.js`, `src/config.js`, `src/routes.js`, `public/index.html`, `test/insights.test.js`
+
 ## P24 — Separate Configuration from the Dashboard — DONE
 
 ### [FEATURE] Move settings into a dedicated settings.html, dashboard becomes analytics-only — DONE

@@ -359,6 +359,28 @@ router.get('/api/data/metric-transactions/export', async (req, res) => {
   }
 });
 
+router.get('/api/data/fire-progress', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const fireAnnualExpenses = req.query.fireAnnualExpenses !== undefined
+      ? parseFloat(req.query.fireAnnualExpenses) || 0
+      : (config.fireAnnualExpenses || 0);
+    const fireWithdrawalRatePct = req.query.fireWithdrawalRatePct !== undefined
+      ? Math.min(Math.max(parseFloat(req.query.fireWithdrawalRatePct), 1), 20)
+      : (config.fireWithdrawalRatePct ?? 4);
+    const progress = await actualService.getFireProgress({
+      fireAnnualExpenses, fireWithdrawalRatePct,
+      annualReturnRatePct: config.insightsAnnualReturnPct ?? 7
+    });
+    res.json(progress);
+  } catch (err) {
+    logger.error('FIRE progress request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to compute FIRE progress.' });
+  }
+});
+
 router.get('/api/data/transactions/export', async (req, res) => {
   const config = requireActualConfigured(req, res);
   if (!config) return;
