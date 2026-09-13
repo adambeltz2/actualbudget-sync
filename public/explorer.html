@@ -107,6 +107,16 @@
             <select id="filterCategory"><option value="">All categories</option></select>
           </div>
           <div>
+            <label class="field-label">Quick Range</label>
+            <select id="filterQuickRange">
+              <option value="">Custom</option>
+              <option value="last3">Last 3 Months</option>
+              <option value="last6">Last 6 Months</option>
+              <option value="currentYear">Current Year</option>
+              <option value="priorYear">Prior Year</option>
+            </select>
+          </div>
+          <div>
             <label class="field-label">From</label>
             <input type="date" id="filterStart">
           </div>
@@ -259,6 +269,35 @@
         categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
     }
 
+    // Maps a quick-range preset to explicit From/To dates so the existing
+    // startDate/endDate filter inputs (and everything downstream that reads
+    // them) don't need to know presets exist.
+    function quickRangeDates(key) {
+      const pad = n => String(n).padStart(2, '0');
+      const fmt = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      const now = new Date();
+      if (key === 'last3') return { start: fmt(new Date(now.getFullYear(), now.getMonth() - 2, 1)), end: fmt(now) };
+      if (key === 'last6') return { start: fmt(new Date(now.getFullYear(), now.getMonth() - 5, 1)), end: fmt(now) };
+      if (key === 'currentYear') return { start: `${now.getFullYear()}-01-01`, end: fmt(now) };
+      if (key === 'priorYear') return { start: `${now.getFullYear() - 1}-01-01`, end: `${now.getFullYear() - 1}-12-31` };
+      return null;
+    }
+
+    document.getElementById('filterQuickRange').addEventListener('change', (e) => {
+      const range = quickRangeDates(e.target.value);
+      if (!range) return;
+      document.getElementById('filterStart').value = range.start;
+      document.getElementById('filterEnd').value = range.end;
+      offset = 0;
+      loadTransactions();
+    });
+    // Editing the dates by hand means the preset no longer applies.
+    ['filterStart', 'filterEnd'].forEach(id => {
+      document.getElementById(id).addEventListener('change', () => {
+        document.getElementById('filterQuickRange').value = '';
+      });
+    });
+
     function currentFilters() {
       const params = new URLSearchParams();
       const accountId = document.getElementById('filterAccount').value;
@@ -318,6 +357,7 @@
       document.getElementById('filterEnd').value = '';
       document.getElementById('filterSearch').value = '';
       document.getElementById('filterSort').value = 'date_desc';
+      document.getElementById('filterQuickRange').value = '';
       offset = 0;
       loadTransactions();
     });

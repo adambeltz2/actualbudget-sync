@@ -165,8 +165,40 @@ function monthDateRange(month) {
   };
 }
 
-async function getSpendByCategory({ month } = {}) {
-  const { startStr, endStr } = monthDateRange(month);
+// An explicit startDate/endDate pair (both "YYYY-MM-DD") takes precedence
+// over `month` wherever both could apply, so the dashboard's period picker
+// can drive these functions with either a single calendar month or one of
+// the multi-month quick-range presets (Last 3/6 Months, Current/Prior Year).
+function explicitDateRange(startDate, endDate) {
+  const [sy, sm, sd] = startDate.split('-').map(Number);
+  const [ey, em, ed] = endDate.split('-').map(Number);
+  return {
+    monthStart: new Date(sy, sm - 1, sd),
+    monthEnd: new Date(ey, em - 1, ed),
+    startStr: startDate,
+    endStr: endDate
+  };
+}
+
+// Every "YYYY-MM" budget month a date range touches, inclusive of both ends
+// — used to sum Actual's per-month budget data (getBudgetMonth) across a
+// range wider than one calendar month, since Actual itself has no
+// range-based budget query.
+function monthsInRange(startDate, endDate) {
+  const [sy, sm] = startDate.split('-').map(Number);
+  const [ey, em] = endDate.split('-').map(Number);
+  const months = [];
+  let y = sy, m = sm;
+  while (y < ey || (y === ey && m <= em)) {
+    months.push(`${y}-${String(m).padStart(2, '0')}`);
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return months;
+}
+
+async function getSpendByCategory({ month, startDate, endDate } = {}) {
+  const { startStr, endStr } = (startDate && endDate) ? explicitDateRange(startDate, endDate) : monthDateRange(month);
 
   const query = q('transactions').options({ splits: 'none' })
     .filter({ date: { $gte: startStr, $lte: endStr } })
@@ -189,8 +221,8 @@ async function getSpendByCategory({ month } = {}) {
 // requested month isn't the current one, the anchor is rolled back further
 // first — to net worth as of that month's own end — by subtracting
 // everything that happened after it.
-async function getBalanceTrend({ month } = {}) {
-  const { monthStart, monthEnd, startStr, endStr } = monthDateRange(month);
+async function getBalanceTrend({ month, startDate, endDate } = {}) {
+  const { monthStart, monthEnd, startStr, endStr } = (startDate && endDate) ? explicitDateRange(startDate, endDate) : monthDateRange(month);
   const currentNetWorth = await getNetWorth();
 
   const { data: afterTotal } = await api.runQuery(
@@ -225,9 +257,19 @@ async function getBudgetMonths() {
   return api.getBudgetMonths();
 }
 
-async function getIncomeVsSpend({ month } = {}) {
-  const targetMonth = month || currentMonthStr();
+async function getIncomeVsSpend({ month, startDate, endDate } = {}) {
   const availableMonths = await getBudgetMonths();
+
+  if (startDate && endDate) {
+    const validMonths = monthsInRange(startDate, endDate).filter(m => availableMonths.includes(m));
+    const budgetMonths = await Promise.all(validMonths.map(m => api.getBudgetMonth(m)));
+    return {
+      income: budgetMonths.reduce((sum, bm) => sum + bm.totalIncome, 0) / 100,
+      spend: budgetMonths.reduce((sum, bm) => sum + Math.abs(bm.totalSpent), 0) / 100
+    };
+  }
+
+  const targetMonth = month || currentMonthStr();
   if (!availableMonths.includes(targetMonth)) {
     return { month: targetMonth, income: 0, spend: 0 };
   }
@@ -280,9 +322,12 @@ function classifyMetricTransactions(transactions, { onBudgetAccountIds, incomeCa
 // closely as this app's query layer can: on-budget accounts only,
 // categorized transactions only, split by each category's income/expense
 // type rather than transaction sign.
-async function getMetricTransactions({ metric, month, range } = {}) {
+async function getMetricTransactions({ metric, month, range, startDate, endDate } = {}) {
   let startStr, endStr;
-  if (range === 'ytd') {
+  if (startDate && endDate) {
+    startStr = startDate;
+    endStr = endDate;
+  } else if (range === 'ytd') {
     const now = new Date();
     startStr = `${now.getFullYear()}-01-01`;
     endStr = now.toISOString().split('T')[0];
@@ -452,9 +497,35 @@ function summarizeBudgetCategory(cat) {
   };
 }
 
-async function getBudgetVsActual({ month } = {}) {
-  const targetMonth = month || currentMonthStr();
+async function getBudgetVsActual({ month, startDate, endDate } = {}) {
   const availableMonths = await getBudgetMonths();
+
+  if (startDate && endDate) {
+    const validMonths = monthsInRange(startDate, endDate).filter(m => availableMonths.includes(m));
+    if (validMonths.length === 0) return [];
+    const budgetMonths = await Promise.all(validMonths.map(m => api.getBudgetMonth(m)));
+    // Budgeted/spent are summed per category across every included month,
+    // since Actual only exposes budget data one calendar month at a time.
+    const merged = new Map();
+    for (const bm of budgetMonths) {
+      for (const group of bm.categoryGroups) {
+        if (group.is_income || group.hidden) continue;
+        for (const cat of group.categories) {
+          if (cat.hidden) continue;
+          const existing = merged.get(cat.id) || { id: cat.id, name: cat.name, budgeted: 0, spent: 0 };
+          existing.budgeted += cat.budgeted || 0;
+          existing.spent += cat.spent || 0;
+          merged.set(cat.id, existing);
+        }
+      }
+    }
+    return [...merged.values()]
+      .filter(cat => cat.budgeted || cat.spent)
+      .map(summarizeBudgetCategory)
+      .sort((a, b) => b.spent - a.spent);
+  }
+
+  const targetMonth = month || currentMonthStr();
   if (!availableMonths.includes(targetMonth)) return [];
 
   const budgetMonth = await api.getBudgetMonth(targetMonth);
@@ -708,5 +779,5 @@ module.exports = {
   testConnection,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
-  buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, classifyMetricTransactions
+  buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, monthsInRange, classifyMetricTransactions
 };

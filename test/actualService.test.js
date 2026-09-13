@@ -1,6 +1,20 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, classifyMetricTransactions } = require('../src/actualService');
+const { buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, monthsInRange, classifyMetricTransactions } = require('../src/actualService');
+
+describe('monthsInRange', () => {
+  test('lists every calendar month a range touches, inclusive of both ends', () => {
+    assert.deepEqual(monthsInRange('2025-01-15', '2025-03-05'), ['2025-01', '2025-02', '2025-03']);
+  });
+
+  test('handles a range within a single month', () => {
+    assert.deepEqual(monthsInRange('2025-06-01', '2025-06-30'), ['2025-06']);
+  });
+
+  test('rolls over a year boundary', () => {
+    assert.deepEqual(monthsInRange('2024-11-01', '2025-01-31'), ['2024-11', '2024-12', '2025-01']);
+  });
+});
 
 describe('buildTransactionFilters', () => {
   test('returns an empty array when no filters are given', () => {
