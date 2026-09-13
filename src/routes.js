@@ -231,12 +231,14 @@ router.get('/api/data/summary', async (req, res) => {
   try {
     await actualService.ensureReady(config);
     const month = /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : undefined;
+    const startDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.startDate) ? req.query.startDate : undefined;
+    const endDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.endDate) ? req.query.endDate : undefined;
     const [incomeVsSpend, incomeVsSpendYTD, spendByCategory, balanceTrend, budgetVsActual] = await Promise.all([
-      actualService.getIncomeVsSpend({ month }),
+      actualService.getIncomeVsSpend({ month, startDate, endDate }),
       actualService.getIncomeVsSpendYTD(),
-      actualService.getSpendByCategory({ month }),
-      actualService.getBalanceTrend({ month }),
-      actualService.getBudgetVsActual({ month })
+      actualService.getSpendByCategory({ month, startDate, endDate }),
+      actualService.getBalanceTrend({ month, startDate, endDate }),
+      actualService.getBudgetVsActual({ month, startDate, endDate })
     ]);
     res.json({ incomeVsSpend, incomeVsSpendYTD, spendByCategory, balanceTrend, budgetVsActual });
   } catch (err) {
@@ -326,7 +328,9 @@ router.get('/api/data/metric-transactions', async (req, res) => {
     const metric = req.query.metric === 'income' ? 'income' : 'spend';
     const range = req.query.range === 'ytd' ? 'ytd' : undefined;
     const month = req.query.month || undefined;
-    const result = await actualService.getMetricTransactions({ metric, month, range });
+    const startDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.startDate) ? req.query.startDate : undefined;
+    const endDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.endDate) ? req.query.endDate : undefined;
+    const result = await actualService.getMetricTransactions({ metric, month, range, startDate, endDate });
     res.json(result);
   } catch (err) {
     logger.error('Metric transactions request failed: ' + err.message);
@@ -342,7 +346,9 @@ router.get('/api/data/metric-transactions/export', async (req, res) => {
     const metric = req.query.metric === 'income' ? 'income' : 'spend';
     const range = req.query.range === 'ytd' ? 'ytd' : undefined;
     const month = req.query.month || undefined;
-    const { transactions } = await actualService.getMetricTransactions({ metric, month, range });
+    const startDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.startDate) ? req.query.startDate : undefined;
+    const endDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.endDate) ? req.query.endDate : undefined;
+    const { transactions } = await actualService.getMetricTransactions({ metric, month, range, startDate, endDate });
 
     const rows = [['Date', 'Account', 'Category', 'Payee', 'Amount']];
     for (const t of transactions) {

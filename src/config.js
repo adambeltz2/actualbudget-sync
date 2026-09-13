@@ -20,6 +20,7 @@ function defaultConfig() {
     viewerPasswordHash: '',
     dashboardWidgets: { incomeVsSpend: true, incomeVsSpendYTD: true, spendByCategory: true, balanceTrend: true, budgetVsActual: true, insights: true, financialHealth: true, fire: true },
     insightsAnnualReturnPct: 7,
+    insightsLookback: '6',
     emergencyFundAccountIds: [], investmentAccountIds: [], liabilityAccountIds: [], financialHealthTargetMonths: 6, financialHealthTargetSavingsPct: 20,
     fireAnnualExpenses: null, fireWithdrawalRatePct: 4,
     emailSections: { balances: true, transactions: true, budgetVsActual: true },

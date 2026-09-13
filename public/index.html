@@ -413,14 +413,25 @@
       <div id="insightsWidget" hidden class="card" style="padding:26px 32px; margin-top:20px;">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:10px;">
           <div class="label-caps">Financial Insights</div>
-          <div style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-muted);">
-            <span>Assumed annual return</span>
-            <select id="insightsReturnRate" style="font-size:13px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); padding:5px 7px;">
-              <option value="0">0% (savings pace only)</option>
-              <option value="4">4%</option>
-              <option value="7" selected>7% (long-run market average)</option>
-              <option value="10">10%</option>
-            </select>
+          <div style="display:flex; align-items:center; gap:14px; font-size:12.5px; color:var(--text-muted); flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span>Lookback</span>
+              <select id="insightsLookback" style="font-size:13px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); padding:5px 7px;">
+                <option value="3">Last 3 Months</option>
+                <option value="6" selected>Last 6 Months</option>
+                <option value="currentYear">Current Year</option>
+                <option value="priorYear">Prior Year</option>
+              </select>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span>Assumed annual return</span>
+              <select id="insightsReturnRate" style="font-size:13px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); padding:5px 7px;">
+                <option value="0">0% (savings pace only)</option>
+                <option value="4">4%</option>
+                <option value="7" selected>7% (long-run market average)</option>
+                <option value="10">10%</option>
+              </select>
+            </div>
           </div>
         </div>
         <p class="field-hint" style="margin-top:0; margin-bottom:20px;">Projections are estimates from your own historical spending and balance trends, not financial advice.</p>
@@ -571,9 +582,31 @@
       const select = document.getElementById('summaryMonth');
       const thisMonth = currentMonthStr();
       const lastMonth = shiftMonthStr(thisMonth, -1);
-      select.innerHTML = `<option value="${thisMonth}">This Month</option><option value="${lastMonth}">Last Month</option>`;
+      select.innerHTML = `
+        <option value="${thisMonth}">This Month</option>
+        <option value="${lastMonth}">Last Month</option>
+        <option value="range:last3">Last 3 Months</option>
+        <option value="range:last6">Last 6 Months</option>
+        <option value="range:currentYear">Current Year</option>
+        <option value="range:priorYear">Prior Year</option>`;
     }
     initMonthSelector();
+
+    // Maps a "range:*" period-picker value to explicit dates and a display
+    // label. Widgets driven by a single Actual budget month (Income vs
+    // Spend, Spend by Category, Balance Trend, Budget vs Actual) all accept
+    // either `month` or `startDate`/`endDate` — this is the one place that
+    // decides which of those two the currently-selected period implies.
+    function periodRangeFor(selectorValue) {
+      const pad = n => String(n).padStart(2, '0');
+      const fmt = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      const now = new Date();
+      if (selectorValue === 'range:last3') return { startDate: fmt(new Date(now.getFullYear(), now.getMonth() - 2, 1)), endDate: fmt(now), label: 'Last 3 Months' };
+      if (selectorValue === 'range:last6') return { startDate: fmt(new Date(now.getFullYear(), now.getMonth() - 5, 1)), endDate: fmt(now), label: 'Last 6 Months' };
+      if (selectorValue === 'range:currentYear') return { startDate: `${now.getFullYear()}-01-01`, endDate: fmt(now), label: 'Current Year' };
+      if (selectorValue === 'range:priorYear') return { startDate: `${now.getFullYear() - 1}-01-01`, endDate: `${now.getFullYear() - 1}-12-31`, label: 'Prior Year' };
+      return null;
+    }
 
     document.getElementById('customizeWidgetsBtn').addEventListener('click', () => {
       document.getElementById('widgetVisibilityRow').hidden = !document.getElementById('widgetVisibilityRow').hidden;
@@ -607,6 +640,7 @@
       document.getElementById('widgetBudgetVsActual').checked = widgets.budgetVsActual !== false;
       document.getElementById('widgetInsights').checked = widgets.insights !== false;
       document.getElementById('insightsReturnRate').value = config.insightsAnnualReturnPct ?? 7;
+      document.getElementById('insightsLookback').value = config.insightsLookback ?? '6';
       document.getElementById('widgetFinancialHealth').checked = widgets.financialHealth !== false;
       document.getElementById('fhEfTarget').value = config.financialHealthTargetMonths ?? 6;
       document.getElementById('fhSrTarget').value = config.financialHealthTargetSavingsPct ?? 20;
@@ -725,15 +759,20 @@
       }).join('') || `<p style="color:var(--text-muted); font-size:13px;">No budgeted categories yet.</p>`;
     }
 
-    async function loadDashboardWidgets(widgets, month) {
-      const monthLabel = monthDisplayLabel(month);
+    async function loadDashboardWidgets(widgets, selectorValue) {
+      const range = periodRangeFor(selectorValue);
+      const monthLabel = range ? range.label : monthDisplayLabel(selectorValue);
       ['incomeVsSpendMonthLabel', 'budgetVsActualMonthLabel', 'spendByCategoryMonthLabel', 'balanceTrendMonthLabel'].forEach(id => {
         document.getElementById(id).innerText = monthLabel;
       });
 
+      const summaryParams = range
+        ? `startDate=${encodeURIComponent(range.startDate)}&endDate=${encodeURIComponent(range.endDate)}`
+        : `month=${encodeURIComponent(selectorValue)}`;
+
       let res;
       try {
-        res = await fetch(`/api/data/summary?month=${encodeURIComponent(month)}`);
+        res = await fetch(`/api/data/summary?${summaryParams}`);
       } catch (err) {
         showError('Could not reach the server while loading the dashboard.');
         return;
@@ -772,7 +811,7 @@
         const arrow = net >= 0
           ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px; margin-right:4px;"><path d="M6 15L12 9L18 15" stroke="var(--positive)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
           : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align:-2px; margin-right:4px;"><path d="M6 9L12 15L18 9" stroke="var(--negative)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-        document.getElementById('ivsNetText').innerHTML = `${arrow}<span style="color:${net >= 0 ? 'var(--positive)' : 'var(--negative)'};">${formatCurrency(Math.abs(net))} ${net >= 0 ? 'saved' : 'over income'}</span> <span style="color:var(--text-muted); font-weight:400;">(${pct}% of income) this month</span>`;
+        document.getElementById('ivsNetText').innerHTML = `${arrow}<span style="color:${net >= 0 ? 'var(--positive)' : 'var(--negative)'};">${formatCurrency(Math.abs(net))} ${net >= 0 ? 'saved' : 'over income'}</span> <span style="color:var(--text-muted); font-weight:400;">(${pct}% of income) ${monthLabel.toLowerCase()}</span>`;
       });
 
       safeRenderWidget('incomeVsSpendYTD', () => {
@@ -842,7 +881,7 @@
 
         const delta = points[points.length - 1].balance - points[0].balance;
         const deltaColor = delta >= 0 ? 'var(--positive)' : 'var(--negative)';
-        document.getElementById('trendDelta').innerHTML = `<span style="color:${deltaColor}; font-weight:700;">${delta >= 0 ? '+' : ''}${formatCurrency(delta)}</span> <span style="color:var(--text-muted);">${monthDisplayLabel(month).toLowerCase()}</span>`;
+        document.getElementById('trendDelta').innerHTML = `<span style="color:${deltaColor}; font-weight:700;">${delta >= 0 ? '+' : ''}${formatCurrency(delta)}</span> <span style="color:var(--text-muted);">${monthLabel.toLowerCase()}</span>`;
         document.getElementById('balanceTrendWidget').hidden = false;
       });
 
@@ -867,7 +906,7 @@
       safeRenderWidget('insights', () => {
         if (widgets.insights === false) return;
         document.getElementById('insightsWidget').hidden = false;
-        loadInsights(document.getElementById('insightsReturnRate').value);
+        loadInsights(document.getElementById('insightsReturnRate').value, document.getElementById('insightsLookback').value);
       });
     }
 
@@ -1163,13 +1202,13 @@
     // instead of just trusting the budget engine's total.
     let metricModalCurrentQuery = '';
 
-    async function openMetricModal(metric, params) {
+    async function openMetricModal(metric, params, label) {
       const overlay = document.getElementById('metricModalOverlay');
       const query = new URLSearchParams({ metric, ...params }).toString();
       metricModalCurrentQuery = query;
 
       document.getElementById('metricModalTitle').innerText = metric === 'income' ? 'Income' : 'Spend';
-      document.getElementById('metricModalSubtitle').innerText = params.range === 'ytd' ? 'Year to date' : monthDisplayLabel(params.month);
+      document.getElementById('metricModalSubtitle').innerText = params.range === 'ytd' ? 'Year to date' : (label || monthDisplayLabel(params.month));
       document.getElementById('metricModalCount').innerText = '…';
       document.getElementById('metricModalTotal').innerText = '—';
       document.getElementById('metricModalList').innerHTML = `<p class="field-hint" style="margin:20px 0; text-align:center;">Loading…</p>`;
@@ -1218,15 +1257,35 @@
       window.location.href = `/api/data/metric-transactions/export?${metricModalCurrentQuery}`;
     });
 
-    document.getElementById('ivsIncome').addEventListener('click', () => openMetricModal('income', { month: document.getElementById('summaryMonth').value }));
-    document.getElementById('ivsSpend').addEventListener('click', () => openMetricModal('spend', { month: document.getElementById('summaryMonth').value }));
+    function currentPeriodMetricParams() {
+      const selectorValue = document.getElementById('summaryMonth').value;
+      const range = periodRangeFor(selectorValue);
+      return range
+        ? [{ startDate: range.startDate, endDate: range.endDate }, range.label]
+        : [{ month: selectorValue }, monthDisplayLabel(selectorValue)];
+    }
+    document.getElementById('ivsIncome').addEventListener('click', () => openMetricModal('income', ...currentPeriodMetricParams()));
+    document.getElementById('ivsSpend').addEventListener('click', () => openMetricModal('spend', ...currentPeriodMetricParams()));
     document.getElementById('ytdIncome').addEventListener('click', () => openMetricModal('income', { range: 'ytd' }));
     document.getElementById('ytdSpend').addEventListener('click', () => openMetricModal('spend', { range: 'ytd' }));
 
-    async function loadInsights(annualReturnPct) {
+    // "Current Year"/"Prior Year" don't map onto a rolling months-back count
+    // the way "Last N Months" does (Insights' `months` param is always a
+    // trailing window ending today) — Current Year uses the number of
+    // months elapsed so far this year as a close approximation, and Prior
+    // Year uses a trailing 12 months since there's no calendar-anchored
+    // lookback in the underlying trend/projection functions.
+    function insightsMonthsFor(lookbackValue) {
+      if (lookbackValue === 'currentYear') return Math.max(new Date().getMonth() + 1, 3);
+      if (lookbackValue === 'priorYear') return 12;
+      return lookbackValue;
+    }
+
+    async function loadInsights(annualReturnPct, lookbackValue) {
+      const months = insightsMonthsFor(lookbackValue ?? document.getElementById('insightsLookback').value);
       let res;
       try {
-        res = await fetch(`/api/data/insights?annualReturnPct=${encodeURIComponent(annualReturnPct)}`);
+        res = await fetch(`/api/data/insights?annualReturnPct=${encodeURIComponent(annualReturnPct)}&months=${encodeURIComponent(months)}`);
       } catch (err) {
         return;
       }
@@ -1243,7 +1302,12 @@
 
     document.getElementById('insightsReturnRate').addEventListener('change', (e) => {
       saveDashboardPreference({ insightsAnnualReturnPct: parseFloat(e.target.value) });
-      loadInsights(e.target.value);
+      loadInsights(e.target.value, document.getElementById('insightsLookback').value);
+    });
+
+    document.getElementById('insightsLookback').addEventListener('change', (e) => {
+      saveDashboardPreference({ insightsLookback: e.target.value });
+      loadInsights(document.getElementById('insightsReturnRate').value, e.target.value);
     });
 
     document.getElementById('summaryMonth').addEventListener('change', (e) => {
