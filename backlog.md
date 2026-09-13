@@ -231,6 +231,16 @@ Affected files (if confirmed): `src/actualService.js` (`buildTransactionFilters`
 The `docker-build` CI job (added alongside the multi-stage Dockerfile optimization) confirms the image builds successfully, but doesn't confirm the resulting container actually boots and serves traffic. A smoke-test step (start the built image, curl `/healthz`, fail the job if it doesn't return 200 within a few seconds) would close that gap.
 Affected files: `.github/workflows/test.yml`
 
+## P21 — Email report: full budget list, liability-only accounts — DONE
+
+### [BUG] Spend vs Budget email section silently capped at 6 categories, with no total — FIXED
+User forwarded a screenshot of a real sync email showing only a handful of categories under "Spend vs Budget" despite having many more budgeted; root cause was `emailReport.js`'s `budgetVsActual.slice(0, 6)`, a leftover cap from when the section was first designed for a "compact" email. Removed the cap so every budgeted category renders, and added a `computeBudgetTotalRow()` helper (pure, mirrors `summarizeBudgetCategory`'s shape) that sums budgeted/spent across every category into a "Total" row rendered with the same bar styling, separated by a divider, so the email now shows the overall spend-vs-budget picture at a glance in addition to the per-category detail.
+Affected files: `src/emailReport.js`, `test/emailReport.test.js`
+
+### [FEATURE] Email "Accounts" section now shows liability accounts only — DONE
+Same screenshot showed a long, cluttered "Accounts" list mixing checking, numerous 529 college-savings accounts, and custodial sub-accounts — the user asked to show only liability accounts (credit cards, anything with a negative balance) instead. Renamed the section "Liability Accounts" and filtered it to accounts where `accountBalances[acc.id] < 0` (the same "debt account" heuristic already established for the Financial Health Check's Debt Load metric, since Actual has no account-type field to key off of), with a "No accounts with a negative balance" fallback message. "Total Balance" above it is unaffected — it still reflects full net worth across every account, not just the filtered list.
+Affected files: `src/emailReport.js`, `test/emailReport.test.js`
+
 ## P20 — Calculation tooltips — DONE
 
 ### [FEATURE] Info tooltips explaining how each calculated figure works — DONE

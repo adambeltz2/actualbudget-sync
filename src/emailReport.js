@@ -41,6 +41,16 @@ function renderBudgetRow(cat) {
   </div>`;
 }
 
+// A synthetic "Total" row in the same shape summarizeBudgetCategory()
+// produces, so renderBudgetRow() can draw it identically to a real category.
+function computeBudgetTotalRow(budgetVsActual) {
+  const budgeted = budgetVsActual.reduce((sum, cat) => sum + cat.budgeted, 0);
+  const spent = budgetVsActual.reduce((sum, cat) => sum + cat.spent, 0);
+  const overBudget = budgeted > 0 ? spent > budgeted : spent > 0;
+  const pctUsed = budgeted > 0 ? Math.round((spent / budgeted) * 100) : (spent > 0 ? 100 : 0);
+  return { name: 'Total', budgeted, spent, remaining: budgeted - spent, pctUsed, overBudget };
+}
+
 function buildReportHtml({
   accounts, accountBalances, accountMap, categoryMap = {}, added, bankSyncIssue,
   totalBalance = 0, budgetVsActual = [], publicUrl = '', sections = {}
@@ -100,7 +110,8 @@ function buildReportHtml({
   if (includeBudget && budgetVsActual.length > 0) {
     html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:12px;">Spend vs Budget</div>
       <div style="margin-bottom:24px;">`;
-    budgetVsActual.slice(0, 6).forEach(cat => { html += renderBudgetRow(cat); });
+    budgetVsActual.forEach(cat => { html += renderBudgetRow(cat); });
+    html += `<div style="border-top:1px solid #F0EFEB; padding-top:12px; margin-top:4px;">${renderBudgetRow(computeBudgetTotalRow(budgetVsActual))}</div>`;
     html += `</div>`;
   }
 
@@ -108,11 +119,16 @@ function buildReportHtml({
     html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED};">Total Balance</div>
       <div style="font-family:'Sora',sans-serif; font-size:32px; font-weight:800; color:#1E2A32; margin-top:4px; margin-bottom:22px;">${formatCurrency(totalBalance)}</div>
 
-      <div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:4px;">Accounts</div>
+      <div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:4px;">Liability Accounts</div>
       <div style="margin-bottom:24px;">`;
-    accounts.forEach((acc, i) => {
-      html += renderAccountRow(acc, accountBalances[acc.id], DOT_PALETTE[i % DOT_PALETTE.length]);
-    });
+    const liabilityAccounts = accounts.filter(acc => accountBalances[acc.id] < 0);
+    if (liabilityAccounts.length > 0) {
+      liabilityAccounts.forEach((acc, i) => {
+        html += renderAccountRow(acc, accountBalances[acc.id], DOT_PALETTE[i % DOT_PALETTE.length]);
+      });
+    } else {
+      html += `<p style="font-size:13px; color:${MUTED}; margin:0;">No accounts with a negative balance.</p>`;
+    }
     html += `</div>`;
   }
 
