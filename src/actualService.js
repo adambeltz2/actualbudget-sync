@@ -420,7 +420,7 @@ async function getFinancialInsights({ months = 6, annualReturnRatePct = 7, inves
 // it only has names and balances, no checking/savings/investment
 // distinction) with recent income/spend to produce the Financial Health
 // Check widget's data.
-async function getFinancialHealthData({ emergencyFundAccountIds = [], investmentAccountIds = [], targetMonths = 6, targetSavingsPct = 20 } = {}) {
+async function getFinancialHealthData({ emergencyFundAccountIds = [], investmentAccountIds = [], liabilityAccountIds = [], targetMonths = 6, targetSavingsPct = 20 } = {}) {
   const accounts = await getAccounts();
   const balances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
 
@@ -428,7 +428,12 @@ async function getFinancialHealthData({ emergencyFundAccountIds = [], investment
     balances.filter(b => emergencyFundAccountIds.includes(b.id)).reduce((sum, b) => sum + b.balance, 0),
     0
   );
-  const debtTotal = balances.reduce((sum, b) => sum + (b.balance < 0 ? -b.balance : 0), 0);
+  // Prefer explicit Liability Account tags when set; fall back to "any
+  // account with a negative balance" for installs that haven't tagged yet.
+  const debtTotal = (liabilityAccountIds.length > 0
+    ? balances.filter(b => liabilityAccountIds.includes(b.id))
+    : balances
+  ).reduce((sum, b) => sum + (b.balance < 0 ? -b.balance : 0), 0);
   const netWorth = balances.reduce((sum, b) => sum + b.balance, 0);
   const investmentBalance = balances.filter(b => investmentAccountIds.includes(b.id)).reduce((sum, b) => sum + b.balance, 0);
   const netWorthBreakdown = computeNetWorthBreakdown({ netWorth, investmentBalance, debtTotal });
@@ -462,17 +467,20 @@ async function getFinancialHealthData({ emergencyFundAccountIds = [], investment
 // getMonthlyBalanceHistoryForAccounts); a past month's income/spend is
 // always directly queryable too. The one thing that ISN'T historical is
 // which accounts are tagged — Actual has no "tagged starting on this date"
-// concept, so today's Emergency Fund/Investment Account tags are applied to
-// every past month's balances. That's an approximation ("what would my
-// score have been if I'd tagged accounts the way I do today"), not a
-// limitation worth building new persisted state to avoid. "Debt" accounts
-// for this trend are simply whichever accounts have a negative balance
-// today — an account that carried debt in the past but is paid off now
-// won't show that old debt, the same approximation as above.
-async function getFinancialHealthHistory({ emergencyFundAccountIds = [], targetMonths = 6, targetSavingsPct = 20, months = 6 } = {}) {
+// concept, so today's Emergency Fund/Investment/Liability Account tags are
+// applied to every past month's balances. That's an approximation ("what
+// would my score have been if I'd tagged accounts the way I do today"), not
+// a limitation worth building new persisted state to avoid. When no
+// Liability Accounts are tagged, "debt" accounts for this trend fall back to
+// whichever accounts have a negative balance today — an account that
+// carried debt in the past but is paid off now won't show that old debt,
+// the same approximation as above.
+async function getFinancialHealthHistory({ emergencyFundAccountIds = [], liabilityAccountIds = [], targetMonths = 6, targetSavingsPct = 20, months = 6 } = {}) {
   const accounts = await getAccounts();
   const currentBalances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
-  const debtAccountIds = currentBalances.filter(b => b.balance < 0).map(b => b.id);
+  const debtAccountIds = liabilityAccountIds.length > 0
+    ? liabilityAccountIds
+    : currentBalances.filter(b => b.balance < 0).map(b => b.id);
 
   const [totalHistory, liquidHistory, debtHistory] = await Promise.all([
     getMonthlyBalanceHistory({ months }),

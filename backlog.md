@@ -231,6 +231,24 @@ Affected files (if confirmed): `src/actualService.js` (`buildTransactionFilters`
 The `docker-build` CI job (added alongside the multi-stage Dockerfile optimization) confirms the image builds successfully, but doesn't confirm the resulting container actually boots and serves traffic. A smoke-test step (start the built image, curl `/healthz`, fail the job if it doesn't return 200 within a few seconds) would close that gap.
 Affected files: `.github/workflows/test.yml`
 
+## P22 — Consolidated Account Classification setup — DONE
+
+### [FEATURE] Liability Accounts tagging + single "Account Classification" settings area — DONE
+Follow-up to the liability-only email accounts filter (P21), which relied on a negative-balance heuristic. User asked whether liabilities should get the same manual tagging as Emergency Fund/Investment accounts, then observed that account classification is naturally a one-time setup step and asked for it to live in its own dedicated area rather than three separate checklist cards scattered through settings.
+Added `liabilityAccountIds` (array, default empty) alongside the existing two tag lists. `getFinancialHealthData`, `getFinancialHealthHistory`, and the email's liability filter (`emailReport.js`) all now prefer explicit `liabilityAccountIds` when set, falling back to the original "any account with a negative balance" heuristic when empty — so existing installs see no behavior change until they classify accounts.
+Replaced the "Emergency Fund Accounts" and "Investment Accounts" cards with a single "Account Classification" card, moved to right after "Actual Budget Configuration" (the natural place for a one-time setup step, rather than buried near the bottom of the form). Each account gets one row with a single `<select>` (Unclassified / Emergency Fund / Investment / Liability) instead of two separate checkboxes with hand-rolled mutual-exclusivity JS — a cleaner model now that there are three categories instead of two, and one a user can't put an account into two buckets by mistake. Card copy explicitly notes it's "usually a one-time setup." Verified via Playwright: all three tag types load pre-selected correctly, reclassifying an account moves it between the right arrays, and the saved config payload matches exactly.
+Affected files: `src/config.js`, `src/actualService.js`, `src/routes.js`, `src/emailReport.js`, `src/syncJob.js`, `public/index.html`, `test/emailReport.test.js`
+
+## P21 — Email report: full budget list, liability-only accounts — DONE
+
+### [BUG] Spend vs Budget email section silently capped at 6 categories, with no total — FIXED
+User forwarded a screenshot of a real sync email showing only a handful of categories under "Spend vs Budget" despite having many more budgeted; root cause was `emailReport.js`'s `budgetVsActual.slice(0, 6)`, a leftover cap from when the section was first designed for a "compact" email. Removed the cap so every budgeted category renders, and added a `computeBudgetTotalRow()` helper (pure, mirrors `summarizeBudgetCategory`'s shape) that sums budgeted/spent across every category into a "Total" row rendered with the same bar styling, separated by a divider, so the email now shows the overall spend-vs-budget picture at a glance in addition to the per-category detail.
+Affected files: `src/emailReport.js`, `test/emailReport.test.js`
+
+### [FEATURE] Email "Accounts" section now shows liability accounts only — DONE
+Same screenshot showed a long, cluttered "Accounts" list mixing checking, numerous 529 college-savings accounts, and custodial sub-accounts — the user asked to show only liability accounts (credit cards, anything with a negative balance) instead. Renamed the section "Liability Accounts" and filtered it to accounts where `accountBalances[acc.id] < 0` (the same "debt account" heuristic already established for the Financial Health Check's Debt Load metric, since Actual has no account-type field to key off of), with a "No accounts with a negative balance" fallback message. "Total Balance" above it is unaffected — it still reflects full net worth across every account, not just the filtered list.
+Affected files: `src/emailReport.js`, `test/emailReport.test.js`
+
 ## P20 — Calculation tooltips — DONE
 
 ### [FEATURE] Info tooltips explaining how each calculated figure works — DONE
