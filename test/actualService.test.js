@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange } = require('../src/actualService');
+const { buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, classifyMetricTransactions } = require('../src/actualService');
 
 describe('buildTransactionFilters', () => {
   test('returns an empty array when no filters are given', () => {
@@ -160,5 +160,48 @@ describe('monthDateRange', () => {
     const { startStr, endStr } = monthDateRange('2025-12');
     assert.equal(startStr, '2025-12-01');
     assert.equal(endStr, '2025-12-31');
+  });
+});
+
+describe('classifyMetricTransactions', () => {
+  const onBudgetAccountIds = new Set(['a1']);
+  const incomeCategoryIds = new Set(['income-cat']);
+
+  test('income metric keeps only income-category transactions', () => {
+    const transactions = [
+      { id: 't1', account: 'a1', category: 'income-cat', amount: 200000 },
+      { id: 't2', account: 'a1', category: 'expense-cat', amount: -4500 }
+    ];
+    const result = classifyMetricTransactions(transactions, { onBudgetAccountIds, incomeCategoryIds, metric: 'income' });
+    assert.deepEqual(result.map(t => t.id), ['t1']);
+  });
+
+  test('spend metric keeps only non-income categorized transactions', () => {
+    const transactions = [
+      { id: 't1', account: 'a1', category: 'income-cat', amount: 200000 },
+      { id: 't2', account: 'a1', category: 'expense-cat', amount: -4500 }
+    ];
+    const result = classifyMetricTransactions(transactions, { onBudgetAccountIds, incomeCategoryIds, metric: 'spend' });
+    assert.deepEqual(result.map(t => t.id), ['t2']);
+  });
+
+  test('a refund posted against an expense category still counts as spend, not income', () => {
+    const transactions = [
+      { id: 't1', account: 'a1', category: 'expense-cat', amount: 1500 } // positive amount, but expense category
+    ];
+    const result = classifyMetricTransactions(transactions, { onBudgetAccountIds, incomeCategoryIds, metric: 'spend' });
+    assert.deepEqual(result.map(t => t.id), ['t1']);
+  });
+
+  test('uncategorized transactions (including transfers) are excluded from both metrics', () => {
+    const transactions = [{ id: 't1', account: 'a1', category: null, amount: -5000 }];
+    assert.deepEqual(classifyMetricTransactions(transactions, { onBudgetAccountIds, incomeCategoryIds, metric: 'income' }), []);
+    assert.deepEqual(classifyMetricTransactions(transactions, { onBudgetAccountIds, incomeCategoryIds, metric: 'spend' }), []);
+  });
+
+  test('off-budget accounts are excluded', () => {
+    const transactions = [{ id: 't1', account: 'off-budget-acc', category: 'income-cat', amount: 100000 }];
+    const result = classifyMetricTransactions(transactions, { onBudgetAccountIds, incomeCategoryIds, metric: 'income' });
+    assert.deepEqual(result, []);
   });
 });

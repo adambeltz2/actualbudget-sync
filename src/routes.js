@@ -315,6 +315,50 @@ function csvEscape(value) {
   return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 }
 
+// Backs the "click a dashboard number to see the underlying transactions"
+// drill-down — lets a user verify the Income/Spend figures independently
+// instead of just trusting the budget engine's total.
+router.get('/api/data/metric-transactions', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const metric = req.query.metric === 'income' ? 'income' : 'spend';
+    const range = req.query.range === 'ytd' ? 'ytd' : undefined;
+    const month = req.query.month || undefined;
+    const result = await actualService.getMetricTransactions({ metric, month, range });
+    res.json(result);
+  } catch (err) {
+    logger.error('Metric transactions request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to compute metric transactions.' });
+  }
+});
+
+router.get('/api/data/metric-transactions/export', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const metric = req.query.metric === 'income' ? 'income' : 'spend';
+    const range = req.query.range === 'ytd' ? 'ytd' : undefined;
+    const month = req.query.month || undefined;
+    const { transactions } = await actualService.getMetricTransactions({ metric, month, range });
+
+    const rows = [['Date', 'Account', 'Category', 'Payee', 'Amount']];
+    for (const t of transactions) {
+      rows.push([t.date, t.account, t.category, t.payee_name || '', t.amount.toFixed(2)]);
+    }
+    const csv = rows.map(row => row.map(csvEscape).join(',')).join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${metric}-transactions.csv"`);
+    res.send(csv);
+  } catch (err) {
+    logger.error('Metric transactions CSV export failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to export metric transactions.' });
+  }
+});
+
 router.get('/api/data/transactions/export', async (req, res) => {
   const config = requireActualConfigured(req, res);
   if (!config) return;

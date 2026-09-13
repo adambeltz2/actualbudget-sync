@@ -258,6 +258,62 @@ async function getIncomeVsSpendYTD() {
   };
 }
 
+// Pure — split out from getMetricTransactions so "which transactions count
+// toward this metric" is unit-testable without a live Actual server.
+// Classifies by each transaction's own category.is_income flag rather than
+// the transaction's sign, since a refund or correction can carry either
+// sign within either bucket. Uncategorized transactions (which includes
+// transfers — Actual never assigns those a category) are excluded, the same
+// convention this app already uses for spend-by-category aggregation.
+function classifyMetricTransactions(transactions, { onBudgetAccountIds, incomeCategoryIds, metric }) {
+  return transactions.filter(t => {
+    if (!onBudgetAccountIds.has(t.account)) return false;
+    if (!t.category) return false;
+    const isIncome = incomeCategoryIds.has(t.category);
+    return metric === 'income' ? isIncome : !isIncome;
+  });
+}
+
+// The underlying transactions behind a dashboard Income/Spend figure, so a
+// user can verify the number themselves instead of trusting the budget
+// engine's own total blindly. Mirrors the budget engine's own definition as
+// closely as this app's query layer can: on-budget accounts only,
+// categorized transactions only, split by each category's income/expense
+// type rather than transaction sign.
+async function getMetricTransactions({ metric, month, range } = {}) {
+  let startStr, endStr;
+  if (range === 'ytd') {
+    const now = new Date();
+    startStr = `${now.getFullYear()}-01-01`;
+    endStr = now.toISOString().split('T')[0];
+  } else {
+    ({ startStr, endStr } = monthDateRange(month));
+  }
+
+  const [accounts, categories, transactions] = await Promise.all([
+    getAccounts(),
+    getCategories(),
+    queryAllTransactions({ startDate: startStr, endDate: endStr }, { sort: 'date_desc' })
+  ]);
+  const onBudgetAccountIds = new Set(accounts.filter(a => !a.offbudget).map(a => a.id));
+  const incomeCategoryIds = new Set(categories.filter(c => c.is_income).map(c => c.id));
+  const categoryName = Object.fromEntries(categories.map(c => [c.id, c.name]));
+  const accountName = Object.fromEntries(accounts.map(a => [a.id, a.name]));
+
+  const matching = classifyMetricTransactions(transactions, { onBudgetAccountIds, incomeCategoryIds, metric });
+  const rows = matching.map(t => ({
+    id: t.id,
+    date: t.date,
+    payee_name: t.payee_name,
+    account: accountName[t.account] || 'Unknown',
+    category: categoryName[t.category] || 'Uncategorized',
+    amount: t.amount / 100
+  }));
+  const total = Math.abs(matching.reduce((sum, t) => sum + t.amount, 0) / 100);
+
+  return { transactions: rows, total, count: rows.length, startDate: startStr, endDate: endStr };
+}
+
 // Pure — takes one category object from getBudgetMonth()'s categoryGroups
 // (amounts still in cents, spend as a negative sum like transaction amounts)
 // and derives the display-ready stats. Exported for unit testing.
@@ -529,8 +585,9 @@ module.exports = {
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getFinancialHealthData, getFinancialHealthHistory,
+  getMetricTransactions,
   testConnection,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
-  buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange
+  buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, classifyMetricTransactions
 };
