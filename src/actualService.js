@@ -5,6 +5,7 @@ const { q } = require('@actual-app/api');
 const { logger } = require('./logger');
 const { buildSpendingInsights, buildBalanceProjection, monthsToReachTarget } = require('./insights');
 const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations, computeNetWorthBreakdown } = require('./financialHealth');
+const { buildCategoryDeltas } = require('./trends');
 
 const DATA_DIR = '/data';
 
@@ -531,6 +532,72 @@ async function getWrappedData({ year } = {}) {
   };
 }
 
+// Month-by-month income/spend/net for the Trends page's savings-over-time
+// chart. Reuses getIncomeVsSpend's existing per-budget-month figures rather
+// than a new query — one call per month via Promise.all, the same tradeoff
+// already accepted by getCategorySpendTrend at this "N months" scale.
+async function getMonthlySavingsHistory({ months = 12 } = {}) {
+  const now = new Date();
+  const monthStrs = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    monthStrs.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  const figures = await Promise.all(monthStrs.map(m => getIncomeVsSpend({ month: m })));
+  return monthStrs.map((month, i) => ({
+    month,
+    income: figures[i].income,
+    spend: figures[i].spend,
+    net: figures[i].income - figures[i].spend
+  }));
+}
+
+// Everything the Trends page shows: a monthly savings history for the
+// chart, a year-over-year income/spend/net comparison (Jan 1 through
+// today's month/day, for both years, so it's apples-to-apples rather than
+// full-year-so-far vs a full prior year), and two ranked category-delta
+// lists (month-over-month, year-over-year) each capped to the categories
+// that actually moved the needle in dollars.
+async function getTrendsData({ months = 12 } = {}) {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+
+  const thisMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const thisMonthStr = `${thisMonthDate.getFullYear()}-${pad(thisMonthDate.getMonth() + 1)}`;
+  const lastMonthStr = `${lastMonthDate.getFullYear()}-${pad(lastMonthDate.getMonth() + 1)}`;
+
+  const thisYearStart = `${now.getFullYear()}-01-01`;
+  const thisYearEnd = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const lastYearStart = `${now.getFullYear() - 1}-01-01`;
+  const lastYearEnd = `${now.getFullYear() - 1}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+  const [
+    monthlySavings,
+    thisYearTotals, lastYearTotals,
+    thisMonthCategories, lastMonthCategories,
+    thisYearCategories, lastYearCategories
+  ] = await Promise.all([
+    getMonthlySavingsHistory({ months }),
+    getIncomeVsSpend({ startDate: thisYearStart, endDate: thisYearEnd }),
+    getIncomeVsSpend({ startDate: lastYearStart, endDate: lastYearEnd }),
+    getSpendByCategory({ month: thisMonthStr }),
+    getSpendByCategory({ month: lastMonthStr }),
+    getSpendByCategory({ startDate: thisYearStart, endDate: thisYearEnd }),
+    getSpendByCategory({ startDate: lastYearStart, endDate: lastYearEnd })
+  ]);
+
+  return {
+    monthlySavings,
+    yearOverYear: {
+      thisYear: { income: thisYearTotals.income, spend: thisYearTotals.spend, net: thisYearTotals.income - thisYearTotals.spend },
+      lastYear: { income: lastYearTotals.income, spend: lastYearTotals.spend, net: lastYearTotals.income - lastYearTotals.spend }
+    },
+    monthOverMonthCategories: buildCategoryDeltas(thisMonthCategories, lastMonthCategories),
+    yearOverYearCategories: buildCategoryDeltas(thisYearCategories, lastYearCategories)
+  };
+}
+
 // Pure — takes one category object from getBudgetMonth()'s categoryGroups
 // (amounts still in cents, spend as a negative sum like transaction amounts)
 // and derives the display-ready stats. Exported for unit testing.
@@ -860,7 +927,7 @@ module.exports = {
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getFinancialHealthData, getFinancialHealthHistory,
-  getMetricTransactions, getFireProgress, getWrappedData,
+  getMetricTransactions, getFireProgress, getWrappedData, getMonthlySavingsHistory, getTrendsData,
   testConnection,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).

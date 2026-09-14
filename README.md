@@ -156,6 +156,12 @@ The **Financial Independence** widget shows a gauge for what % of your "FIRE num
 
 Financial Health Check and Financial Independence both show a brief "rule of thumb" line next to each target (e.g. "3–6 months of essential expenses," "15–20% of income") — standard personal-finance benchmarks, not the app's own opinion, so the numbers are easier to judge without outside context.
 
+## Trends
+
+**📈 Trends** (linked from the Dashboard, Data Explorer, and Settings nav) is for proactive awareness rather than a single month's snapshot: a monthly **Net Savings** bar chart (green for months you saved, red for months you spent more than you earned) over the last 12 or 24 months, so an overspend spike — a home renovation, a big one-time purchase — is visible at a glance instead of buried in a single number. Below it, a **Year to Date vs. Last Year** comparison (income, spend, net saved) covers the same January-1-through-today window in both years, so it's apples-to-apples rather than a full year vs. a partial one.
+
+Two ranked tables show **which categories are costing more or less**: Month over Month (this month vs. last) and Year over Year (this year so far vs. the same months last year) — both capped to the categories that moved the most in actual dollars, not every category that changed at all, so a handful of one-off small changes don't bury the ones that matter.
+
 ## Wrapped
 
 **🎉 Wrapped** (linked from the dashboard) is a Spotify-Wrapped-style year-in-review: a full-screen slide carousel — arrow keys, click the screen edges, or the dot indicators to navigate — covering your income vs. expenses, top spending categories and payees, transaction activity stats, and a GitHub-style calendar heatmap of transaction frequency for the year. Pick which year to view from the dropdown in the top right (defaults to the current year). It's built directly against your live synced data, so there's no export-and-upload step.

@@ -401,6 +401,20 @@ router.get('/api/data/wrapped', async (req, res) => {
   }
 });
 
+router.get('/api/data/trends', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const months = Math.min(Math.max(parseInt(req.query.months, 10) || 12, 3), 24);
+    const trends = await actualService.getTrendsData({ months });
+    res.json(trends);
+  } catch (err) {
+    logger.error('Trends request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to compute trends.' });
+  }
+});
+
 router.get('/api/data/transactions/export', async (req, res) => {
   const config = requireActualConfigured(req, res);
   if (!config) return;
