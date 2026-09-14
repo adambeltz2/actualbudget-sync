@@ -217,6 +217,21 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P30 — Dashboard decluttering: capped trends, benchmark context, collapsible sections — DONE
+
+### [BUG] Financial Insights' Spending Trends listed 30+ categories instead of the meaningful few — FIXED
+User shared a full PDF printout of their dashboard (8 pages) reporting it as "very busy" and hard to parse. The single biggest contributor: `buildSpendingInsights()` had a significance threshold (15% change) but no cap on result count and sorted by percent change rather than dollar impact — so a household with one large one-time expense early in the 6-month lookback (a vacation, a home project) saw nearly every category read as "decreased X%" once that spend tapered off, including trivial ones like a $2/mo category dropping to $0. Changed the ranking to sort by dollar impact (`|secondHalfAvg − firstHalfAvg|`) and capped the result to the top 6 (`maxInsights`, default 6) — the categories that actually moved the needle, not every category that technically crossed a percent threshold.
+Affected files: `src/insights.js`, `test/insights.test.js`
+
+### [FEATURE] "Rule of thumb" benchmark context next to Financial Health / FIRE targets — DONE
+Same feedback, addressing "make this easier to understand from a personal finance / financial advisor perspective": the existing `.info-tip` tooltips explain *how* each figure is calculated but not what a "good" number looks like. Added one-line, always-visible reference notes (not hidden behind a hover, since the point was making figures self-explanatory at a glance) under Emergency Fund ("3–6 months of essential expenses"), Savings Rate ("15–20% of income is a common target"), Debt Load ("pay down high-interest debt before extra investing"), and the FIRE withdrawal rate ("4% / 25x is the standard baseline") — standard personal-finance rules of thumb, clearly framed as general guidance rather than the app's own opinion.
+Affected files: `public/index.html`
+
+### [FEATURE] Collapsible dashboard sections (Spending / Health & Goals / Projections) — DONE
+The remaining density was structural: 8 widget cards stacked on one page with no way to focus on a subset. Grouped Spend by Category/Balance Trend/Spend vs Budget under "Spending", Financial Health Check/Financial Independence under "Health & Goals", and Financial Insights under "Projections" — each a native `<details>/<summary>` (free keyboard/screen-reader support, no new JS framework) styled to match the existing card aesthetic. Income vs Spend, Income vs Spend YTD, and Accounts stay outside any section since those are the "at a glance" numbers meant to always be visible. Collapsed/expanded state persists per-viewer via `localStorage` (the same pattern already used for the theme toggle) so a section stays collapsed across reloads. A section whose widgets are all hidden via the existing Customize checkboxes now hides itself entirely instead of showing an empty header.
+Verified via a Playwright pass: capped Spending Trends renders exactly 6 rows end-to-end, collapsing a section and reloading the page keeps it collapsed while other sections stay open, and a screenshot review confirming the page reads dramatically shorter with the rule-of-thumb text visible without adding clutter.
+Affected files: `public/index.html`
+
 ## P29 — Wrapped: pick the year — DONE
 
 ### [FEATURE] Year selector on the Wrapped page — DONE

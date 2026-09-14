@@ -57,6 +57,19 @@
     a { color: var(--accent); }
     .card { background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow); }
     .card-soft { background: var(--card-bg-soft); border: 1px solid var(--border); border-radius: 10px; }
+
+    /* Collapsible dashboard sections (Spending / Health & Goals / Projections)
+       group related widgets under one header so someone can hide what they
+       don't check daily. Native <details>/<summary> for free keyboard and
+       screen-reader support; state persists per-viewer via localStorage. */
+    .dashboardSection { margin-top: 28px; }
+    .dashboardSection summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 4px 0 12px; user-select: none; }
+    .dashboardSection summary::-webkit-details-marker { display: none; }
+    .dashboardSection summary .sectionChevron { transition: transform 0.15s; flex-shrink: 0; color: var(--text-muted); }
+    .dashboardSection[open] > summary .sectionChevron { transform: rotate(90deg); }
+    .dashboardSection summary .sectionTitle { font-size: 15px; font-weight: 700; color: var(--text); }
+    .dashboardSection summary .sectionHint { font-size: 12.5px; font-weight: 400; color: var(--text-muted); }
+    .dashboardSection .sectionBody > * + * { margin-top: 20px; }
     .label-caps { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
     .pill { font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
     .pill-good { background: color-mix(in srgb, var(--positive) 15%, transparent); color: var(--positive); }
@@ -219,41 +232,57 @@
         <div id="accountsList" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:10px; max-height:420px; overflow-y:auto; padding-right:4px;"></div>
       </div>
 
-      <!-- Two-up row -->
-      <div class="grid-2" style="margin-bottom:20px;">
-        <div id="spendByCategoryWidget" hidden class="card" style="padding:22px; display:flex; flex-direction:column;">
-          <div class="label-caps" style="margin-bottom:12px;">Spend by Category · <span id="spendByCategoryMonthLabel">This Month</span></div>
-          <div style="position:relative; flex:1; display:flex; align-items:center; justify-content:center; min-height:150px;">
-            <canvas id="spendByCategoryChart"></canvas>
-            <div id="donutCenter" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none;">
-              <div id="donutTotal" class="num" style="font-weight:700; font-size:16px;"></div>
-              <div style="font-size:10px; color:var(--text-muted);">total spend</div>
+      <!-- Spending -->
+      <details id="sectionSpending" class="dashboardSection" open>
+        <summary>
+          <svg class="sectionChevron" width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="sectionTitle">Spending</span>
+          <span class="sectionHint">Spend by Category, Balance Trend, Spend vs Budget</span>
+        </summary>
+        <div class="sectionBody">
+          <div class="grid-2">
+            <div id="spendByCategoryWidget" hidden class="card" style="padding:22px; display:flex; flex-direction:column;">
+              <div class="label-caps" style="margin-bottom:12px;">Spend by Category · <span id="spendByCategoryMonthLabel">This Month</span></div>
+              <div style="position:relative; flex:1; display:flex; align-items:center; justify-content:center; min-height:150px;">
+                <canvas id="spendByCategoryChart"></canvas>
+                <div id="donutCenter" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none;">
+                  <div id="donutTotal" class="num" style="font-weight:700; font-size:16px;"></div>
+                  <div style="font-size:10px; color:var(--text-muted);">total spend</div>
+                </div>
+              </div>
+              <div id="spendByCategoryLegend" style="display:flex; flex-direction:column; gap:6px; margin-top:12px; font-size:12.5px;"></div>
+            </div>
+
+            <div id="balanceTrendWidget" hidden class="card" style="padding:22px; display:flex; flex-direction:column;">
+              <div class="label-caps" style="margin-bottom:12px;">Balance Trend · <span id="balanceTrendMonthLabel">This Month</span></div>
+              <div style="position:relative; flex:1; min-height:150px;"><canvas id="balanceTrendChart"></canvas></div>
+              <div id="trendDelta" style="font-size:13px; margin-top:8px;"></div>
             </div>
           </div>
-          <div id="spendByCategoryLegend" style="display:flex; flex-direction:column; gap:6px; margin-top:12px; font-size:12.5px;"></div>
-        </div>
 
-        <div id="balanceTrendWidget" hidden class="card" style="padding:22px; display:flex; flex-direction:column;">
-          <div class="label-caps" style="margin-bottom:12px;">Balance Trend · <span id="balanceTrendMonthLabel">This Month</span></div>
-          <div style="position:relative; flex:1; min-height:150px;"><canvas id="balanceTrendChart"></canvas></div>
-          <div id="trendDelta" style="font-size:13px; margin-top:8px;"></div>
-        </div>
-      </div>
-
-      <!-- Spend vs Budget -->
-      <div id="budgetVsActualWidget" hidden class="card" style="padding:26px 32px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
-          <div class="label-caps">Spend vs Budget · <span id="budgetVsActualMonthLabel">This Month</span></div>
-          <div style="display:flex; align-items:center; gap:16px; font-size:12.5px;">
-            <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:var(--accent);"></span>On track</span>
-            <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:var(--negative);"></span>Over budget</span>
+          <div id="budgetVsActualWidget" hidden class="card" style="padding:26px 32px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+              <div class="label-caps">Spend vs Budget · <span id="budgetVsActualMonthLabel">This Month</span></div>
+              <div style="display:flex; align-items:center; gap:16px; font-size:12.5px;">
+                <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:var(--accent);"></span>On track</span>
+                <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:var(--negative);"></span>Over budget</span>
+              </div>
+            </div>
+            <div id="budgetRows" style="display:flex; flex-direction:column; gap:16px;"></div>
           </div>
         </div>
-        <div id="budgetRows" style="display:flex; flex-direction:column; gap:16px;"></div>
-      </div>
+      </details>
 
+      <!-- Health & Goals -->
+      <details id="sectionHealth" class="dashboardSection" open>
+        <summary>
+          <svg class="sectionChevron" width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="sectionTitle">Health &amp; Goals</span>
+          <span class="sectionHint">Financial Health Check, Financial Independence</span>
+        </summary>
+        <div class="sectionBody">
       <!-- Financial Health Check -->
-      <div id="financialHealthWidget" hidden class="card" style="padding:26px 32px; margin-top:20px;">
+      <div id="financialHealthWidget" hidden class="card" style="padding:26px 32px;">
         <div class="label-caps" style="margin-bottom:16px; display:flex; align-items:center; gap:6px;">Financial Health Check
           <span class="info-tip" tabindex="0">i<span class="info-tip-content">Overall score = Emergency Fund (40%) + Savings Rate (40%) + Debt Load (20%), each scored 0–100% of its target and weighted, then rounded. Emergency Fund and Savings Rate count more because they reflect ongoing resilience; Debt Load counts less since it's balance-based, not payment-based.</span></span>
         </div>
@@ -302,6 +331,7 @@
                 <option value="9">9 months</option>
               </select>
             </div>
+            <div class="field-hint" style="margin-top:8px;">Rule of thumb: 3–6 months of essential expenses; lean toward 6+ if income is variable.</div>
           </div>
 
           <div class="card-soft" style="padding:16px;">
@@ -323,6 +353,7 @@
                 <option value="30">30%</option>
               </select>
             </div>
+            <div class="field-hint" style="margin-top:8px;">Rule of thumb: 15–20% of income is a common target; more if pursuing early retirement.</div>
           </div>
 
           <div class="card-soft" style="padding:16px;">
@@ -334,6 +365,7 @@
             </div>
             <div id="fhDlValue" class="num" style="font-size:22px; font-weight:800; margin-bottom:4px;">—</div>
             <div id="fhDlSub" style="font-size:11.5px; color:var(--text-muted);"></div>
+            <div class="field-hint" style="margin-top:8px;">Rule of thumb: pay down high-interest debt (credit cards) before extra investing.</div>
           </div>
         </div>
 
@@ -406,11 +438,22 @@
             </div>
           </div>
         </div>
-        <p class="field-hint" style="margin-top:8px; margin-bottom:0;">This is a simple math projection from your own historical data, not financial advice.</p>
+        <p class="field-hint" style="margin-top:8px; margin-bottom:4px;">Rule of thumb: 4% (25x expenses) is the standard baseline; a lower rate like 3–3.5% adds a safety margin for a longer retirement.</p>
+        <p class="field-hint" style="margin-top:0; margin-bottom:0;">This is a simple math projection from your own historical data, not financial advice.</p>
       </div>
+        </div>
+      </details>
 
+      <!-- Projections -->
+      <details id="sectionProjections" class="dashboardSection" open>
+        <summary>
+          <svg class="sectionChevron" width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="sectionTitle">Projections</span>
+          <span class="sectionHint">Financial Insights</span>
+        </summary>
+        <div class="sectionBody">
       <!-- Financial Insights -->
-      <div id="insightsWidget" hidden class="card" style="padding:26px 32px; margin-top:20px;">
+      <div id="insightsWidget" hidden class="card" style="padding:26px 32px;">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:10px;">
           <div class="label-caps">Financial Insights</div>
           <div style="display:flex; align-items:center; gap:14px; font-size:12.5px; color:var(--text-muted); flex-wrap:wrap;">
@@ -487,6 +530,8 @@
           <p id="projectionFootnote" class="field-hint" style="margin-bottom:0;"></p>
         </div>
       </div>
+        </div>
+      </details>
     </div>
 
     <footer style="display:flex; align-items:center; justify-content:center; gap:14px; font-size:12px; color:var(--text-muted); margin-top:28px; padding-top:20px; border-top:1px solid var(--border);">
@@ -908,7 +953,31 @@
         document.getElementById('insightsWidget').hidden = false;
         loadInsights(document.getElementById('insightsReturnRate').value, document.getElementById('insightsLookback').value);
       });
+
+      updateSectionVisibility();
     }
+
+    // A collapsible section (Spending / Health & Goals / Projections) whose
+    // widgets are all hidden via Customize would otherwise show as an empty
+    // header with nothing under it — hide the whole section in that case.
+    function updateSectionVisibility() {
+      document.querySelectorAll('.dashboardSection').forEach(section => {
+        const hasVisibleWidget = Array.from(section.querySelectorAll('.card')).some(card => !card.hidden);
+        section.hidden = !hasVisibleWidget;
+      });
+    }
+
+    // Collapsed/expanded state per section persists per-viewer via
+    // localStorage, the same pattern already used for the theme toggle.
+    document.querySelectorAll('.dashboardSection').forEach(section => {
+      try {
+        const stored = localStorage.getItem(`dashboardSection:${section.id}`);
+        if (stored === 'closed') section.open = false;
+      } catch (e) { /* localStorage may be unavailable */ }
+      section.addEventListener('toggle', () => {
+        try { localStorage.setItem(`dashboardSection:${section.id}`, section.open ? 'open' : 'closed'); } catch (e) { /* ignore */ }
+      });
+    });
 
     // Small hand-rolled SVG sparkline (no Chart.js instance per row — this
     // widget can list a dozen categories, and one Chart.js canvas per row

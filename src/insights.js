@@ -88,7 +88,15 @@ function classifySpendTrend(monthlyTotals) {
 // categories that moved by more than `significantPctChange`. Requires at
 // least 4 months of data (two 2-month halves) so a single expensive month
 // doesn't read as a "trend".
-function buildSpendingInsights(categoryTrends, { significantPctChange = 15, minMonths = 4 } = {}) {
+//
+// Ranked and capped by dollar impact rather than percent change: a category
+// that dropped 100% from $2/mo isn't meaningful even though its percent
+// change is the largest possible, and a household with one large one-time
+// expense in the first half of the lookback window (a vacation, a home
+// project) sees nearly every category "decrease" once that spend tapers
+// off — without a cap, that reads as a wall of 30+ near-identical lines
+// instead of the handful of changes actually worth a second look.
+function buildSpendingInsights(categoryTrends, { significantPctChange = 15, minMonths = 4, maxInsights = 6 } = {}) {
   const insights = [];
   for (const trend of categoryTrends) {
     if (trend.monthlyTotals.length < minMonths) continue;
@@ -104,13 +112,17 @@ function buildSpendingInsights(categoryTrends, { significantPctChange = 15, minM
       name: trend.name,
       direction,
       pctChange: roundedPct,
+      dollarImpact: Math.abs(secondHalfAvg - firstHalfAvg),
       firstHalfAvg: Math.round(firstHalfAvg * 100) / 100,
       secondHalfAvg: Math.round(secondHalfAvg * 100) / 100,
       monthlyTotals: trend.monthlyTotals,
       message: `${trend.name} spending has ${direction}d ${roundedPct}% over the last ${months} months ($${Math.round(firstHalfAvg)} → $${Math.round(secondHalfAvg)}/mo).`
     });
   }
-  return insights.sort((a, b) => b.pctChange - a.pctChange);
+  return insights
+    .sort((a, b) => b.dollarImpact - a.dollarImpact)
+    .slice(0, maxInsights)
+    .map(({ dollarImpact, ...rest }) => rest);
 }
 
 // A single projection point: the straight-line continuation of the current
