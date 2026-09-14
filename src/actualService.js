@@ -534,17 +534,29 @@ async function getWrappedData({ year } = {}) {
 // Pure — takes one category object from getBudgetMonth()'s categoryGroups
 // (amounts still in cents, spend as a negative sum like transaction amounts)
 // and derives the display-ready stats. Exported for unit testing.
+// `cat.balance` is Actual's own "leftover" figure (the same number shown in
+// its Balance column) — budgeted this month plus anything carried over from
+// prior months, minus spent. Determining overBudget/pctUsed from just this
+// month's `budgeted` vs `spent` (the old approach) falsely flags a
+// sinking-fund category as wildly over budget: a category with a small
+// monthly budget that accumulates for a planned large purchase (a home
+// renovation, an annual insurance premium) shows a huge spend against a tiny
+// monthly figure the moment the purchase happens, even though it was funded
+// entirely from savings built up over many months and Actual's own UI shows
+// it fully covered (balance stays positive).
 function summarizeBudgetCategory(cat) {
   const budgeted = (cat.budgeted || 0) / 100;
   const spent = Math.abs(cat.spent || 0) / 100;
-  const overBudget = budgeted > 0 ? spent > budgeted : spent > 0;
-  const pctUsed = budgeted > 0 ? Math.round((spent / budgeted) * 100) : (spent > 0 ? 100 : 0);
+  const remaining = (cat.balance || 0) / 100;
+  const overBudget = remaining < 0;
+  const available = remaining + spent;
+  const pctUsed = available > 0 ? Math.round((spent / available) * 100) : (spent > 0 ? 100 : 0);
   return {
     categoryId: cat.id,
     name: cat.name,
     budgeted,
     spent,
-    remaining: budgeted - spent,
+    remaining,
     pctUsed,
     overBudget
   };
@@ -559,15 +571,21 @@ async function getBudgetVsActual({ month, startDate, endDate } = {}) {
     const budgetMonths = await Promise.all(validMonths.map(m => api.getBudgetMonth(m)));
     // Budgeted/spent are summed per category across every included month,
     // since Actual only exposes budget data one calendar month at a time.
+    // balance is NOT summed — it's a running leftover, not a per-month flow,
+    // so summing across months would double-count carryover; the last
+    // included month's balance already reflects the full rollover history
+    // through the end of the range (validMonths is chronologically
+    // ascending, and Promise.all preserves that order).
     const merged = new Map();
     for (const bm of budgetMonths) {
       for (const group of bm.categoryGroups) {
         if (group.is_income || group.hidden) continue;
         for (const cat of group.categories) {
           if (cat.hidden) continue;
-          const existing = merged.get(cat.id) || { id: cat.id, name: cat.name, budgeted: 0, spent: 0 };
+          const existing = merged.get(cat.id) || { id: cat.id, name: cat.name, budgeted: 0, spent: 0, balance: 0 };
           existing.budgeted += cat.budgeted || 0;
           existing.spent += cat.spent || 0;
+          existing.balance = cat.balance || 0;
           merged.set(cat.id, existing);
         }
       }

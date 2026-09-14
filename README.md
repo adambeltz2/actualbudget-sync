@@ -116,6 +116,8 @@ The **Data Explorer** (linked from the dashboard) lists account balances and let
 
 The dashboard's period picker (top right, defaults to **This Month**) also offers **Last 3/6 Months**, **Current Year**, and **Prior Year** alongside This/Last Month — every widget it drives (Income vs Spend, Spend by Category, Balance Trend, Spend vs Budget) updates to cover the selected range.
 
+**Spend vs Budget** is rollover-aware: a category with a small monthly budget that's been accumulating for a planned purchase (a home renovation, an annual premium) won't read as wildly over budget the month you actually spend it, as long as the accumulated balance covers it — matching what Actual's own Balance column shows, rather than comparing spend against just that one month's budgeted figure.
+
 Click any **Income**, **Spend**, **Income YTD**, or **Spend YTD** figure to see exactly which transactions make it up, with an Export CSV button — the same on-budget, categorized transactions the budget engine itself uses (transfers and off-budget accounts are excluded), so you can verify the number independently instead of just trusting it.
 
 ## Read-Only Access

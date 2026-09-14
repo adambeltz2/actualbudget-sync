@@ -102,8 +102,11 @@ describe('SORT_ORDERS', () => {
 describe('summarizeBudgetCategory', () => {
   // getBudgetMonth() reports amounts in cents, with spend as a negative sum
   // (like transaction amounts), the same convention used everywhere else.
+  // `balance` is Actual's own "leftover" figure (budgeted + carried-over
+  // funds − spent) — the source of truth for remaining/overBudget, since a
+  // category can carry funds from prior months.
   test('converts cents to dollars and computes remaining/pctUsed when under budget', () => {
-    const result = summarizeBudgetCategory({ id: 'c1', name: 'Groceries', budgeted: 80000, spent: -68500 });
+    const result = summarizeBudgetCategory({ id: 'c1', name: 'Groceries', budgeted: 80000, spent: -68500, balance: 11500 });
     assert.equal(result.budgeted, 800);
     assert.equal(result.spent, 685);
     assert.equal(result.remaining, 115);
@@ -111,30 +114,48 @@ describe('summarizeBudgetCategory', () => {
     assert.equal(result.overBudget, false);
   });
 
-  test('flags overBudget and reports a negative remaining when spend exceeds budget', () => {
-    const result = summarizeBudgetCategory({ id: 'c2', name: 'Dining Out', budgeted: 40000, spent: -47100 });
+  test('flags overBudget and reports a negative remaining when spend exceeds available funds', () => {
+    const result = summarizeBudgetCategory({ id: 'c2', name: 'Dining Out', budgeted: 40000, spent: -47100, balance: -7100 });
     assert.equal(result.remaining, -71);
     assert.equal(result.pctUsed, 118);
     assert.equal(result.overBudget, true);
   });
 
-  test('a category with zero budget but nonzero spend is treated as fully over', () => {
-    const result = summarizeBudgetCategory({ id: 'c3', name: 'Uncategorized', budgeted: 0, spent: -2000 });
+  test('a category with zero budget but nonzero spend and no carryover is treated as fully over', () => {
+    const result = summarizeBudgetCategory({ id: 'c3', name: 'Uncategorized', budgeted: 0, spent: -2000, balance: -2000 });
     assert.equal(result.pctUsed, 100);
     assert.equal(result.overBudget, true);
   });
 
   test('a category with zero budget and zero spend is not over budget', () => {
-    const result = summarizeBudgetCategory({ id: 'c4', name: 'Unused', budgeted: 0, spent: 0 });
+    const result = summarizeBudgetCategory({ id: 'c4', name: 'Unused', budgeted: 0, spent: 0, balance: 0 });
     assert.equal(result.pctUsed, 0);
     assert.equal(result.overBudget, false);
   });
 
-  test('missing budgeted/spent fields default to zero rather than throwing', () => {
+  test('missing budgeted/spent/balance fields default to zero rather than throwing', () => {
     const result = summarizeBudgetCategory({ id: 'c5', name: 'Empty' });
     assert.equal(result.budgeted, 0);
     assert.equal(result.spent, 0);
     assert.equal(result.overBudget, false);
+  });
+
+  // Reproduces a real user report: a sinking-fund category (small monthly
+  // budget, funded by savings built up over many months) reads as wildly
+  // "over budget" if overBudget/pctUsed are computed from this month's
+  // budgeted vs spent alone — Actual's own UI shows it fully covered because
+  // the category's balance (leftover, including carryover) stays positive.
+  test('a planned purchase funded from a sinking fund is NOT flagged over budget, even though spend far exceeds this month\'s budgeted amount', () => {
+    // Mirrors a real "Home Improvement" category: $250 budgeted this month,
+    // $4,328 spent, but $1,343.46 of accumulated balance still left over.
+    const result = summarizeBudgetCategory({ id: 'home-improvement', name: 'Home Improvement', budgeted: 25000, spent: -432800, balance: 134346 });
+    assert.equal(result.overBudget, false);
+    assert.equal(result.remaining, 1343.46);
+    // pctUsed reflects how much of the AVAILABLE funds (balance + spent,
+    // i.e. this month's budget plus everything carried over) got used —
+    // not spent ÷ this month's budgeted, which would wrongly read as 1731%.
+    assert.equal(result.pctUsed, Math.round(4328 / (1343.46 + 4328) * 100));
+    assert.ok(result.pctUsed < 100);
   });
 });
 
