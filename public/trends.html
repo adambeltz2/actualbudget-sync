@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trends — Actual Budget Smart Sync</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap">
+  <script src="/vendor/chart.umd.js"></script>
+  <style>
+    :root {
+      --bg: #F1F0EC; --card-bg: #FFFFFF; --border: #F0EFEB;
+      --text: #1E2A32; --text-secondary: #33404A; --text-muted: #8A93A0;
+      --accent: #0EA894; --accent-dark: #0C8E7D;
+      --positive: #1C8C74; --negative: #C4573F;
+      --shadow: 0 1px 2px rgba(30,42,50,0.04), 0 8px 24px rgba(30,42,50,0.06);
+    }
+    html.dark {
+      --bg: #171D21; --card-bg: #1F262B; --border: #2C363D;
+      --text: #EDEFF0; --text-secondary: #C7CDD1; --text-muted: #7C8890;
+      --accent: #14BFA8; --accent-dark: #0EA894;
+      --positive: #2FBF9B; --negative: #E0806A;
+      --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px rgba(0,0,0,0.3);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 40px 24px 64px;
+      background: var(--bg); color: var(--text);
+      font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
+    }
+    .shell { max-width: 1120px; margin: 0 auto; }
+    .num { font-family: 'Sora', system-ui, sans-serif; }
+    a { color: var(--accent); }
+    .card { background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow); padding: 26px 32px; margin-bottom: 24px; }
+    .card-soft { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; }
+    .label-caps { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer;
+      padding: 9px 14px; border-radius: 10px; font-weight: 600; font-size: 13.5px;
+      font-family: inherit; text-decoration: none; transition: opacity 0.15s;
+    }
+    .btn-ghost { background: var(--card-bg); color: var(--text-secondary); box-shadow: var(--shadow); }
+    .btn-ghost:hover { opacity: 0.85; }
+    select {
+      padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--card-bg); color: var(--text); font-family: inherit; font-size: 13px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    th { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-weight: 700; color: var(--text-secondary); }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    .error-banner {
+      background: color-mix(in srgb, var(--negative) 12%, var(--card-bg));
+      border: 1px solid color-mix(in srgb, var(--negative) 35%, var(--card-bg));
+      color: var(--negative); font-size: 14px; padding: 12px 14px; border-radius: 10px; margin-bottom: 24px;
+    }
+    .notice-banner {
+      background: color-mix(in srgb, var(--accent) 10%, var(--card-bg));
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--card-bg));
+      color: var(--accent-dark); font-size: 14px; padding: 14px 16px; border-radius: 10px; margin-bottom: 24px;
+    }
+    .yoyGrid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
+    @media (max-width: 700px) { .yoyGrid { grid-template-columns: 1fr; } }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:28px; flex-wrap:wrap; gap:12px;">
+      <div>
+        <div class="num" style="font-size:22px; font-weight:800;">Trends</div>
+        <p style="font-size:13.5px; color:var(--text-muted); margin:2px 0 0;">Are you saving more or less over time, and which categories are driving the change.</p>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="themeToggleBtn" title="Toggle dark mode" class="btn btn-ghost">🌙</button>
+        <a href="/" class="btn btn-ghost">Dashboard</a>
+        <a href="/explorer.html" class="btn btn-ghost">Data Explorer</a>
+        <a href="/settings.html" class="btn btn-ghost">⚙ Settings</a>
+        <button id="logoutBtn" class="btn btn-ghost">Logout</button>
+      </div>
+    </div>
+
+    <div id="errorBanner" class="error-banner" hidden></div>
+    <div id="notConfiguredMsg" class="notice-banner" hidden>
+      Actual Budget isn't configured yet. Set it up on the <a href="/settings.html" style="font-weight:700;">Settings</a> page first.
+    </div>
+
+    <div id="trendsBody" hidden>
+      <!-- Net Savings Over Time -->
+      <div class="card">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:10px;">
+          <div class="label-caps">Net Savings Over Time</div>
+          <select id="lookbackSelect">
+            <option value="12">Last 12 Months</option>
+            <option value="24">Last 24 Months</option>
+          </select>
+        </div>
+        <p style="font-size:12.5px; color:var(--text-muted); margin:0 0 16px;">Income minus spend for each month — green means you saved that month, red means you spent more than you earned.</p>
+        <div style="position:relative; height:220px;"><canvas id="savingsChart"></canvas></div>
+
+        <div class="yoyGrid" style="margin-top:24px; padding-top:20px; border-top:1px solid var(--border);">
+          <div class="card-soft" style="padding:14px 16px;">
+            <div class="label-caps" style="margin-bottom:6px;">Income YTD</div>
+            <div id="yoyIncomeThis" class="num" style="font-size:18px; font-weight:800;">—</div>
+            <div id="yoyIncomeDelta" style="font-size:12px; color:var(--text-muted); margin-top:2px;"></div>
+          </div>
+          <div class="card-soft" style="padding:14px 16px;">
+            <div class="label-caps" style="margin-bottom:6px;">Spend YTD</div>
+            <div id="yoySpendThis" class="num" style="font-size:18px; font-weight:800;">—</div>
+            <div id="yoySpendDelta" style="font-size:12px; color:var(--text-muted); margin-top:2px;"></div>
+          </div>
+          <div class="card-soft" style="padding:14px 16px;">
+            <div class="label-caps" style="margin-bottom:6px;">Net Saved YTD</div>
+            <div id="yoyNetThis" class="num" style="font-size:18px; font-weight:800;">—</div>
+            <div id="yoyNetDelta" style="font-size:12px; color:var(--text-muted); margin-top:2px;"></div>
+          </div>
+        </div>
+        <p style="font-size:11.5px; color:var(--text-muted); margin:10px 0 0;">Compares January 1 through today against the same period last year, so it's an apples-to-apples comparison rather than a full year vs. a partial one.</p>
+      </div>
+
+      <!-- Month over Month -->
+      <div class="card">
+        <div class="label-caps" style="margin-bottom:4px;">Categories Costing More or Less · Month over Month</div>
+        <p style="font-size:12.5px; color:var(--text-muted); margin:0 0 16px;">This month vs. last month, ranked by the categories that moved the most in dollars.</p>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Category</th><th style="text-align:right;">This Month</th><th style="text-align:right;">Last Month</th><th style="text-align:right;">Change</th></tr></thead>
+            <tbody id="momBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Year over Year -->
+      <div class="card">
+        <div class="label-caps" style="margin-bottom:4px;">Categories Costing More or Less · Year over Year</div>
+        <p style="font-size:12.5px; color:var(--text-muted); margin:0 0 16px;">This year so far vs. the same months last year, ranked by dollar impact.</p>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Category</th><th style="text-align:right;">This Year</th><th style="text-align:right;">Last Year</th><th style="text-align:right;">Change</th></tr></thead>
+            <tbody id="yoyBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <footer style="display:flex; align-items:center; justify-content:center; gap:14px; font-size:12px; color:var(--text-muted); margin-top:28px; padding-top:20px; border-top:1px solid var(--border);">
+      <span>Actual Budget Smart Sync <span id="appVersion"></span></span>
+      <a href="https://github.com/adambeltz2/actualbudget-sync" target="_blank" rel="noopener" style="color:var(--text-muted);">GitHub</a>
+      <a href="https://www.buymeacoffee.com/adambeltz" target="_blank" rel="noopener" style="color:var(--text-muted);">☕ Buy Me a Coffee</a>
+    </footer>
+  </div>
+
+  <script>
+    fetch('/api/version').then(r => r.json()).then(({ version, commit }) => {
+      document.getElementById('appVersion').innerText = version ? `v${version}${commit ? ` (${commit})` : ''}` : '';
+    }).catch(() => {});
+
+    // --- Theme ---
+    function applyTheme(isDark) {
+      document.documentElement.classList.toggle('dark', isDark);
+      document.getElementById('themeToggleBtn').innerText = isDark ? '☀️' : '🌙';
+    }
+    try {
+      const stored = localStorage.getItem('theme');
+      applyTheme(stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
+    } catch (e) { /* localStorage may be unavailable */ }
+    document.getElementById('themeToggleBtn').addEventListener('click', () => {
+      const isDark = !document.documentElement.classList.contains('dark');
+      applyTheme(isDark);
+      try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch (e) { /* ignore */ }
+    });
+
+    // --- Error banner ---
+    const errorBanner = document.getElementById('errorBanner');
+    function showError(message) { errorBanner.innerText = message; errorBanner.hidden = false; }
+    function hideError() { errorBanner.hidden = true; }
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    });
+
+    function formatCurrency(amount) {
+      const text = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+      return amount < 0 ? `-$${text}` : `$${text}`;
+    }
+
+    function monthLabel(monthStr) {
+      const [y, m] = monthStr.split('-');
+      return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    }
+
+    let savingsChart = null;
+    function renderSavingsChart(monthlySavings) {
+      const ctx = document.getElementById('savingsChart');
+      if (savingsChart) savingsChart.destroy();
+      savingsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: monthlySavings.map(m => monthLabel(m.month)),
+          datasets: [{
+            data: monthlySavings.map(m => m.net),
+            backgroundColor: monthlySavings.map(m => m.net >= 0 ? '#0EA894' : '#C4573F'),
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (item) => formatCurrency(item.raw) } }
+          },
+          scales: {
+            y: { ticks: { callback: (v) => formatCurrency(v) } }
+          }
+        }
+      });
+    }
+
+    function renderYoyDelta(elementId, current, prior, { lowerIsBetter = false } = {}) {
+      const el = document.getElementById(elementId);
+      if (prior === 0) { el.innerText = 'No data last year'; return; }
+      const delta = current - prior;
+      const pct = Math.round((delta / Math.abs(prior)) * 100);
+      const improved = lowerIsBetter ? delta < 0 : delta > 0;
+      const arrow = delta === 0 ? '' : (delta > 0 ? '▲' : '▼');
+      el.innerHTML = `<span style="color:${improved ? 'var(--positive)' : (delta === 0 ? 'var(--text-muted)' : 'var(--negative)')};">${arrow} ${formatCurrency(Math.abs(delta))} (${Math.abs(pct)}%)</span> vs last year`;
+    }
+
+    function renderCategoryTable(bodyId, deltas) {
+      const tbody = document.getElementById(bodyId);
+      tbody.innerHTML = deltas.map(d => `
+        <tr>
+          <td>${d.name}</td>
+          <td class="num" style="text-align:right;">${formatCurrency(d.current)}</td>
+          <td class="num" style="text-align:right; color:var(--text-muted);">${formatCurrency(d.prior)}</td>
+          <td class="num" style="text-align:right; font-weight:700; color:${d.delta > 0 ? 'var(--negative)' : 'var(--positive)'};">${d.delta > 0 ? '+' : ''}${formatCurrency(d.delta)}</td>
+        </tr>`).join('') || `<tr><td colspan="4" style="color:var(--text-muted);">No notable changes.</td></tr>`;
+    }
+
+    async function loadTrends() {
+      const months = document.getElementById('lookbackSelect').value;
+      let res;
+      try {
+        res = await fetch(`/api/data/trends?months=${encodeURIComponent(months)}`);
+      } catch (err) {
+        showError('Could not reach the server.');
+        return;
+      }
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      const data = await res.json();
+      if (data.error) { showError(data.error); return; }
+      hideError();
+
+      renderSavingsChart(data.monthlySavings);
+
+      const { thisYear, lastYear } = data.yearOverYear;
+      document.getElementById('yoyIncomeThis').innerText = formatCurrency(thisYear.income);
+      document.getElementById('yoySpendThis').innerText = formatCurrency(thisYear.spend);
+      document.getElementById('yoyNetThis').innerText = formatCurrency(thisYear.net);
+      renderYoyDelta('yoyIncomeDelta', thisYear.income, lastYear.income);
+      renderYoyDelta('yoySpendDelta', thisYear.spend, lastYear.spend, { lowerIsBetter: true });
+      renderYoyDelta('yoyNetDelta', thisYear.net, lastYear.net);
+
+      renderCategoryTable('momBody', data.monthOverMonthCategories);
+      renderCategoryTable('yoyBody', data.yearOverYearCategories);
+    }
+
+    document.getElementById('lookbackSelect').addEventListener('change', loadTrends);
+
+    (async function init() {
+      let configRes;
+      try {
+        configRes = await fetch('/api/config');
+      } catch (err) {
+        showError('Could not reach the server. Check your connection and reload.');
+        return;
+      }
+      if (configRes.status === 401) { window.location.href = '/login.html'; return; }
+      const config = await configRes.json();
+      if (!config.actualUrl || !config.actualPasswordSet || !config.syncId) {
+        document.getElementById('notConfiguredMsg').hidden = false;
+        return;
+      }
+
+      document.getElementById('trendsBody').hidden = false;
+      await loadTrends();
+    })();
+  </script>
+</body>
+</html>

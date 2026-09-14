@@ -46,9 +46,15 @@ function renderBudgetRow(cat) {
 function computeBudgetTotalRow(budgetVsActual) {
   const budgeted = budgetVsActual.reduce((sum, cat) => sum + cat.budgeted, 0);
   const spent = budgetVsActual.reduce((sum, cat) => sum + cat.spent, 0);
-  const overBudget = budgeted > 0 ? spent > budgeted : spent > 0;
-  const pctUsed = budgeted > 0 ? Math.round((spent / budgeted) * 100) : (spent > 0 ? 100 : 0);
-  return { name: 'Total', budgeted, spent, remaining: budgeted - spent, pctUsed, overBudget };
+  // Sums each category's own `remaining` (Actual's true leftover balance,
+  // including any rolled-over funds) rather than recomputing budgeted−spent,
+  // so a sinking-fund category funded from savings doesn't make the whole
+  // Total row read as over budget.
+  const remaining = budgetVsActual.reduce((sum, cat) => sum + cat.remaining, 0);
+  const overBudget = remaining < 0;
+  const available = remaining + spent;
+  const pctUsed = available > 0 ? Math.round((spent / available) * 100) : (spent > 0 ? 100 : 0);
+  return { name: 'Total', budgeted, spent, remaining, pctUsed, overBudget };
 }
 
 function buildReportHtml({

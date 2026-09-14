@@ -5,6 +5,7 @@ const { q } = require('@actual-app/api');
 const { logger } = require('./logger');
 const { buildSpendingInsights, buildBalanceProjection, monthsToReachTarget } = require('./insights');
 const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations, computeNetWorthBreakdown } = require('./financialHealth');
+const { buildCategoryDeltas } = require('./trends');
 
 const DATA_DIR = '/data';
 
@@ -531,20 +532,98 @@ async function getWrappedData({ year } = {}) {
   };
 }
 
+// Month-by-month income/spend/net for the Trends page's savings-over-time
+// chart. Reuses getIncomeVsSpend's existing per-budget-month figures rather
+// than a new query — one call per month via Promise.all, the same tradeoff
+// already accepted by getCategorySpendTrend at this "N months" scale.
+async function getMonthlySavingsHistory({ months = 12 } = {}) {
+  const now = new Date();
+  const monthStrs = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    monthStrs.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  const figures = await Promise.all(monthStrs.map(m => getIncomeVsSpend({ month: m })));
+  return monthStrs.map((month, i) => ({
+    month,
+    income: figures[i].income,
+    spend: figures[i].spend,
+    net: figures[i].income - figures[i].spend
+  }));
+}
+
+// Everything the Trends page shows: a monthly savings history for the
+// chart, a year-over-year income/spend/net comparison (Jan 1 through
+// today's month/day, for both years, so it's apples-to-apples rather than
+// full-year-so-far vs a full prior year), and two ranked category-delta
+// lists (month-over-month, year-over-year) each capped to the categories
+// that actually moved the needle in dollars.
+async function getTrendsData({ months = 12 } = {}) {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+
+  const thisMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const thisMonthStr = `${thisMonthDate.getFullYear()}-${pad(thisMonthDate.getMonth() + 1)}`;
+  const lastMonthStr = `${lastMonthDate.getFullYear()}-${pad(lastMonthDate.getMonth() + 1)}`;
+
+  const thisYearStart = `${now.getFullYear()}-01-01`;
+  const thisYearEnd = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const lastYearStart = `${now.getFullYear() - 1}-01-01`;
+  const lastYearEnd = `${now.getFullYear() - 1}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+  const [
+    monthlySavings,
+    thisYearTotals, lastYearTotals,
+    thisMonthCategories, lastMonthCategories,
+    thisYearCategories, lastYearCategories
+  ] = await Promise.all([
+    getMonthlySavingsHistory({ months }),
+    getIncomeVsSpend({ startDate: thisYearStart, endDate: thisYearEnd }),
+    getIncomeVsSpend({ startDate: lastYearStart, endDate: lastYearEnd }),
+    getSpendByCategory({ month: thisMonthStr }),
+    getSpendByCategory({ month: lastMonthStr }),
+    getSpendByCategory({ startDate: thisYearStart, endDate: thisYearEnd }),
+    getSpendByCategory({ startDate: lastYearStart, endDate: lastYearEnd })
+  ]);
+
+  return {
+    monthlySavings,
+    yearOverYear: {
+      thisYear: { income: thisYearTotals.income, spend: thisYearTotals.spend, net: thisYearTotals.income - thisYearTotals.spend },
+      lastYear: { income: lastYearTotals.income, spend: lastYearTotals.spend, net: lastYearTotals.income - lastYearTotals.spend }
+    },
+    monthOverMonthCategories: buildCategoryDeltas(thisMonthCategories, lastMonthCategories),
+    yearOverYearCategories: buildCategoryDeltas(thisYearCategories, lastYearCategories)
+  };
+}
+
 // Pure — takes one category object from getBudgetMonth()'s categoryGroups
 // (amounts still in cents, spend as a negative sum like transaction amounts)
 // and derives the display-ready stats. Exported for unit testing.
+// `cat.balance` is Actual's own "leftover" figure (the same number shown in
+// its Balance column) — budgeted this month plus anything carried over from
+// prior months, minus spent. Determining overBudget/pctUsed from just this
+// month's `budgeted` vs `spent` (the old approach) falsely flags a
+// sinking-fund category as wildly over budget: a category with a small
+// monthly budget that accumulates for a planned large purchase (a home
+// renovation, an annual insurance premium) shows a huge spend against a tiny
+// monthly figure the moment the purchase happens, even though it was funded
+// entirely from savings built up over many months and Actual's own UI shows
+// it fully covered (balance stays positive).
 function summarizeBudgetCategory(cat) {
   const budgeted = (cat.budgeted || 0) / 100;
   const spent = Math.abs(cat.spent || 0) / 100;
-  const overBudget = budgeted > 0 ? spent > budgeted : spent > 0;
-  const pctUsed = budgeted > 0 ? Math.round((spent / budgeted) * 100) : (spent > 0 ? 100 : 0);
+  const remaining = (cat.balance || 0) / 100;
+  const overBudget = remaining < 0;
+  const available = remaining + spent;
+  const pctUsed = available > 0 ? Math.round((spent / available) * 100) : (spent > 0 ? 100 : 0);
   return {
     categoryId: cat.id,
     name: cat.name,
     budgeted,
     spent,
-    remaining: budgeted - spent,
+    remaining,
     pctUsed,
     overBudget
   };
@@ -559,15 +638,21 @@ async function getBudgetVsActual({ month, startDate, endDate } = {}) {
     const budgetMonths = await Promise.all(validMonths.map(m => api.getBudgetMonth(m)));
     // Budgeted/spent are summed per category across every included month,
     // since Actual only exposes budget data one calendar month at a time.
+    // balance is NOT summed — it's a running leftover, not a per-month flow,
+    // so summing across months would double-count carryover; the last
+    // included month's balance already reflects the full rollover history
+    // through the end of the range (validMonths is chronologically
+    // ascending, and Promise.all preserves that order).
     const merged = new Map();
     for (const bm of budgetMonths) {
       for (const group of bm.categoryGroups) {
         if (group.is_income || group.hidden) continue;
         for (const cat of group.categories) {
           if (cat.hidden) continue;
-          const existing = merged.get(cat.id) || { id: cat.id, name: cat.name, budgeted: 0, spent: 0 };
+          const existing = merged.get(cat.id) || { id: cat.id, name: cat.name, budgeted: 0, spent: 0, balance: 0 };
           existing.budgeted += cat.budgeted || 0;
           existing.spent += cat.spent || 0;
+          existing.balance = cat.balance || 0;
           merged.set(cat.id, existing);
         }
       }
@@ -749,11 +834,25 @@ async function getFinancialHealthData({ emergencyFundAccountIds = [], investment
   const monthlyIncome = monthlyFigures.reduce((sum, m) => sum + m.income, 0) / monthlyFigures.length;
   const monthlyAvgSpend = monthlyFigures.reduce((sum, m) => sum + m.spend, 0) / monthlyFigures.length;
 
+  // Same trailing 3-month window as the averages above, used to name the
+  // single largest expense behind a low savings rate — and, via
+  // summarizeBudgetCategory's balance-aware overBudget flag, to distinguish
+  // a planned purchase funded from savings (balance stayed positive) from
+  // genuine overspending (balance went negative), rather than treating
+  // every big expense the same way.
+  const rangeStart = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+  const rangeEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  const pad = n => String(n).padStart(2, '0');
+  const topSpendCategories = await getBudgetVsActual({
+    startDate: `${rangeStart.getFullYear()}-${pad(rangeStart.getMonth() + 1)}-01`,
+    endDate: `${rangeEnd.getFullYear()}-${pad(rangeEnd.getMonth() + 1)}-${pad(rangeEnd.getDate())}`
+  });
+
   const emergencyFund = computeEmergencyFund({ liquidBalance, monthlyAvgSpend, targetMonths });
   const savingsRate = computeSavingsRate({ income: monthlyIncome, spend: monthlyAvgSpend, targetPct: targetSavingsPct });
   const debtLoad = computeDebtLoad({ debtTotal, monthlyIncome });
   const { overall, label } = computeOverallScore({ emergencyFund, savingsRate, debtLoad });
-  const recommendations = buildRecommendations({ emergencyFund, savingsRate, debtLoad });
+  const recommendations = buildRecommendations({ emergencyFund, savingsRate, debtLoad, topSpendCategories });
 
   return { overall, label, emergencyFund, savingsRate, debtLoad, recommendations, liquidBalance, monthlyIncome, monthlyAvgSpend, netWorthBreakdown };
 }
@@ -828,7 +927,7 @@ module.exports = {
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getFinancialHealthData, getFinancialHealthHistory,
-  getMetricTransactions, getFireProgress, getWrappedData,
+  getMetricTransactions, getFireProgress, getWrappedData, getMonthlySavingsHistory, getTrendsData,
   testConnection,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).

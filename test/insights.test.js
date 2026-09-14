@@ -136,6 +136,34 @@ describe('buildSpendingInsights', () => {
     ]);
     assert.equal(insights[0].categoryId, 'big');
   });
+
+  test('ranks by dollar impact, not percent change — a $2/mo category dropping 100% loses to a $5000/mo category dropping 30%', () => {
+    const tinyButTotal = Array.from({ length: 6 }, (_, i) => ({ month: `m${i}`, total: i < 3 ? 2 : 0 }));
+    const hugeButPartial = Array.from({ length: 6 }, (_, i) => ({ month: `m${i}`, total: i < 3 ? 5000 : 3500 }));
+    const insights = buildSpendingInsights([
+      { categoryId: 'tiny', name: 'Tiny', monthlyTotals: tinyButTotal },
+      { categoryId: 'huge', name: 'Huge', monthlyTotals: hugeButPartial }
+    ]);
+    assert.equal(insights[0].categoryId, 'huge');
+    assert.equal(insights[1].categoryId, 'tiny');
+  });
+
+  test('caps the result to maxInsights even when many categories cross the significance threshold', () => {
+    const trends = Array.from({ length: 20 }, (_, i) => ({
+      categoryId: `cat${i}`,
+      name: `Category ${i}`,
+      // Distinct dollar impacts (i=0 has the largest) so the cap's ordering is unambiguous.
+      monthlyTotals: Array.from({ length: 6 }, (_, m) => ({ month: `m${m}`, total: m < 3 ? 1000 - i : 500 - i }))
+    }));
+    const insights = buildSpendingInsights(trends);
+    assert.equal(insights.length, 6);
+    assert.equal(insights[0].categoryId, 'cat0');
+  });
+
+  test('does not leak the internal dollarImpact ranking field into the result', () => {
+    const insights = buildSpendingInsights([{ categoryId: 'groceries', name: 'Groceries', monthlyTotals: sixMonthsRising }]);
+    assert.equal('dollarImpact' in insights[0], false);
+  });
 });
 
 describe('buildBalanceProjection', () => {
