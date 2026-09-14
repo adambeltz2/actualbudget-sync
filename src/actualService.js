@@ -767,11 +767,25 @@ async function getFinancialHealthData({ emergencyFundAccountIds = [], investment
   const monthlyIncome = monthlyFigures.reduce((sum, m) => sum + m.income, 0) / monthlyFigures.length;
   const monthlyAvgSpend = monthlyFigures.reduce((sum, m) => sum + m.spend, 0) / monthlyFigures.length;
 
+  // Same trailing 3-month window as the averages above, used to name the
+  // single largest expense behind a low savings rate — and, via
+  // summarizeBudgetCategory's balance-aware overBudget flag, to distinguish
+  // a planned purchase funded from savings (balance stayed positive) from
+  // genuine overspending (balance went negative), rather than treating
+  // every big expense the same way.
+  const rangeStart = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+  const rangeEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  const pad = n => String(n).padStart(2, '0');
+  const topSpendCategories = await getBudgetVsActual({
+    startDate: `${rangeStart.getFullYear()}-${pad(rangeStart.getMonth() + 1)}-01`,
+    endDate: `${rangeEnd.getFullYear()}-${pad(rangeEnd.getMonth() + 1)}-${pad(rangeEnd.getDate())}`
+  });
+
   const emergencyFund = computeEmergencyFund({ liquidBalance, monthlyAvgSpend, targetMonths });
   const savingsRate = computeSavingsRate({ income: monthlyIncome, spend: monthlyAvgSpend, targetPct: targetSavingsPct });
   const debtLoad = computeDebtLoad({ debtTotal, monthlyIncome });
   const { overall, label } = computeOverallScore({ emergencyFund, savingsRate, debtLoad });
-  const recommendations = buildRecommendations({ emergencyFund, savingsRate, debtLoad });
+  const recommendations = buildRecommendations({ emergencyFund, savingsRate, debtLoad, topSpendCategories });
 
   return { overall, label, emergencyFund, savingsRate, debtLoad, recommendations, liquidBalance, monthlyIncome, monthlyAvgSpend, netWorthBreakdown };
 }

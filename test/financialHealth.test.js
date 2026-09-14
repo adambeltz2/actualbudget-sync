@@ -143,6 +143,41 @@ describe('buildRecommendations', () => {
     assert.equal(recs.length, 1);
     assert.match(recs[0].message, /debt/);
   });
+
+  test('names the largest expense and notes it was funded from savings when its balance stayed positive', () => {
+    const emergencyFund = computeEmergencyFund({ liquidBalance: 12000, monthlyAvgSpend: 2000, targetMonths: 6 });
+    const savingsRate = computeSavingsRate({ income: 5000, spend: 5500, targetPct: 20 }); // negative rate
+    const debtLoad = computeDebtLoad({ debtTotal: 0, monthlyIncome: 5000 });
+    const topSpendCategories = [
+      { categoryId: 'hi', name: 'Home Improvement', spent: 4328, overBudget: false },
+      { categoryId: 'gr', name: 'Groceries', spent: 1914, overBudget: false }
+    ];
+    const recs = buildRecommendations({ emergencyFund, savingsRate, debtLoad, topSpendCategories });
+    const savingsRec = recs.find(r => /saving/.test(r.message));
+    assert.match(savingsRec.message, /Home Improvement \(\$4,328\)/);
+    assert.match(savingsRec.message, /funded from savings/);
+    assert.doesNotMatch(savingsRec.message, /over its budgeted amount/);
+  });
+
+  test('names the largest expense and flags genuine overspending when its balance went negative', () => {
+    const emergencyFund = computeEmergencyFund({ liquidBalance: 12000, monthlyAvgSpend: 2000, targetMonths: 6 });
+    const savingsRate = computeSavingsRate({ income: 5000, spend: 5500, targetPct: 20 });
+    const debtLoad = computeDebtLoad({ debtTotal: 0, monthlyIncome: 5000 });
+    const topSpendCategories = [{ categoryId: 'dining', name: 'Dining Out', spent: 900, overBudget: true }];
+    const recs = buildRecommendations({ emergencyFund, savingsRate, debtLoad, topSpendCategories });
+    const savingsRec = recs.find(r => /saving/.test(r.message));
+    assert.match(savingsRec.message, /Dining Out \(\$900\)/);
+    assert.match(savingsRec.message, /over its budgeted amount/);
+  });
+
+  test('falls back to the generic pointer when no spend category data is available', () => {
+    const emergencyFund = computeEmergencyFund({ liquidBalance: 12000, monthlyAvgSpend: 2000, targetMonths: 6 });
+    const savingsRate = computeSavingsRate({ income: 5000, spend: 4800, targetPct: 20 });
+    const debtLoad = computeDebtLoad({ debtTotal: 0, monthlyIncome: 5000 });
+    const recs = buildRecommendations({ emergencyFund, savingsRate, debtLoad, topSpendCategories: [] });
+    const savingsRec = recs.find(r => /saving/.test(r.message));
+    assert.match(savingsRec.message, /Check Spend by Category/);
+  });
 });
 
 describe('computeNetWorthBreakdown', () => {

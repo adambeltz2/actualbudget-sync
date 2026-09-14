@@ -61,7 +61,17 @@ function computeOverallScore({ emergencyFund, savingsRate, debtLoad }) {
   return { overall, label };
 }
 
-function buildRecommendations({ emergencyFund, savingsRate, debtLoad }) {
+// `topSpendCategories` (optional, largest-spend-first) lets the Savings Rate
+// message name the single biggest expense in the same window instead of a
+// generic "go check" pointer — and, since scoring a household's spending as
+// simply "good" or "bad" is inherently subjective, it draws a factual
+// distinction the raw savings-rate number can't: a category whose balance
+// stayed positive (`overBudget: false`, from summarizeBudgetCategory) was
+// funded from money already set aside in prior months — a planned purchase,
+// not new overspending — while one that went negative genuinely exceeded
+// what was budgeted for it. Whether either is "fine" is left to the reader;
+// this only reports which one happened.
+function buildRecommendations({ emergencyFund, savingsRate, debtLoad, topSpendCategories = [] }) {
   const recs = [];
   if (emergencyFund.status !== 'good') {
     recs.push({
@@ -70,9 +80,15 @@ function buildRecommendations({ emergencyFund, savingsRate, debtLoad }) {
     });
   }
   if (savingsRate.status !== 'good') {
+    const top = topSpendCategories[0];
+    const detail = top
+      ? (top.overBudget
+        ? `Your largest expense this period was ${top.name} ($${Math.round(top.spent).toLocaleString('en-US')}), which went over its budgeted amount.`
+        : `Your largest expense this period was ${top.name} ($${Math.round(top.spent).toLocaleString('en-US')}), funded from savings set aside in prior months rather than new spending.`)
+      : 'Check Spend by Category for the biggest place to cut back.';
     recs.push({
       status: savingsRate.status,
-      message: `You're saving ${savingsRate.ratePct.toFixed(0)}% of income, below your ${savingsRate.targetPct}% target. Check Spend by Category for the biggest place to cut back.`
+      message: `You're saving ${savingsRate.ratePct.toFixed(0)}% of income, below your ${savingsRate.targetPct}% target. ${detail}`
     });
   }
   if (debtLoad.debtTotal > 0) {
