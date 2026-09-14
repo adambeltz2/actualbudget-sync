@@ -217,6 +217,14 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P34 — Auto-bump version on release — DONE
+
+### [DEBT] Dashboard footer's version number never moved, despite ~15 feature releases — FIXED
+User asked why the footer's version wasn't incrementing. Root cause: `GET /api/version` reports `package.json`'s `version` field plus a commit hash injected at Docker build time via `GIT_COMMIT=${{ github.sha }}` (`.github/workflows/publish.yml`) — the commit hash updates correctly on every release, but nothing ever bumped `version` itself; it had been hardcoded to `1.0.0` since a very early commit, long before this session's feature work started.
+Added a "Bump package.json patch version" step to `publish.yml`, run on every push to `main` before the Docker build: `npm version patch --no-git-tag-version` bumps `package.json`/`package-lock.json`, commits with `[skip ci]` (so the bump push doesn't re-trigger `publish.yml`/`test.yml` a second time), and pushes straight back to `main` — checked out via `ref: ${{ github.ref }}` rather than the default detached-HEAD SHA so the push has something to push to. A small retry loop (fetch + rebase, up to 3 attempts) handles the unlikely case of two merges landing close enough together to race on the push. Needed `contents: write` added to the job's permissions (previously `contents: read`, since it only checked out code before).
+Verified `npm version patch --no-git-tag-version` locally (bumps both files consistently, e.g. 1.0.0 → 1.0.1) and validated the workflow YAML parses correctly; the actual bump-and-push behavior can only be confirmed by a real merge to `main`; a Docker build/publish dry run isn't practical in this environment.
+Affected files: `.github/workflows/publish.yml`
+
 ## P33 — Trends page: net savings over time + month/year-over-year category movers — DONE
 
 ### [FEATURE] New Trends page for proactive awareness — DONE
