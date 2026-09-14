@@ -217,6 +217,12 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P29 — Wrapped: pick the year — DONE
+
+### [FEATURE] Year selector on the Wrapped page — DONE
+User asked to pick which year Wrapped shows instead of it always defaulting to the current year. The backend already accepted an optional `year` query param (`getWrappedData({ year })`, `GET /api/data/wrapped?year=`) from when Wrapped first shipped — unused by the frontend until now — so this was purely a `public/wrapped.html` change: added a `#yearSelect` dropdown next to the theme toggle, populated with the current year and the 4 before it (Actual has no cheap "earliest transaction date" lookup, and a year with no data already renders the existing empty-state messaging on each slide, so there was no need to query for which years actually have data before listing them). Changing the year resets the carousel to the intro slide and refetches every slide's data for that year.
+Affected files: `public/wrapped.html`
+
 ## P18 — Follow-ups from Docker/optimization review (2026-09-12)
 
 ### [DEBT] `@actual-app/api` pinned to `"latest"`, no committed lockfile — DONE

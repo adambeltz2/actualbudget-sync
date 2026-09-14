@@ -84,7 +84,10 @@
   <div id="topBar">
     <a href="/" class="btn btn-ghost">← Dashboard</a>
     <div id="dots"></div>
-    <button id="themeToggleBtn" title="Toggle dark mode" class="btn btn-ghost">🌙</button>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <select id="yearSelect" class="btn btn-ghost" style="cursor:pointer; padding:10px 12px;"></select>
+      <button id="themeToggleBtn" title="Toggle dark mode" class="btn btn-ghost">🌙</button>
+    </div>
   </div>
 
   <div id="errorOverlay" hidden style="position:fixed; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:24px;">
@@ -249,10 +252,29 @@
       }).join('');
     }
 
+    // Offers the current year plus the 4 before it — Actual doesn't expose
+    // "earliest transaction date" cheaply, and a year with no data just
+    // renders the existing empty-state messaging, so there's no need to
+    // query for which years actually have data before listing them.
+    function initYearSelector() {
+      const select = document.getElementById('yearSelect');
+      const thisYear = new Date().getFullYear();
+      const years = [];
+      for (let y = thisYear; y >= thisYear - 4; y--) years.push(y);
+      select.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+    }
+    initYearSelector();
+    document.getElementById('yearSelect').addEventListener('change', () => {
+      goTo(0);
+      loadWrapped();
+    });
+
     async function loadWrapped() {
+      const year = document.getElementById('yearSelect').value;
+      document.getElementById('errorOverlay').hidden = true;
       let res;
       try {
-        res = await fetch('/api/data/wrapped');
+        res = await fetch(`/api/data/wrapped?year=${encodeURIComponent(year)}`);
       } catch (err) {
         document.getElementById('errorMessage').innerText = 'Could not reach the server.';
         document.getElementById('errorOverlay').hidden = false;

@@ -152,4 +152,4 @@ The **Financial Independence** widget shows a gauge for what % of your "FIRE num
 
 ## Wrapped
 
-**🎉 Wrapped** (linked from the dashboard) is a Spotify-Wrapped-style year-in-review: a full-screen slide carousel — arrow keys, click the screen edges, or the dot indicators to navigate — covering your income vs. expenses, top spending categories and payees, transaction activity stats, and a GitHub-style calendar heatmap of transaction frequency for the year. It's built directly against your live synced data, so there's no export-and-upload step.
+**🎉 Wrapped** (linked from the dashboard) is a Spotify-Wrapped-style year-in-review: a full-screen slide carousel — arrow keys, click the screen edges, or the dot indicators to navigate — covering your income vs. expenses, top spending categories and payees, transaction activity stats, and a GitHub-style calendar heatmap of transaction frequency for the year. Pick which year to view from the dropdown in the top right (defaults to the current year). It's built directly against your live synced data, so there's no export-and-upload step.
