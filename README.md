@@ -100,6 +100,7 @@ docker compose up -d
 * `CONFIG_ENCRYPTION_KEY` (optional env var in `docker-compose.yaml`) encrypts your Actual Budget and SMTP passwords at rest in `data/config.json`. Without it, those two fields are stored in plaintext (as they always have been). If you set it, keep the value somewhere safe — changing or losing it makes previously saved secrets unreadable and you'll need to re-enter them.
 * The container listens on port `3000`; change the left side of the `ports` mapping in `docker-compose.yaml` if that's taken on your host.
 * Both registries are updated together on every push to `main`, so tags stay in sync — no need to worry about one being stale relative to the other.
+* If the local sync cache under `./data` ever goes stale or corrupted relative to the server (rare — shows up in logs as `invalid fileId`, a JSON parse error, or similar), the app clears its own cache and retries automatically on the next sync or dashboard load. Your `config.json` in the same folder is never touched by this.
 
 ## Data Explorer & Dashboard
 

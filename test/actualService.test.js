@@ -1,6 +1,43 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, monthsInRange, classifyMetricTransactions } = require('../src/actualService');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const { buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, monthsInRange, classifyMetricTransactions, isCorruptedCacheError, purgeLocalCache } = require('../src/actualService');
+
+describe('isCorruptedCacheError', () => {
+  test('recognizes known @actual-app/api local-cache corruption signatures', () => {
+    assert.equal(isCorruptedCacheError(new Error('invalid fileId')), true);
+    assert.equal(isCorruptedCacheError(new Error('Unexpected end of JSON input')), true);
+    assert.equal(isCorruptedCacheError(new Error("Cannot read properties of null (reading 'prepare')")), true);
+    assert.equal(isCorruptedCacheError(new Error('App: startServices called while services are already running')), true);
+  });
+
+  test('does not flag unrelated errors', () => {
+    assert.equal(isCorruptedCacheError(new Error('Invalid password')), false);
+    assert.equal(isCorruptedCacheError(new Error('ECONNREFUSED')), false);
+  });
+});
+
+describe('purgeLocalCache', () => {
+  test('deletes everything under dataDir except config.json', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'abs-cache-test-'));
+    fs.writeFileSync(path.join(dir, 'config.json'), '{"kept":true}');
+    fs.mkdirSync(path.join(dir, 'My-Finances-fa3f79f'));
+    fs.writeFileSync(path.join(dir, 'My-Finances-fa3f79f', 'metadata.json'), '{}');
+    fs.writeFileSync(path.join(dir, 'some-cache-file.sqlite'), '');
+
+    purgeLocalCache(dir);
+
+    assert.deepEqual(fs.readdirSync(dir), ['config.json']);
+    assert.equal(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'), '{"kept":true}');
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('is a no-op when dataDir does not exist', () => {
+    assert.doesNotThrow(() => purgeLocalCache('/nonexistent/path/for/this/test'));
+  });
+});
 
 describe('monthsInRange', () => {
   test('lists every calendar month a range touches, inclusive of both ends', () => {

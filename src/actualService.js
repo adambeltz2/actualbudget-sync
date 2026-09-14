@@ -1,8 +1,12 @@
+const fs = require('fs');
+const path = require('path');
 const api = require('@actual-app/api');
 const { q } = require('@actual-app/api');
 const { logger } = require('./logger');
 const { buildSpendingInsights, buildBalanceProjection, monthsToReachTarget } = require('./insights');
 const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations, computeNetWorthBreakdown } = require('./financialHealth');
+
+const DATA_DIR = '/data';
 
 // Kept open across sync cycles instead of init()/shutdown() per run, so the
 // downloaded budget stays queryable between syncs (needed by the data
@@ -14,6 +18,55 @@ function fingerprint(config) {
   return `${config.actualUrl}|${config.syncId}|${config.actualPassword}`;
 }
 
+// @actual-app/api throws these when its local SQLite/JSON cache under
+// DATA_DIR is corrupted or stale relative to the server — e.g. metadata
+// left truncated by an interrupted write, or the server no longer
+// recognizing a cached fileId (the budget was reset/recreated server-side,
+// or the cache survived a Sync ID change). Previously this required an
+// operator to manually find and delete the right cache subfolder under
+// ./data; self-healing here means a bad local cache can't wedge the
+// scheduled sync indefinitely.
+const CORRUPTED_CACHE_SIGNATURES = [
+  'invalid fileId',
+  'Unexpected end of JSON input',
+  "reading 'prepare'",
+  'services are already running'
+];
+
+function isCorruptedCacheError(err) {
+  const message = String((err && err.message) || err);
+  return CORRUPTED_CACHE_SIGNATURES.some(sig => message.includes(sig));
+}
+
+// Wipes everything under dataDir except config.json — the rest is entirely
+// @actual-app/api's own per-budget cache, safe to discard and let it
+// re-download fresh.
+function purgeLocalCache(dataDir) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dataDir);
+  } catch (err) {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry === 'config.json') continue;
+    fs.rmSync(path.join(dataDir, entry), { recursive: true, force: true });
+  }
+}
+
+async function downloadWithSelfHeal(config) {
+  try {
+    await api.downloadBudget(config.syncId);
+  } catch (err) {
+    if (!isCorruptedCacheError(err)) throw err;
+    logger.warn(`Local Actual Budget cache appears corrupted (${err.message}); clearing it under ${DATA_DIR} and retrying once...`);
+    await api.shutdown().catch(() => {});
+    purgeLocalCache(DATA_DIR);
+    await api.init({ dataDir: DATA_DIR, serverURL: config.actualUrl, password: config.actualPassword });
+    await api.downloadBudget(config.syncId);
+  }
+}
+
 async function ensureReady(config) {
   const fp = fingerprint(config);
   if (initialized && fp === currentFingerprint) return;
@@ -23,15 +76,15 @@ async function ensureReady(config) {
     await shutdown();
   }
 
-  await api.init({ dataDir: '/data', serverURL: config.actualUrl, password: config.actualPassword });
-  await api.downloadBudget(config.syncId);
+  await api.init({ dataDir: DATA_DIR, serverURL: config.actualUrl, password: config.actualPassword });
+  await downloadWithSelfHeal(config);
   initialized = true;
   currentFingerprint = fp;
 }
 
 async function refreshBudget(config) {
   await ensureReady(config);
-  await api.downloadBudget(config.syncId);
+  await downloadWithSelfHeal(config);
 }
 
 // Used by the dashboard's "Test Connection" button. Reuses ensureReady, so a
@@ -779,5 +832,6 @@ module.exports = {
   testConnection,
   runBankSync, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
-  buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, monthsInRange, classifyMetricTransactions
+  buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, monthsInRange, classifyMetricTransactions,
+  isCorruptedCacheError, purgeLocalCache
 };
