@@ -33,7 +33,7 @@ This service is designed to run independently of your main Actual Budget server.
 
 ## Prerequisites
 * Docker and Docker Compose (Docker Desktop includes both)
-* An active [Actual Budget](https://actualbudget.com/) instance
+* An active [Actual Budget](https://actualbudget.org/) instance
 * Your Actual Budget **Sync ID** (found in *Settings > Show advanced settings > Sync ID*)
 * An App Password or SMTP credentials for your email provider (e.g., Gmail App Password), if you want email reports
 

@@ -7,7 +7,7 @@ Act as a senior software engineer and technical investigator. Optimize for corre
 *   **Root Cause Focus:** Do not blindly patch symptoms. Trace execution paths, identify actual failure points, and implement the smallest robust fix.
 
 ## 2. Project Overview
-**Actual Budget Auto-Sync** is a standalone, Dockerized Node.js service that automates bank syncing for [Actual Budget](https://actualbudget.com/) and emails a summary of new transactions.
+**Actual Budget Auto-Sync** is a standalone, Dockerized Node.js service that automates bank syncing for [Actual Budget](https://actualbudget.org/) and emails a summary of new transactions.
 
 *   **What it does:** On a configurable cron schedule (default `0 6,12 * * *`), the service connects to a user's Actual Budget instance, takes a transaction "snapshot," triggers `runBankSync()`, waits for the bank/SimpleFIN data to update, takes a second snapshot, diffs the two to find newly-added transactions, and emails a report of what changed.
 *   **How it's used:** It runs independently of the main Actual Budget server (self-hosted or a remote instance such as Pikapod), as a single Docker container. All configuration — Actual Budget URL, password, Sync ID, cron schedule, and SMTP/email settings — is managed through a built-in web dashboard on port `3000`, persisted to `./data/config.json` on the host, rather than via `.env` file editing.
