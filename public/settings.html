@@ -255,6 +255,24 @@
         </div>
       </div>
 
+      <!-- Feedback Section -->
+      <div class="card" style="padding:22px;">
+        <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Feedback</div>
+        <p class="field-hint" style="margin-top:0; margin-bottom:14px;">Lets the 💬 Feedback button (dashboard, Data Explorer, Trends, and here) file a GitHub issue on this project directly, instead of you having to open GitHub yourself.</p>
+        <div class="grid-2">
+          <div>
+            <label class="field-label">GitHub Repository</label>
+            <input type="text" id="feedbackGithubRepo" placeholder="owner/repo">
+            <p class="field-hint">e.g. <code>adambeltz2/actualbudget-sync</code>.</p>
+          </div>
+          <div>
+            <label class="field-label">GitHub Personal Access Token</label>
+            <input type="password" id="feedbackGithubToken" autocomplete="new-password">
+            <p id="feedbackGithubTokenHint" class="field-hint">Needs "Issues: Read and write" permission on the repo above.</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Access & Sharing -->
       <div class="card" style="padding:22px;">
         <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Access &amp; Sharing</div>
@@ -298,8 +316,27 @@
     <footer style="display:flex; align-items:center; justify-content:center; gap:14px; font-size:12px; color:var(--text-muted); margin-top:28px; padding-top:20px; border-top:1px solid var(--border);">
       <span>Actual Budget Smart Sync <span id="appVersion"></span></span>
       <a href="https://github.com/adambeltz2/actualbudget-sync" target="_blank" rel="noopener" style="color:var(--text-muted);">GitHub</a>
+      <a href="javascript:void(0)" id="feedbackOpenBtn" style="color:var(--text-muted);">💬 Feedback</a>
       <a href="https://www.buymeacoffee.com/adambeltz" target="_blank" rel="noopener" style="color:var(--text-muted);">☕ Buy Me a Coffee</a>
     </footer>
+  </div>
+
+  <!-- Feedback Modal -->
+  <div id="feedbackModalOverlay" hidden style="position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:100; display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto;">
+    <div class="card" style="width:100%; max-width:480px; padding:26px;">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px;">
+        <div class="num" style="font-size:18px; font-weight:800;">Send Feedback</div>
+        <button type="button" id="feedbackModalClose" class="btn btn-ghost" style="padding:6px 12px; font-size:13px;">Close</button>
+      </div>
+      <label class="field-label">What's on your mind?</label>
+      <textarea id="feedbackMessage" rows="5" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-family:inherit; font-size:14px; resize:vertical;" placeholder="A bug you ran into, an idea, anything..."></textarea>
+      <label class="field-label" style="margin-top:12px;">Your email (optional, if you'd like a reply)</label>
+      <input type="email" id="feedbackEmail" placeholder="you@example.com">
+      <p id="feedbackResult" hidden style="font-size:13px; padding:9px 12px; border-radius:8px; margin:14px 0 0;"></p>
+      <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+        <button type="button" id="feedbackSubmitBtn" class="btn btn-primary" style="padding:9px 20px;">Submit</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -451,6 +488,13 @@
       document.getElementById('webhookUrlHint').innerText = config.webhookUrlSet
         ? 'Webhook URL is saved. Leave blank to keep it, or paste a new one to change it.'
         : 'Discord: channel > Edit Channel > Integrations > Webhooks. Slack: create an Incoming Webhook app.';
+
+      document.getElementById('feedbackGithubRepo').value = config.feedbackGithubRepo || '';
+      document.getElementById('feedbackGithubToken').value = '';
+      document.getElementById('feedbackGithubToken').placeholder = config.feedbackGithubTokenSet ? '•••••••• (unchanged)' : '';
+      document.getElementById('feedbackGithubTokenHint').innerText = config.feedbackGithubTokenSet
+        ? 'Token is saved. Leave blank to keep it, or paste a new one to change it.'
+        : 'Needs "Issues: Read and write" permission on the repo above.';
 
       document.getElementById('viewerPasswordHint').innerText = config.viewerAccessEnabled
         ? 'Read-only access is enabled. Enter a new password below to change it.'
@@ -695,6 +739,8 @@
         webhookEnabled: webhookToggle.checked,
         webhookPlatform: document.getElementById('webhookPlatform').value,
         webhookUrl: document.getElementById('webhookUrl').value,
+        feedbackGithubRepo: document.getElementById('feedbackGithubRepo').value,
+        feedbackGithubToken: document.getElementById('feedbackGithubToken').value,
         emergencyFundAccountIds: emergencyFundAccountIds,
         investmentAccountIds: investmentAccountIds,
         liabilityAccountIds: liabilityAccountIds,
@@ -739,6 +785,63 @@
     };
 
     loadConfig();
+
+    // --- Feedback ---
+    (function() {
+      const overlay = document.getElementById('feedbackModalOverlay');
+      const openBtn = document.getElementById('feedbackOpenBtn');
+      const closeBtn = document.getElementById('feedbackModalClose');
+      const submitBtn = document.getElementById('feedbackSubmitBtn');
+      const resultEl = document.getElementById('feedbackResult');
+      if (!overlay || !openBtn) return;
+
+      openBtn.addEventListener('click', () => {
+        document.getElementById('feedbackMessage').value = '';
+        document.getElementById('feedbackEmail').value = '';
+        resultEl.hidden = true;
+        overlay.hidden = false;
+      });
+      closeBtn.addEventListener('click', () => { overlay.hidden = true; });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.hidden = true; });
+
+      submitBtn.addEventListener('click', async () => {
+        const message = document.getElementById('feedbackMessage').value.trim();
+        resultEl.hidden = false;
+        if (!message) {
+          resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
+          resultEl.style.color = 'var(--negative)';
+          resultEl.innerText = 'Enter a message first.';
+          return;
+        }
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'Sending…';
+        try {
+          const res = await fetch('/api/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message, email: document.getElementById('feedbackEmail').value.trim() })
+          });
+          const data = await res.json();
+          if (data.success) {
+            resultEl.style.background = 'color-mix(in srgb, var(--positive) 12%, var(--card-bg))';
+            resultEl.style.color = 'var(--positive)';
+            resultEl.innerText = '✓ Thanks! Your feedback was filed on GitHub.';
+            document.getElementById('feedbackMessage').value = '';
+          } else {
+            resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
+            resultEl.style.color = 'var(--negative)';
+            resultEl.innerText = `✕ ${data.error || 'Failed to send feedback.'}`;
+          }
+        } catch (err) {
+          resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
+          resultEl.style.color = 'var(--negative)';
+          resultEl.innerText = '✕ Could not reach the server.';
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.innerText = 'Submit';
+        }
+      });
+    })();
   </script>
 </body>
 </html>
