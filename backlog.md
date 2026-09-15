@@ -217,6 +217,22 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P36 — Fix 5 dependency vulnerabilities flagged by Docker Hub's image scan — FIXED
+
+### [DEBT] `nodemailer`, `node-cron`, `express`/`qs` carried known CVEs, some high severity — FIXED
+User pointed out Docker Hub's automatic vulnerability scan on the published image (15 flagged findings — 3 high, 11 medium, 1 low, all in the app's own `node_modules` layer). Cross-referenced against `npm audit`: every finding traced back to just three direct dependencies — `nodemailer` (11 separate advisories, the bulk of it, including a high-severity TLS certificate validation bypass and several SMTP/CRLF injection and domain-validation-bypass issues), `node-cron` (a moderate `uuid` bounds-check advisory in its dependency tree), and `express`'s `qs` dependency (a moderate DoS/array-limit-bypass pair).
+`express`/`qs` fixed via a plain `npm audit fix` (patch-level, no breaking changes). `nodemailer` (6.9 → 10.0.10) and `node-cron` (3.0.3 → 4.6.0) both needed major version bumps — checked first that both packages require Node ≥20 (matching the existing `node:20-slim` base image already in use) and that this codebase's entire usage of each library is minimal and stable across the bump (`nodemailer.createTransport({...}).sendMail({...})` in `emailReport.js`; `cron.schedule(pattern, fn, { scheduled, timezone })` + `.stop()` in `scheduler.js`) — both APIs are unchanged between the old and new majors.
+Verified via a smoke script requiring both packages and exercising the exact calls this codebase makes (`createTransport`+checking `sendMail` exists; `cron.validate`+`schedule`+`stop`, none throwing), the full `npm test` suite (160/160, unaffected — no test exercised either library directly), a live `node index.js` boot confirming the cron job still schedules identically, and `npm audit` reporting 0 vulnerabilities afterward (down from 5 distinct advisories covering the reported 15 findings).
+Affected files: `package.json`, `package-lock.json`
+
+## P35 — Docker Hub README wasn't syncing, and its screenshots were broken links — FIXED
+
+### [BUG] Docker Hub repo overview never updates from README.md; screenshots would be broken there anyway — FIXED
+User asked why Docker Hub's page never picks up README.md changes despite an image being pushed on every merge to `main`. Root cause: pushing an image and updating a Docker Hub repository's description are two entirely separate Docker Hub API operations — nothing in `publish.yml` (or anywhere else) had ever called the one that updates the description, so it was still whatever was typed in manually, once, in Docker Hub's web UI. Separately, even once synced, the two screenshot images in `README.md` used repo-relative paths (`docs/screenshots/dashboard.png`) — those resolve fine on GitHub but would be dead links on Docker Hub's page, which has no notion of this repo's file tree.
+Added a "Sync README to Docker Hub" step to `publish.yml` (`peter-evans/dockerhub-description@v4`, reusing the existing `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets already used to log in for the image push — no new credentials needed) that pushes `README.md` as the Docker Hub repository's full description on every release. Changed both screenshot links to absolute `raw.githubusercontent.com` URLs so they render correctly from both GitHub and Docker Hub instead of only GitHub.
+Verified the workflow YAML parses correctly and `npm test` still passes (workflow/docs-only change, no application code touched); the actual sync can only be confirmed by a real merge to `main` and checking Docker Hub's page afterward.
+Affected files: `.github/workflows/publish.yml`, `README.md`
+
 ## P34 — Auto-bump version on release — DONE
 
 ### [DEBT] Dashboard footer's version number never moved, despite ~15 feature releases — FIXED
