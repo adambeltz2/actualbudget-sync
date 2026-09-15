@@ -69,8 +69,13 @@ jobs:
       # already renders (its screenshot links point at raw.githubusercontent.com
       # absolute URLs rather than repo-relative paths specifically so they
       # also resolve correctly from Docker Hub's page, not just GitHub's).
+      # continue-on-error: this is a documentation nicety, not the release
+      # itself (the image above already pushed successfully by this point) —
+      # a Docker Hub API hiccup (e.g. a token permission issue) shouldn't
+      # mark the whole run, and thus the actual image publish, as failed.
       - name: Sync README to Docker Hub
         uses: peter-evans/dockerhub-description@v4
+        continue-on-error: true
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
