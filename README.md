@@ -3,6 +3,7 @@
 ![Last Commit](https://img.shields.io/github/last-commit/adambeltz2/actualbudget-sync)
 ![Docker Pulls](https://img.shields.io/docker/pulls/adambeltz/actualbudget-sync)
 ![License](https://img.shields.io/github/license/adambeltz2/actualbudget-sync)
+[![Buy Me a Coffee](https://img.shields.io/badge/☕-Buy%20Me%20a%20Coffee-FFDD00)](https://www.buymeacoffee.com/adambeltz)
 
 A standalone, Dockerized automation tool that automatically syncs bank accounts in Actual Budget and emails you a summary of new transactions.
 
