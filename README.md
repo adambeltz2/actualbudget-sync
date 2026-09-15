@@ -130,6 +130,10 @@ Use **Access & Sharing** in Settings to set a separate viewer password for a sec
 
 Actual Budget doesn't distinguish checking/savings/investment/liability accounts — it only knows names and balances. **Account Classification** in Settings (right after the Actual Budget connection settings, since it's usually a one-time setup) lets you tag each account as **Emergency Fund**, **Investment**, **Liability**, or leave it unclassified — an account can only be one of these at a time. These tags drive the Financial Health Check widget, its Net Worth Breakdown, the Financial Insights projection, and the "Liability Accounts" section of sync emails. Until you classify anything, Liability falls back to "any account with a negative balance" so the app still works sensibly out of the box.
 
+## Feedback
+
+The **💬 Feedback** link in the footer (Dashboard, Data Explorer, Trends, Settings) opens a small form to report a bug or idea — submitting it files a GitHub issue on this project directly, no need to leave the app. Set a **GitHub Repository** and **Personal Access Token** (scoped to "Issues: Read and write" on that repo) in Settings' Feedback card to enable it; until then, the button explains it isn't configured yet.
+
 ## Webhook Notifications
 
 **Webhook Notifications** in Settings sends the same sync summary as the email report to a Discord or Slack channel via an incoming webhook, instead of (or alongside) email. Use "Send Test Message" to confirm the URL works before relying on it. Like your Actual Budget and SMTP passwords, the webhook URL is encrypted at rest when `CONFIG_ENCRYPTION_KEY` is set.

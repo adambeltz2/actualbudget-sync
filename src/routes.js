@@ -8,6 +8,7 @@ const { applySchedule } = require('./scheduler');
 const auth = require('./auth');
 const actualService = require('./actualService');
 const { sendWebhookReport } = require('./webhookReport');
+const { submitFeedback } = require('./feedback');
 
 const router = express.Router();
 const { requireAdmin } = auth;
@@ -28,10 +29,11 @@ router.get('/api/version', (req, res) => {
 // client only learns whether one is set, and a save only changes it when a
 // new non-empty value is submitted (see POST handler below).
 router.get('/api/config', (req, res) => {
-  const { dashboardPasswordHash, sessionSecret, viewerPasswordHash, actualPassword, emailPass, webhookUrl, ...safeConfig } = getConfig();
+  const { dashboardPasswordHash, sessionSecret, viewerPasswordHash, actualPassword, emailPass, webhookUrl, feedbackGithubToken, ...safeConfig } = getConfig();
   res.json({
     ...safeConfig,
     actualPasswordSet: !!actualPassword, emailPassSet: !!emailPass, webhookUrlSet: !!webhookUrl,
+    feedbackGithubTokenSet: !!feedbackGithubToken,
     viewerAccessEnabled: !!viewerPasswordHash,
     role: req.sessionRole
   });
@@ -45,6 +47,7 @@ router.post('/api/config', requireAdmin, (req, res) => {
     actualPassword: req.body.actualPassword ? req.body.actualPassword : current.actualPassword,
     emailPass: req.body.emailPass ? req.body.emailPass : current.emailPass,
     webhookUrl: req.body.webhookUrl ? req.body.webhookUrl : current.webhookUrl,
+    feedbackGithubToken: req.body.feedbackGithubToken ? req.body.feedbackGithubToken : current.feedbackGithubToken,
     dashboardPasswordHash: current.dashboardPasswordHash,
     sessionSecret: current.sessionSecret,
     viewerPasswordHash: current.viewerPasswordHash,
@@ -119,6 +122,32 @@ router.post('/api/config/test-webhook', requireAdmin, async (req, res) => {
   } catch (err) {
     logger.warn('Webhook test failed: ' + err.message);
     res.json({ success: false, error: err.message });
+  }
+});
+
+// --- Feedback ---
+// Open to any logged-in session (admin or viewer) — this posts to the
+// project's own GitHub repo, not the user's Actual Budget data, so viewer
+// access doesn't need to be widened for it.
+router.post('/api/feedback', async (req, res) => {
+  const message = (req.body.message || '').trim();
+  if (!message) {
+    return res.status(400).json({ error: 'A message is required.' });
+  }
+
+  const current = getConfig();
+  try {
+    const { url } = await submitFeedback(current, {
+      message,
+      email: req.body.email || '',
+      appVersion: version,
+      commit: process.env.GIT_COMMIT ? process.env.GIT_COMMIT.slice(0, 7) : null
+    });
+    logger.info(`Feedback submitted as GitHub issue: ${url}`);
+    res.json({ success: true, url });
+  } catch (err) {
+    logger.warn('Feedback submission failed: ' + err.message);
+    res.status(400).json({ error: err.message });
   }
 });
 

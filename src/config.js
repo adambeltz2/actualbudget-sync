@@ -8,7 +8,7 @@ const CONFIG_PATH = '/data/config.json';
 // Encrypted at rest when CONFIG_ENCRYPTION_KEY is set (see secretCrypto.js).
 // Webhook URLs are bearer credentials (anyone holding one can post as this
 // integration), so they get the same at-rest treatment as passwords.
-const SECRET_FIELDS = ['actualPassword', 'emailPass', 'webhookUrl'];
+const SECRET_FIELDS = ['actualPassword', 'emailPass', 'webhookUrl', 'feedbackGithubToken'];
 
 function defaultConfig() {
   return {
@@ -25,7 +25,8 @@ function defaultConfig() {
     fireAnnualExpenses: null, fireWithdrawalRatePct: 4,
     emailSections: { balances: true, transactions: true, budgetVsActual: true },
     lastSyncAt: null, lastSyncStatus: null, lastSyncError: null,
-    webhookEnabled: false, webhookPlatform: 'discord', webhookUrl: ''
+    webhookEnabled: false, webhookPlatform: 'discord', webhookUrl: '',
+    feedbackGithubToken: '', feedbackGithubRepo: ''
   };
 }
 

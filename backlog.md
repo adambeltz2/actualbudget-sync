@@ -217,6 +217,14 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P37 — In-app Feedback button files a GitHub issue directly — DONE
+
+### [FEATURE] "Send Feedback" button on Dashboard/Data Explorer/Trends/Settings, files a GitHub issue — DONE
+User asked for a feedback function so they (or anyone with dashboard access) don't have to leave the app to report a bug or idea. Added `src/feedback.js` (`submitFeedback(config, {message, email, appVersion, commit})`) which POSTs to `https://api.github.com/repos/{repo}/issues`, using the message's first line (max 80 chars) as the issue title and the full message plus app version/commit and an optional reply-to email as the body, labeled `feedback`.
+New `feedbackGithubToken`/`feedbackGithubRepo` config fields (Settings' new "Feedback" card) — the token is treated as a secret (added to `SECRET_FIELDS` in `src/config.js`, encrypted at rest under `CONFIG_ENCRYPTION_KEY` same as the webhook URL/passwords). Needs a GitHub PAT scoped to "Issues: Read and write" on the target repo.
+`POST /api/feedback` is intentionally not admin-gated (unlike most `/api/config/*` routes) — it only ever talks to this project's own GitHub repo, never the user's Actual Budget data, so a read-only viewer session can use it too. A 💬 Feedback link in the shared footer (Dashboard, Data Explorer, Trends, Settings) opens a small modal (message + optional email) and reports back the created issue or a clear error (e.g. "not configured yet" if the token/repo fields are empty).
+Affected files: `src/feedback.js` (new), `src/config.js`, `src/routes.js`, `public/index.html`, `public/settings.html`, `public/explorer.html`, `public/trends.html`, `test/feedback.test.js` (new)
+
 ## P36 — Fix 5 dependency vulnerabilities flagged by Docker Hub's image scan — FIXED
 
 ### [DEBT] `nodemailer`, `node-cron`, `express`/`qs` carried known CVEs, some high severity — FIXED
