@@ -62,3 +62,17 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/actualbudget-sync:latest
+
+      # Docker Hub's repo overview is unrelated to GitHub and has no idea
+      # this repo exists — pushing images here was never going to update it.
+      # Syncs it explicitly on every release using the same README.md GitHub
+      # already renders (its screenshot links point at raw.githubusercontent.com
+      # absolute URLs rather than repo-relative paths specifically so they
+      # also resolve correctly from Docker Hub's page, not just GitHub's).
+      - name: Sync README to Docker Hub
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/actualbudget-sync
+          readme-filepath: ./README.md

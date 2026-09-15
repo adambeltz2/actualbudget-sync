@@ -14,11 +14,11 @@ This service is designed to run independently of your main Actual Budget server.
 
 **Dashboard** — Income vs Spend, account balances, spend by category, balance trend, budget vs actual, and financial projections, all from your own synced data.
 
-![Dashboard screenshot](docs/screenshots/dashboard.png)
+![Dashboard screenshot](https://raw.githubusercontent.com/adambeltz2/actualbudget-sync/main/docs/screenshots/dashboard.png)
 
 **Email report** — a sync summary with new transactions, budget status, and account balances, delivered straight to your inbox.
 
-![Email report screenshot](docs/screenshots/email-report.png)
+![Email report screenshot](https://raw.githubusercontent.com/adambeltz2/actualbudget-sync/main/docs/screenshots/email-report.png)
 
 *(Screenshots use sample data, not real account information.)*
 
