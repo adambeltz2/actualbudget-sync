@@ -233,6 +233,8 @@ Added a "Sync README to Docker Hub" step to `publish.yml` (`peter-evans/dockerhu
 Verified the workflow YAML parses correctly and `npm test` still passes (workflow/docs-only change, no application code touched); the actual sync can only be confirmed by a real merge to `main` and checking Docker Hub's page afterward.
 Affected files: `.github/workflows/publish.yml`, `README.md`
 
+**Follow-up (same day):** the first real run of this step failed with `403 Forbidden` on Docker Hub's PATCH request — confirmed via the workflow's job logs that the image push itself had already succeeded (both GHCR and Docker Hub), only the README-sync step failed. Root cause: Docker Hub's Hub API endpoint for updating a repository's description requires an Access Token scoped to **Read, Write, Delete** — a token scoped only to **Read & Write** (sufficient for `docker push`) gets rejected. User updated the `DOCKERHUB_TOKEN`'s scope on Docker Hub's side (outside this repo). Added `continue-on-error: true` to the sync step so a future Docker Hub API hiccup can't mark an entire release "failed" when the actual image publish — the part that matters — already succeeded by that point.
+
 ## P34 — Auto-bump version on release — DONE
 
 ### [DEBT] Dashboard footer's version number never moved, despite ~15 feature releases — FIXED
