@@ -65,8 +65,12 @@ function buildReportHtml({
   const includeTransactions = sections.transactions !== false;
   const includeBudget = sections.budgetVsActual !== false;
 
-  let subject = 'Budget Sync: ' + added.length + ' New Transactions';
-  if (bankSyncIssue) subject = '⚠️ Budget Sync Alert: Connection Issues';
+  // Never reveals sync status (e.g. a connection issue) in the subject
+  // itself — an inbox preview or lock-screen notification shouldn't show
+  // that before the email is even opened.
+  const subject = added.length > 0
+    ? `Actual Budget Sync: ${added.length} New Transaction${added.length === 1 ? '' : 's'}`
+    : 'Actual Budget Sync: Summary';
 
   const groupedTransactions = _.groupBy(added, 'account');
 

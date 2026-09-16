@@ -217,6 +217,12 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P39 — Generic, static email subject line — DONE
+
+### [FEATURE] Email subject no longer reveals sync status before the email is opened — DONE
+User didn't want the subject to always show "Budget Sync Alert: Connection Issues" on an inbox/lock-screen preview when there's a bank-sync issue. Subject is now driven only by whether there were new transactions, never by `bankSyncIssue`: `"Actual Budget Sync: N New Transaction(s)"` when `added.length > 0`, otherwise `"Actual Budget Sync: Summary"` — a connection issue (or any account sync error) only ever shows once the email is opened, in the "Account Status" section at the bottom (P38).
+Affected files: `src/emailReport.js`, `test/emailReport.test.js`
+
 ## P38 — Email/dashboard only ever showed one account's bank-sync error, even when several failed — FIXED
 
 ### [BUG] `runBankSync()`'s own thrown error only ever names the first failing account — FIXED
