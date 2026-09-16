@@ -172,6 +172,11 @@
         </div>
       </div>
 
+      <div id="accountSyncIssuesBanner" hidden style="background:color-mix(in srgb, var(--negative) 10%, var(--card-bg)); border-left:3px solid var(--negative); border-radius:8px; padding:12px 16px; margin-bottom:16px;">
+        <div style="font-size:13px; font-weight:700; color:var(--negative); margin-bottom:6px;">⚠ Account Sync Issues</div>
+        <div id="accountSyncIssuesList" style="font-size:13px; color:var(--text-secondary); display:flex; flex-direction:column; gap:3px;"></div>
+      </div>
+
       <div id="widgetVisibilityRow" hidden class="card-soft" style="display:flex; flex-wrap:wrap; gap:18px; padding:12px 16px; margin-bottom:16px; font-size:13px;">
         <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetIncomeVsSpend"> Income vs Spend</label>
         <label style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text-secondary);"><input type="checkbox" id="widgetIncomeVsSpendYTD"> Income vs Spend YTD</label>
@@ -717,6 +722,7 @@
       if (isConfigured) {
         document.getElementById('dashboardWidgetsSection').hidden = false;
         renderLastSyncPill(config.lastSyncAt, config.lastSyncStatus, config.lastSyncError);
+        renderAccountSyncIssues(config.lastSyncAccountErrors);
         loadDashboardWidgets(widgets, document.getElementById('summaryMonth').value);
       } else if (!isViewer) {
         showError('Actual Budget isn\'t configured yet. Head to Settings to get started.');
@@ -784,6 +790,25 @@
       pill.title = errorMessage || '';
       pill.innerText = `${style.icon} ${label} ${relativeTime(lastSyncAt)}`;
       pill.hidden = false;
+    }
+
+    // As of the last completed sync — persists across page reloads, unlike
+    // the last-sync pill's tooltip (which only ever showed one account's
+    // message even when several failed, since @actual-app/api's own
+    // runBankSync() throws using just the first error it collects).
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.innerText = text ?? '';
+      return div.innerHTML;
+    }
+
+    function renderAccountSyncIssues(accountErrors) {
+      const banner = document.getElementById('accountSyncIssuesBanner');
+      if (!accountErrors || accountErrors.length === 0) { banner.hidden = true; return; }
+      document.getElementById('accountSyncIssuesList').innerHTML = accountErrors
+        .map(e => `<div><strong>${escapeHtml(e.accountName)}</strong> — ${escapeHtml(e.label)}</div>`)
+        .join('');
+      banner.hidden = false;
     }
 
     // --- Dashboard Widgets ---

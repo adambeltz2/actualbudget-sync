@@ -217,6 +217,15 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P38 — Email/dashboard only ever showed one account's bank-sync error, even when several failed — FIXED
+
+### [BUG] `runBankSync()`'s own thrown error only ever names the first failing account — FIXED
+User noticed the app's log sometimes shows many accounts failing to sync, but the email only ever mentions one. Root cause: `@actual-app/api`'s public `runBankSync()` attempts every linked account internally (each in its own try/catch, collecting a full `errors` array), but its `api/bank-sync` handler throws using only `errors[0]` — every other account's failure is silently discarded before it ever reaches this app's code, regardless of how many actually failed.
+Fixed without touching non-public `@actual-app/api` internals: every account already gets a `bank_sync_status` column persisted ('ok' or a failure reason) during that same attempt, before the throw happens — added `getBankSyncStatuses()` (`src/actualService.js`, a plain `q('accounts').select(['id','name','bank_sync_status'])` query, same query-builder pattern already used elsewhere in this file) to read it back afterward. `syncJob.js` now queries this right after `runBankSync()` and builds a full `accountSyncErrors` array (one entry per affected account, with a friendly label per status code — "Needs reconnecting", "Rate limited", etc.) instead of relying on the single thrown message.
+Per the user's ask: the email's "Account Status: Action Required" block moved from right after the transactions section to the very bottom (after budget/balances), and now lists every affected account instead of one. The dashboard gets a new "⚠ Account Sync Issues" banner (persisted via a new `lastSyncAccountErrors` config field, so it survives a page reload, unlike the old single-message tooltip on the sync pill) listing the same per-account detail.
+Verified via `npm test` (164/164, including a new emailReport test asserting every account with a sync issue appears, and the reordered section test moving "Account Status" to after "Total Balance").
+Affected files: `src/actualService.js`, `src/syncJob.js`, `src/config.js`, `src/emailReport.js`, `public/index.html`, `test/emailReport.test.js`
+
 ## P37 — In-app Feedback button files a GitHub issue directly — DONE
 
 ### [FEATURE] "Send Feedback" button on Dashboard/Data Explorer/Trends/Settings, files a GitHub issue — DONE

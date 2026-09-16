@@ -128,7 +128,7 @@ describe('buildReportHtml', () => {
     assert.match(html, /New Transactions[\s\S]*?>0</);
   });
 
-  test('sections render in the requested order: transactions, account status, budget, balances', () => {
+  test('sections render in the requested order: transactions, budget, balances, then account status at the bottom', () => {
     const budgetVsActual = [
       { categoryId: 'c1', name: 'Groceries', budgeted: 800, spent: 685, remaining: 115, pctUsed: 86, overBudget: false }
     ];
@@ -137,14 +137,27 @@ describe('buildReportHtml', () => {
       totalBalance: 1208.50, budgetVsActual
     });
     const txIndex = html.indexOf('New Transactions');
-    const statusIndex = html.indexOf('Account Status');
     const budgetIndex = html.indexOf('Spend vs Budget');
     const balanceIndex = html.indexOf('Total Balance');
+    const statusIndex = html.indexOf('Account Status');
 
     assert.ok(txIndex !== -1 && statusIndex !== -1 && budgetIndex !== -1 && balanceIndex !== -1);
-    assert.ok(txIndex < statusIndex, 'transactions should come before account status');
-    assert.ok(statusIndex < budgetIndex, 'account status should come before budget');
+    assert.ok(txIndex < budgetIndex, 'transactions should come before budget');
     assert.ok(budgetIndex < balanceIndex, 'budget should come before balances');
+    assert.ok(balanceIndex < statusIndex, 'account status should come after everything else, at the bottom');
+  });
+
+  test('lists every account with a sync issue, not just one', () => {
+    const accountSyncErrors = [
+      { accountId: 'acc-1', accountName: 'Checking', status: 'reauth-required', label: 'Needs reconnecting — the bank login has expired' },
+      { accountId: 'acc-2', accountName: 'Savings', status: 'rate-limit-exceeded', label: 'Rate limited by the bank provider — will retry next sync' }
+    ];
+    const { html } = buildReportHtml({
+      accounts, accountBalances, accountMap, added: [], bankSyncIssue: '2 accounts had sync issues: Checking, Savings.',
+      accountSyncErrors
+    });
+    assert.match(html, /Checking[\s\S]*?Needs reconnecting/);
+    assert.match(html, /Savings[\s\S]*?Rate limited/);
   });
 
   test('user-provided text is HTML-escaped', () => {

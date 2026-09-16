@@ -9,9 +9,22 @@ let isSyncing = false;
 
 // Re-reads config immediately before writing so a settings change made while
 // a sync was running isn't clobbered by the stale copy syncAndReport started with.
-function recordSyncResult(status, errorMessage = null) {
+function recordSyncResult(status, errorMessage = null, accountErrors = []) {
   const latest = getConfig();
-  saveConfig({ ...latest, lastSyncAt: new Date().toISOString(), lastSyncStatus: status, lastSyncError: errorMessage });
+  saveConfig({ ...latest, lastSyncAt: new Date().toISOString(), lastSyncStatus: status, lastSyncError: errorMessage, lastSyncAccountErrors: accountErrors });
+}
+
+const BANK_SYNC_STATUS_LABELS = {
+  'reauth-required': 'Needs reconnecting — the bank login has expired',
+  'attention-required': 'Needs attention in Actual Budget',
+  'rate-limit-exceeded': 'Rate limited by the bank provider — will retry next sync',
+  'timed-out': 'Timed out while syncing',
+  'account-missing': 'Account missing from the linked institution',
+  failed: 'Failed to sync'
+};
+
+function describeBankSyncStatus(status) {
+  return BANK_SYNC_STATUS_LABELS[status] || 'Failed to sync';
 }
 
 async function syncAndReport() {
@@ -55,13 +68,22 @@ async function syncAndReport() {
     }
 
     logger.info('Triggering Bank Sync via Actual Budget API...');
-    let bankSyncIssue = null;
     try {
       await actualService.runBankSync();
     } catch (syncErr) {
       logger.warn(`Bank connection issue detected: ${syncErr.message}`);
-      bankSyncIssue = syncErr.message;
     }
+
+    // bank_sync_status is persisted per-account before runBankSync() throws
+    // (or resolves), so this reflects every account that was attempted —
+    // not just the one runBankSync()'s own error happened to name.
+    const bankSyncStatuses = await actualService.getBankSyncStatuses();
+    const accountSyncErrors = bankSyncStatuses
+      .filter(a => a.bank_sync_status && a.bank_sync_status !== 'ok')
+      .map(a => ({ accountId: a.id, accountName: a.name, status: a.bank_sync_status, label: describeBankSyncStatus(a.bank_sync_status) }));
+    const bankSyncIssue = accountSyncErrors.length === 0 ? null
+      : accountSyncErrors.length === 1 ? `${accountSyncErrors[0].accountName}: ${accountSyncErrors[0].label}`
+      : `${accountSyncErrors.length} accounts had sync issues: ${accountSyncErrors.map(e => e.accountName).join(', ')}.`;
 
     logger.info('Waiting 20 seconds for SimpleFIN data to process...');
     await new Promise(resolve => setTimeout(resolve, 20000));
@@ -85,7 +107,7 @@ async function syncAndReport() {
       const includeBudget = config.emailSections?.budgetVsActual !== false;
       const budgetVsActual = includeBudget ? await actualService.getBudgetVsActual() : [];
       const { subject, html } = buildReportHtml({
-        accounts, accountBalances, accountMap, categoryMap, added, bankSyncIssue,
+        accounts, accountBalances, accountMap, categoryMap, added, bankSyncIssue, accountSyncErrors,
         totalBalance, budgetVsActual, publicUrl: config.publicUrl,
         sections: config.emailSections, liabilityAccountIds: config.liabilityAccountIds || []
       });
@@ -104,7 +126,7 @@ async function syncAndReport() {
       }
     }
 
-    recordSyncResult(bankSyncIssue ? 'warning' : 'success', bankSyncIssue);
+    recordSyncResult(bankSyncIssue ? 'warning' : 'success', bankSyncIssue, accountSyncErrors);
     logger.info('Sync Process Finished Cleanly');
   } catch (err) {
     recordSyncResult('error', err.message);

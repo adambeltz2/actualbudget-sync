@@ -58,7 +58,7 @@ function computeBudgetTotalRow(budgetVsActual) {
 }
 
 function buildReportHtml({
-  accounts, accountBalances, accountMap, categoryMap = {}, added, bankSyncIssue,
+  accounts, accountBalances, accountMap, categoryMap = {}, added, bankSyncIssue, accountSyncErrors = [],
   totalBalance = 0, budgetVsActual = [], publicUrl = '', sections = {}, liabilityAccountIds = []
 }) {
   const includeBalances = sections.balances !== false;
@@ -106,13 +106,6 @@ function buildReportHtml({
     }
   }
 
-  // Connection issues are always surfaced regardless of section toggles — this is the one alert users shouldn't be able to silence.
-  if (bankSyncIssue) {
-    html += `<div style="background-color:#fceceb; border-left:4px solid ${CORAL}; padding:15px; border-radius:4px; margin-bottom:22px;">
-        <h4 style="margin:0 0 5px 0; color:#c0392b; font-size:14px;">⚠️ Account Status: Action Required</h4>
-        <p style="margin:0; font-size:13.5px; color:#4B5760;">${_.escape(bankSyncIssue)}</p></div>`;
-  }
-
   if (includeBudget && budgetVsActual.length > 0) {
     html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:12px;">Spend vs Budget</div>
       <div style="margin-bottom:24px;">`;
@@ -144,6 +137,21 @@ function buildReportHtml({
 
   if (publicUrl) {
     html += `<a href="${_.escape(publicUrl)}" style="display:block; text-align:center; background:${ACCENT}; color:#FFFFFF; font-weight:700; font-size:14px; padding:13px; border-radius:999px; text-decoration:none;">View Full Report</a>`;
+  }
+
+  // Connection issues are always surfaced regardless of section toggles —
+  // this is the one alert users shouldn't be able to silence. Listed at the
+  // bottom (below the sections users actually check first) and one row per
+  // affected account, rather than only ever naming whichever account
+  // runBankSync()'s own thrown error happened to be about.
+  if (accountSyncErrors.length > 0 || bankSyncIssue) {
+    const items = accountSyncErrors.length > 0
+      ? accountSyncErrors.map(e => `<strong>${_.escape(e.accountName)}</strong> — ${_.escape(e.label)}`)
+      : [_.escape(bankSyncIssue)];
+    html += `<div style="background-color:#fceceb; border-left:4px solid ${CORAL}; padding:15px; border-radius:4px; margin-top:22px;">
+        <h4 style="margin:0 0 8px 0; color:#c0392b; font-size:14px;">⚠️ Account Status: Action Required</h4>
+        ${items.map(text => `<p style="margin:0 0 4px; font-size:13.5px; color:#4B5760;">${text}</p>`).join('')}
+      </div>`;
   }
 
   html += `</div>
