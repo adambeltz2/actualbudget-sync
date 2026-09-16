@@ -13,15 +13,25 @@ const added = [
 describe('buildReportHtml', () => {
   test('subject reflects the number of new transactions', () => {
     const { subject } = buildReportHtml({ accounts, accountBalances, accountMap, added, bankSyncIssue: null });
-    assert.equal(subject, 'Budget Sync: 2 New Transactions');
+    assert.equal(subject, 'Actual Budget Sync: 2 New Transactions');
   });
 
-  test('a bank sync issue overrides the subject and always appears in the body', () => {
+  test('subject is singular for exactly one new transaction', () => {
+    const { subject } = buildReportHtml({ accounts, accountBalances, accountMap, added: [added[0]], bankSyncIssue: null });
+    assert.equal(subject, 'Actual Budget Sync: 1 New Transaction');
+  });
+
+  test('subject falls back to a generic summary with zero new transactions, even with a bank sync issue', () => {
+    const { subject } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null });
+    assert.equal(subject, 'Actual Budget Sync: Summary');
+  });
+
+  test('a bank sync issue never leaks into the subject, but always appears in the body', () => {
     const { subject, html } = buildReportHtml({
       accounts, accountBalances, accountMap, added: [], bankSyncIssue: 'Connection timed out',
       sections: { balances: false, transactions: false }
     });
-    assert.match(subject, /Connection Issues/);
+    assert.equal(subject, 'Actual Budget Sync: Summary');
     assert.match(html, /Connection timed out/);
   });
 
