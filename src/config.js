@@ -24,7 +24,7 @@ function defaultConfig() {
     emergencyFundAccountIds: [], investmentAccountIds: [], liabilityAccountIds: [], financialHealthTargetMonths: 6, financialHealthTargetSavingsPct: 20,
     fireAnnualExpenses: null, fireWithdrawalRatePct: 4,
     emailSections: { balances: true, transactions: true, budgetVsActual: true },
-    lastSyncAt: null, lastSyncStatus: null, lastSyncError: null,
+    lastSyncAt: null, lastSyncStatus: null, lastSyncError: null, lastSyncAccountErrors: [],
     webhookEnabled: false, webhookPlatform: 'discord', webhookUrl: '',
     feedbackGithubToken: '', feedbackGithubRepo: ''
   };

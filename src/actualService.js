@@ -910,6 +910,21 @@ async function runBankSync() {
   return api.runBankSync();
 }
 
+// runBankSync() attempts every linked account but its public API only ever
+// throws using the *first* account's error, discarding the rest even though
+// @actual-app/api persists a bank_sync_status ('ok' or a failure reason) for
+// every account it attempted, before that throw happens. Reading it back
+// here (rather than reimplementing bank-sync's own account/error handling
+// against @actual-app/api's non-public internals) is how syncJob surfaces
+// every failing account instead of just the one runBankSync() happened to
+// throw about.
+async function getBankSyncStatuses() {
+  const { data } = await api.runQuery(
+    q('accounts').filter({ closed: false }).select(['id', 'name', 'bank_sync_status'])
+  );
+  return data;
+}
+
 async function shutdown() {
   if (!initialized) return;
   await api.shutdown();
@@ -929,7 +944,7 @@ module.exports = {
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getFinancialHealthData, getFinancialHealthHistory,
   getMetricTransactions, getFireProgress, getWrappedData, getMonthlySavingsHistory, getTrendsData,
   testConnection,
-  runBankSync, shutdown, isReady,
+  runBankSync, getBankSyncStatuses, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
   buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, monthsInRange, classifyMetricTransactions,
   isCorruptedCacheError, purgeLocalCache
