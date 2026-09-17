@@ -48,8 +48,8 @@ function renderBudgetRow(cat) {
       </tr>
     </table>
     <div style="position:relative; height:13px; background:#F0EFEB; border-radius:4px;">
-      <div style="position:absolute; left:0; top:0; bottom:0; width:${pct}%; background:${barColor}; border-radius:4px; display:flex; align-items:center; justify-content:flex-end; padding-right:6px;">
-        <span style="font-size:9px; font-weight:700; color:white;">${cat.pctUsed}%</span>
+      <div style="position:absolute; left:0; top:0; bottom:0; width:${pct}%; background:${barColor}; border-radius:4px;">
+        <div style="font-size:9px; font-weight:700; color:white; line-height:13px; text-align:right; padding-right:6px; white-space:nowrap;">${cat.pctUsed}%</div>
       </div>
     </div>
   </div>`;
