@@ -217,6 +217,18 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P40 — Email layout: dot alignment and collapsed dollar-amount spacing — FIXED
+
+### [BUG] Flexbox (`display:flex`, `align-items`, `justify-content:space-between`) isn't reliably honored in mail clients — FIXED
+User's screenshots (viewed in the Gmail app) showed the Liability Accounts dots floating off-center against each account name, and category names running straight into their dollar amounts on the Spend vs Budget rows with no gap at all. Root cause: several mail clients — the Gmail app prominently among them — don't honor flexbox reliably, falling back to normal inline flow; a flex row's children then stack with default `vertical-align:baseline` spacing (misaligned dots) or lose their `space-between` gap entirely (collapsed label/amount).
+Rewrote the three affected rows (`renderAccountRow`, `renderBudgetRow`'s label/status line, and the per-transaction row) as `<table role="presentation">` rows with `vertical-align:middle`/`text-align:right` — the standard, broadly-supported email-safe layout technique — instead of flex divs.
+
+**Follow-up (same day):** user noticed the progress bar's percentage label was also slightly clipped — the one remaining flex usage in the file (`display:flex; align-items:center; justify-content:flex-end` centering it inside the colored bar), same root cause. Without flex support the label fell into normal flow inside the bar's fixed 13px height instead of being vertically centered, clipping it. Replaced with the classic non-flex single-line centering trick (`line-height` matching the bar's height, `text-align:right` + `padding-right` for horizontal placement) rather than another table, since it's plain text with no separate cells to align.
+
+**Follow-up (same day):** user asked to move Total Balance (and its Liability Accounts sub-list) to the very top of the email, above New Transactions — reordered `buildReportHtml`'s section blocks accordingly; Spend vs Budget and the bottom Account Status alert are unaffected.
+Verified via `npm test` (166/166, including an updated section-order test).
+Affected files: `src/emailReport.js`
+
 ## P39 — Generic, static email subject line — DONE
 
 ### [FEATURE] Email subject no longer reveals sync status before the email is opened — DONE
