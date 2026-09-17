@@ -227,7 +227,10 @@ Rewrote the three affected rows (`renderAccountRow`, `renderBudgetRow`'s label/s
 
 **Follow-up (same day):** user asked to move Total Balance (and its Liability Accounts sub-list) to the very top of the email, above New Transactions — reordered `buildReportHtml`'s section blocks accordingly; Spend vs Budget and the bottom Account Status alert are unaffected.
 Verified via `npm test` (166/166, including an updated section-order test).
-Affected files: `src/emailReport.js`
+
+**Follow-up (same day):** flagged and then fixed one more edge case in the same file — a near-zero `pctUsed` (a category that's barely been touched) left the "N%" label with almost no room inside the colored fill; `text-align:right` then pushed it out past the *left* edge of the whole bar rather than staying inside its sliver (visible in the user's own screenshot, on a couple of fully-funded categories reading "0%"). Below a 15%-width threshold the label now renders in its own table cell right after the bar (normal document flow, so it physically can't overflow) instead of inside the fill; at or above that threshold it's unchanged.
+Verified via `npm test` (168/168, including two new tests: the label moving out of the bar below the threshold, and staying inside it above the threshold).
+Affected files: `src/emailReport.js`, `test/emailReport.test.js`
 
 ## P39 — Generic, static email subject line — DONE
 
