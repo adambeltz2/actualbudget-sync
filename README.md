@@ -114,7 +114,7 @@ Use **Test Connection** in Settings' Actual Budget Configuration card to verify 
 
 **Backup & Restore** in Settings lets you download your full configuration as JSON and restore it later (e.g. after moving to a new host). The backup file contains your Actual Budget and SMTP credentials in plain text regardless of `CONFIG_ENCRYPTION_KEY` — it's meant to be stored securely by you, not left lying around.
 
-The **Data Explorer** (linked from the dashboard) lists account balances and lets you filter transactions by account, category, date range, and payee, with pagination and a CSV export of the current filter. A **Quick Range** dropdown (Last 3/6 Months, Current Year, Prior Year) fills in the From/To dates for you — editing either date by hand switches it back to a custom range.
+The **Data Explorer** (linked from the dashboard) lists account balances and lets you filter transactions by account, category, date range, and payee, with pagination and a CSV export of the current filter. A **Quick Range** dropdown (Last 3/6 Months, Current Year, Prior Year) fills in the From/To dates for you — editing either date by hand switches it back to a custom range. The category filter is grouped by Actual's own category groups (e.g. "Bills," "Fun Money") instead of one flat alphabetical list.
 
 The dashboard's period picker (top right, defaults to **This Month**) also offers **Last 3/6 Months**, **Current Year**, and **Prior Year** alongside This/Last Month — every widget it drives (Income vs Spend, Spend by Category, Balance Trend, Spend vs Budget) updates to cover the selected range.
 
@@ -166,7 +166,11 @@ Financial Health Check and Financial Independence both show a brief "rule of thu
 
 **📈 Trends** (linked from the Dashboard, Data Explorer, and Settings nav) is for proactive awareness rather than a single month's snapshot: a monthly **Net Savings** bar chart (green for months you saved, red for months you spent more than you earned) over the last 12 or 24 months, so an overspend spike — a home renovation, a big one-time purchase — is visible at a glance instead of buried in a single number. Below it, a **Year to Date vs. Last Year** comparison (income, spend, net saved) covers the same January-1-through-today window in both years, so it's apples-to-apples rather than a full year vs. a partial one.
 
-Two ranked tables show **which categories are costing more or less**: Month over Month (this month vs. last) and Year over Year (this year so far vs. the same months last year) — both capped to the categories that moved the most in actual dollars, not every category that changed at all, so a handful of one-off small changes don't bury the ones that matter.
+Two ranked tables show **which categories are costing more or less**: Month over Month (this month vs. last) and Year over Year (this year so far vs. the same months last year) — both capped to the categories that moved the most in actual dollars, not every category that changed at all, so a handful of one-off small changes don't bury the ones that matter. Each category shows its Actual category group (e.g. "Bills," "Fun Money") as a small subtitle, same as the Spend by Category legend and the Data Explorer's category filter.
+
+## Net Worth
+
+**💰 Net Worth** (linked from the Dashboard, Data Explorer, Trends, and Settings nav) is the long-horizon counterpart to Trends and Financial Health: a month-over-month chart of every account combined — checking, savings, investments, and liabilities together — over the last 12 or 24 months, reconstructed from your existing transaction history the same way Financial Health's Score Trend is (no separate tracking needed). Below the chart, three stats summarize the latest month: **Net Worth**, **Assets**, and **Liabilities**, plus the change in net worth over the selected lookback window. Which accounts count as liabilities is the same **Account Classification** tags used throughout the app — explicit tags when set, or any account currently in the red as a fallback.
 
 ## Wrapped
 

@@ -225,6 +225,22 @@ router.get('/api/data/categories', async (req, res) => {
   }
 });
 
+// Separate from /api/data/categories (which stays a flat list — several
+// server-side functions already depend on that shape) so the Data
+// Explorer's category filter can group its dropdown by Actual's own
+// category groups without changing anything that already consumes the flat one.
+router.get('/api/data/category-groups', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    res.json(await actualService.getCategoryGroups());
+  } catch (err) {
+    logger.error('Category groups request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to load category groups.' });
+  }
+});
+
 router.get('/api/data/transactions', async (req, res) => {
   const config = requireActualConfigured(req, res);
   if (!config) return;
@@ -441,6 +457,20 @@ router.get('/api/data/trends', async (req, res) => {
   } catch (err) {
     logger.error('Trends request failed: ' + err.message);
     res.status(500).json({ error: 'Failed to compute trends.' });
+  }
+});
+
+router.get('/api/data/networth', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const months = Math.min(Math.max(parseInt(req.query.months, 10) || 12, 3), 24);
+    const history = await actualService.getNetWorthHistory({ liabilityAccountIds: config.liabilityAccountIds || [], months });
+    res.json({ history });
+  } catch (err) {
+    logger.error('Net worth request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to compute net worth history.' });
   }
 });
 

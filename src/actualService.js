@@ -116,6 +116,24 @@ async function getCategories() {
   return api.getCategories();
 }
 
+async function getCategoryGroups() {
+  return api.getCategoryGroups();
+}
+
+// Pure — category groups nest their categories (per getCategoryGroups()'s
+// shape), flattened here into a plain categoryId -> groupName lookup so
+// anywhere that already keys off a flat category list (Spend by Category,
+// Trends' category tables) can attach a group label with one Map.get().
+function buildCategoryGroupMap(categoryGroups) {
+  const map = new Map();
+  for (const group of categoryGroups) {
+    for (const cat of group.categories || []) {
+      map.set(cat.id, group.name);
+    }
+  }
+  return map;
+}
+
 async function getPayees() {
   return api.getPayees();
 }
@@ -262,11 +280,17 @@ async function getSpendByCategory({ month, startDate, endDate } = {}) {
     .select(['category', { total: { $sum: '$amount' } }]);
   const { data } = await api.runQuery(query);
 
-  const categories = await getCategories();
+  const [categories, categoryGroups] = await Promise.all([getCategories(), getCategoryGroups()]);
   const categoryName = Object.fromEntries(categories.map(c => [c.id, c.name]));
+  const groupNameByCategory = buildCategoryGroupMap(categoryGroups);
 
   return data
-    .map(row => ({ categoryId: row.category, name: categoryName[row.category] || 'Unknown', total: Math.abs(row.total) / 100 }))
+    .map(row => ({
+      categoryId: row.category,
+      name: categoryName[row.category] || 'Unknown',
+      groupName: groupNameByCategory.get(row.category) || 'Other',
+      total: Math.abs(row.total) / 100
+    }))
     .sort((a, b) => b.total - a.total);
 }
 
@@ -906,6 +930,33 @@ async function getFinancialHealthHistory({ emergencyFundAccountIds = [], liabili
   });
 }
 
+// Net Worth page: getMonthlyBalanceHistory() already sums every account
+// (assets and liabilities together, since a liability's balance is
+// negative), so it's already a month-end *net worth* series with no new
+// balance reconstruction needed — this just also breaks out the liability
+// portion (same tag-or-fallback convention as getFinancialHealthHistory
+// above) so the page can plot assets vs. liabilities, not just the total.
+async function getNetWorthHistory({ liabilityAccountIds = [], months = 12 } = {}) {
+  const accounts = await getAccounts();
+  const currentBalances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
+  const debtAccountIds = liabilityAccountIds.length > 0
+    ? liabilityAccountIds
+    : currentBalances.filter(b => b.balance < 0).map(b => b.id);
+
+  const [totalHistory, debtHistory] = await Promise.all([
+    getMonthlyBalanceHistory({ months }),
+    getMonthlyBalanceHistoryForAccounts(debtAccountIds, { months })
+  ]);
+  const debtByMonth = new Map(debtHistory.map(m => [m.month, m.balance]));
+
+  return totalHistory.map(m => {
+    const netWorth = m.balance;
+    const liabilities = Math.min(debtByMonth.get(m.month) || 0, 0);
+    const assets = netWorth - liabilities;
+    return { month: m.month, netWorth, assets, liabilities };
+  });
+}
+
 async function runBankSync() {
   return api.runBankSync();
 }
@@ -938,14 +989,14 @@ function isReady() {
 
 module.exports = {
   ensureReady, refreshBudget, getAccounts, getAccountBalance,
-  getTransactionsForAccount, getCategories, getPayees, queryTransactions, queryAllTransactions,
+  getTransactionsForAccount, getCategories, getCategoryGroups, getPayees, queryTransactions, queryAllTransactions,
   countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getFinancialHealthData, getFinancialHealthHistory,
-  getMetricTransactions, getFireProgress, getWrappedData, getMonthlySavingsHistory, getTrendsData,
+  getMetricTransactions, getFireProgress, getWrappedData, getMonthlySavingsHistory, getTrendsData, getNetWorthHistory,
   testConnection,
   runBankSync, getBankSyncStatuses, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
   buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, monthsInRange, classifyMetricTransactions,
-  isCorruptedCacheError, purgeLocalCache
+  isCorruptedCacheError, purgeLocalCache, buildCategoryGroupMap
 };
