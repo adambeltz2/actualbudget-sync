@@ -108,6 +108,25 @@ describe('buildReportHtml', () => {
     assert.doesNotMatch(withoutBudget.html, /Dining Out/);
   });
 
+  test('a near-zero percentage moves the label out of the bar instead of overflowing its left edge', () => {
+    const budgetVsActual = [
+      { categoryId: 'c1', name: 'College Savings (529)', budgeted: 200, spent: 0, remaining: 200, pctUsed: 0, overBudget: false }
+    ];
+    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, budgetVsActual });
+    // The label should sit in its own table cell after the bar, not inside
+    // the (near-)zero-width colored fill where right-aligned text would
+    // overflow past the bar's left edge.
+    assert.match(html, /<td[^>]*><span[^>]*>0%<\/span><\/td>/);
+  });
+
+  test('a comfortably large percentage keeps the label inside the bar', () => {
+    const budgetVsActual = [
+      { categoryId: 'c1', name: 'Groceries', budgeted: 800, spent: 685, remaining: 115, pctUsed: 86, overBudget: false }
+    ];
+    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, budgetVsActual });
+    assert.match(html, /width:86%[\s\S]*?86%<\/div>/);
+  });
+
   test('an empty budgetVsActual list renders no budget section', () => {
     const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, budgetVsActual: [] });
     assert.doesNotMatch(html, /Spend vs Budget/);

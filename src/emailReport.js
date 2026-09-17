@@ -40,6 +40,13 @@ function renderBudgetRow(cat) {
   // A table row, not flexbox — space-between isn't reliably honored by
   // every mail client (notably the Gmail app), which collapses the name
   // and status right next to each other with no gap at all.
+  // Below a threshold, the colored fill is too narrow to hold the "N%"
+  // label — right-aligned text in a near-zero-width box overflows out
+  // past the *left* edge of the whole bar instead of staying inside its
+  // sliver. Below that width, the label moves to its own cell just after
+  // the bar (in normal document flow, so it can't overflow) instead.
+  const pctLabel = `${cat.pctUsed}%`;
+  const labelFitsInBar = pct >= 15;
   return `<div style="margin-bottom:12px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:5px;">
       <tr>
@@ -47,11 +54,16 @@ function renderBudgetRow(cat) {
         <td style="font-size:12px; text-align:right; white-space:nowrap; padding-left:10px;">${status}</td>
       </tr>
     </table>
-    <div style="position:relative; height:13px; background:#F0EFEB; border-radius:4px;">
-      <div style="position:absolute; left:0; top:0; bottom:0; width:${pct}%; background:${barColor}; border-radius:4px;">
-        <div style="font-size:9px; font-weight:700; color:white; line-height:13px; text-align:right; padding-right:6px; white-space:nowrap;">${cat.pctUsed}%</div>
-      </div>
-    </div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td style="position:relative; height:13px; background:#F0EFEB; border-radius:4px;">
+          <div style="position:absolute; left:0; top:0; bottom:0; width:${pct}%; background:${barColor}; border-radius:4px;">
+            ${labelFitsInBar ? `<div style="font-size:9px; font-weight:700; color:white; line-height:13px; text-align:right; padding-right:6px; white-space:nowrap;">${pctLabel}</div>` : ''}
+          </div>
+        </td>
+        ${labelFitsInBar ? '' : `<td style="vertical-align:middle; white-space:nowrap; padding-left:6px;"><span style="font-size:9px; font-weight:700; color:${barColor};">${pctLabel}</span></td>`}
+      </tr>
+    </table>
   </div>`;
 }
 
