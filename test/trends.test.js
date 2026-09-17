@@ -51,6 +51,20 @@ describe('buildCategoryDeltas', () => {
     assert.equal(deltas[1].name, 'Tiny');
   });
 
+  test('carries groupName through from whichever period has it', () => {
+    const current = [{ categoryId: 'g', name: 'Groceries', groupName: 'Food & Dining', total: 600 }];
+    const prior = [{ categoryId: 'g', name: 'Groceries', total: 500 }];
+    const deltas = buildCategoryDeltas(current, prior);
+    assert.equal(deltas[0].groupName, 'Food & Dining');
+  });
+
+  test('falls back to "Other" when neither period has a groupName', () => {
+    const current = [{ categoryId: 'g', name: 'Groceries', total: 600 }];
+    const prior = [{ categoryId: 'g', name: 'Groceries', total: 500 }];
+    const deltas = buildCategoryDeltas(current, prior);
+    assert.equal(deltas[0].groupName, 'Other');
+  });
+
   test('caps to maxResults even when many categories changed', () => {
     // Distinct, monotonically decreasing deltas (Category 0 has the largest)
     // so the cap's ordering is unambiguous.

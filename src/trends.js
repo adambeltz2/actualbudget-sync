@@ -7,18 +7,23 @@
 // uncapped list of every category that changed at all becomes a wall of
 // noise instead of something worth reading).
 function buildCategoryDeltas(current, prior, { maxResults = 12 } = {}) {
-  const currentByName = new Map(current.map(c => [c.name, c.total]));
-  const priorByName = new Map(prior.map(c => [c.name, c.total]));
+  const currentByName = new Map(current.map(c => [c.name, c]));
+  const priorByName = new Map(prior.map(c => [c.name, c]));
   const names = new Set([...currentByName.keys(), ...priorByName.keys()]);
 
   const deltas = [];
   for (const name of names) {
-    const currentTotal = currentByName.get(name) || 0;
-    const priorTotal = priorByName.get(name) || 0;
+    const currentRow = currentByName.get(name);
+    const priorRow = priorByName.get(name);
+    const currentTotal = currentRow?.total || 0;
+    const priorTotal = priorRow?.total || 0;
     const delta = currentTotal - priorTotal;
     if (delta === 0) continue;
     const pctChange = priorTotal > 0 ? Math.round((delta / priorTotal) * 100) : 100;
-    deltas.push({ name, current: currentTotal, prior: priorTotal, delta, pctChange });
+    // A category's group doesn't change between the two periods being
+    // compared, so either row's groupName (whichever exists) is correct.
+    const groupName = currentRow?.groupName || priorRow?.groupName || 'Other';
+    deltas.push({ name, groupName, current: currentTotal, prior: priorTotal, delta, pctChange });
   }
 
   return deltas

@@ -149,6 +149,7 @@
         <button id="themeToggleBtn" title="Toggle dark mode" class="btn btn-ghost">🌙</button>
         <a href="/explorer.html" class="btn btn-ghost">Data Explorer</a>
         <a href="/trends.html" class="btn btn-ghost">📈 Trends</a>
+        <a href="/networth.html" class="btn btn-ghost">💰 Net Worth</a>
         <a href="/wrapped.html" class="btn btn-ghost">🎉 Wrapped</a>
         <a id="settingsLink" href="/settings.html" class="btn btn-ghost">⚙ Settings</a>
         <button id="triggerSyncBtn" class="btn btn-primary">Trigger Manual Sync</button>
@@ -940,7 +941,10 @@
         document.getElementById('spendByCategoryLegend').innerHTML = top.map((c, i) => `
           <div style="display:flex; align-items:center; gap:8px;">
             <span style="width:8px;height:8px;border-radius:50%;background:${CATEGORY_PALETTE[i % CATEGORY_PALETTE.length]}; flex-shrink:0;"></span>
-            <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${c.name}</span>
+            <span style="flex:1; min-width:0; overflow:hidden;">
+              <span style="display:block; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${escapeHtml(c.name)}</span>
+              ${c.groupName ? `<span style="display:block; font-size:11px; color:var(--text-muted); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${escapeHtml(c.groupName)}</span>` : ''}
+            </span>
             <span style="color:var(--text-muted);">${total > 0 ? Math.round((c.total / total) * 100) : 0}%</span>
           </div>`).join('');
         document.getElementById('spendByCategoryWidget').hidden = false;

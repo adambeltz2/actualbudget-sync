@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, monthsInRange, classifyMetricTransactions, isCorruptedCacheError, purgeLocalCache } = require('../src/actualService');
+const { buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, monthsInRange, classifyMetricTransactions, isCorruptedCacheError, purgeLocalCache, buildCategoryGroupMap } = require('../src/actualService');
 
 describe('isCorruptedCacheError', () => {
   test('recognizes known @actual-app/api local-cache corruption signatures', () => {
@@ -36,6 +36,25 @@ describe('purgeLocalCache', () => {
 
   test('is a no-op when dataDir does not exist', () => {
     assert.doesNotThrow(() => purgeLocalCache('/nonexistent/path/for/this/test'));
+  });
+});
+
+describe('buildCategoryGroupMap', () => {
+  test('maps each nested category id to its group name', () => {
+    const groups = [
+      { id: 'g1', name: 'Bills', categories: [{ id: 'c1', name: 'Rent' }, { id: 'c2', name: 'Utilities' }] },
+      { id: 'g2', name: 'Fun Money', categories: [{ id: 'c3', name: 'Dining Out' }] }
+    ];
+    const map = buildCategoryGroupMap(groups);
+    assert.equal(map.get('c1'), 'Bills');
+    assert.equal(map.get('c2'), 'Bills');
+    assert.equal(map.get('c3'), 'Fun Money');
+    assert.equal(map.get('nonexistent'), undefined);
+  });
+
+  test('handles a group with no categories', () => {
+    const map = buildCategoryGroupMap([{ id: 'g1', name: 'Empty Group' }]);
+    assert.equal(map.size, 0);
   });
 });
 

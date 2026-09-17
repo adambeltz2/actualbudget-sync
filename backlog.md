@@ -217,6 +217,20 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P41 — Category groups as a design element + a new Net Worth page — DONE
+
+### [FEATURE] Surface Actual's category groups everywhere categories are listed — DONE
+User pointed out Actual already has category groups (e.g. "Bills," "Fun Money") and asked for them to show up as a design element rather than staying invisible. Added `getCategoryGroups()` (`src/actualService.js`, a thin `api.getCategoryGroups()` wrapper) and a pure `buildCategoryGroupMap(categoryGroups)` helper flattening a group's nested `categories` into a `categoryId -> groupName` lookup. `getSpendByCategory()` now attaches a `groupName` to each row, which flows automatically to `/api/data/summary` (dashboard) and `getTrendsData()`'s category deltas (`src/trends.js`'s `buildCategoryDeltas` carries `groupName` through from whichever period has it, defaulting to "Other").
+Applied it in the three places categories already show up: the Data Explorer's category filter is now grouped with `<optgroup>`s (new `GET /api/data/category-groups` route, kept separate from the existing flat `/api/data/categories` since several server-side functions already depend on that flat shape); the dashboard's Spend by Category legend shows each category's group as a small muted subtitle; the Trends page's Month-over-Month/Year-over-Year tables do the same.
+Verified via `npm test` (172/172, including new `buildCategoryGroupMap` and `buildCategoryDeltas` groupName tests).
+Affected files: `src/actualService.js`, `src/trends.js`, `src/routes.js`, `public/explorer.html`, `public/index.html`, `public/trends.html`, `test/actualService.test.js`, `test/trends.test.js`
+
+### [FEATURE] New Net Worth page (month-over-month, over 12-24 months) — DONE
+User liked net worth tracking as a next feature, scoped via `AskUserQuestion` to a dedicated page (not a dashboard widget or a Financial Health extension). Turned out to need almost no new reconstruction logic: `getMonthlyBalanceHistory({months})` already sums every account (assets and liabilities together, since a liability's balance is negative in Actual), so it was already a month-end *net worth* series — Financial Insights' projection chart has been plotting this exact series all along, just never as its own page. New `getNetWorthHistory({liabilityAccountIds, months})` breaks out the liability portion too (same tag-or-fallback-to-negative-balance convention as `getFinancialHealthHistory`), so the page can show assets vs. liabilities, not just the total, via `GET /api/data/networth?months=N`.
+New `public/networth.html` (💰 Net Worth, linked from Dashboard/Data Explorer/Trends/Settings nav): a line/area chart of net worth over the selected lookback (12/24 months), plus three stat cards — Net Worth Today, Assets, Liabilities — and the change in net worth over that window.
+Verified via `npm test` (172/172 — no new unit tests for `getNetWorthHistory` itself, matching the existing precedent that `getFinancialHealthHistory` and similar `@actual-app/api`-calling functions aren't directly unit tested either, only their pure helper functions are).
+Affected files: `src/actualService.js`, `src/routes.js`, `public/networth.html` (new), `public/index.html`, `public/explorer.html`, `public/trends.html`, `public/settings.html`
+
 ## P40 — Email layout: dot alignment and collapsed dollar-amount spacing — FIXED
 
 ### [BUG] Flexbox (`display:flex`, `align-items`, `justify-content:space-between`) isn't reliably honored in mail clients — FIXED
