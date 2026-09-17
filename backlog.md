@@ -217,6 +217,14 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P40 — Email layout: dot alignment and collapsed dollar-amount spacing — FIXED
+
+### [BUG] Flexbox (`display:flex`, `align-items`, `justify-content:space-between`) isn't reliably honored in mail clients — FIXED
+User's screenshots (viewed in the Gmail app) showed the Liability Accounts dots floating off-center against each account name, and category names running straight into their dollar amounts on the Spend vs Budget rows with no gap at all. Root cause: several mail clients — the Gmail app prominently among them — don't honor flexbox reliably, falling back to normal inline flow; a flex row's children then stack with default `vertical-align:baseline` spacing (misaligned dots) or lose their `space-between` gap entirely (collapsed label/amount).
+Rewrote the three affected rows (`renderAccountRow`, `renderBudgetRow`'s label/status line, and the per-transaction row) as `<table role="presentation">` rows with `vertical-align:middle`/`text-align:right` — the standard, broadly-supported email-safe layout technique — instead of flex divs. Left the one remaining flex usage (the percentage label positioned inside the colored progress bar) alone for now since it wasn't part of what was reported; same class of fix if it turns out to need it too.
+Verified via `npm test` (166/166 unaffected — existing assertions check rendered text/order via regex, not exact tag structure, so none needed updating).
+Affected files: `src/emailReport.js`
+
 ## P39 — Generic, static email subject line — DONE
 
 ### [FEATURE] Email subject no longer reveals sync status before the email is opened — DONE
