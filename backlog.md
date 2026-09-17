@@ -88,13 +88,13 @@ Affected files: `index.js`, `Dockerfile`
 The repo's only workflow (`publish.yml`) builds/publishes on push to `main`; nothing checked pull requests before merge. Added `.github/workflows/test.yml` running `npm test` on every pull request (plus pushes to `main`, matching `publish.yml`'s trigger) on Node 20 to match the Docker image.
 Affected files: `.github/workflows/test.yml`
 
-## P6 — Multiple email recipients
+## P6 — Multiple email recipients — DONE
 
 ### [FEATURE] Support sending the sync report to multiple recipients — DONE
 `emailTo` already reached nodemailer as a raw string, and nodemailer accepts a comma-separated `to` natively, but the field was `type="email"` without the `multiple` attribute — browsers reject a comma-containing value against that constraint, silently blocking the save. Added the `multiple` attribute (native per-address validation now works correctly for a list) and a `parseRecipients()` helper in `emailReport.js` that splits on comma or semicolon, trims whitespace, drops empty entries, and de-duplicates before handing the list to nodemailer. Documented the format with a `title` tooltip on the field ("Separate multiple addresses with commas, e.g. alice@example.com, bob@example.com") and matching helper text beneath it, following the same pattern as the rest of the form.
 Affected files: `src/emailReport.js`, `public/index.html`, `test/emailReport.test.js`
 
-## P7 — Mint-style redesign
+## P7 — Mint-style redesign — DONE
 
 ### [FEATURE] Mint.com-inspired dashboard and email redesign — DONE
 Full visual redesign of `index.html`, `explorer.html`, and `login.html` around a shared design system (muted off-white/dark backgrounds, teal accent, "Sora" + "Source Sans 3" fonts, card+shadow style) prototyped first as a design canvas mockup and approved before implementation. The dashboard's Net Worth widget was replaced with:
