@@ -138,7 +138,7 @@ describe('buildReportHtml', () => {
     assert.match(html, /New Transactions[\s\S]*?>0</);
   });
 
-  test('sections render in the requested order: transactions, budget, balances, then account status at the bottom', () => {
+  test('sections render in the requested order: balances, then transactions, budget, then account status at the bottom', () => {
     const budgetVsActual = [
       { categoryId: 'c1', name: 'Groceries', budgeted: 800, spent: 685, remaining: 115, pctUsed: 86, overBudget: false }
     ];
@@ -146,15 +146,15 @@ describe('buildReportHtml', () => {
       accounts, accountBalances, accountMap, added, bankSyncIssue: 'Connection timed out',
       totalBalance: 1208.50, budgetVsActual
     });
+    const balanceIndex = html.indexOf('Total Balance');
     const txIndex = html.indexOf('New Transactions');
     const budgetIndex = html.indexOf('Spend vs Budget');
-    const balanceIndex = html.indexOf('Total Balance');
     const statusIndex = html.indexOf('Account Status');
 
     assert.ok(txIndex !== -1 && statusIndex !== -1 && budgetIndex !== -1 && balanceIndex !== -1);
+    assert.ok(balanceIndex < txIndex, 'balances should come before transactions');
     assert.ok(txIndex < budgetIndex, 'transactions should come before budget');
-    assert.ok(budgetIndex < balanceIndex, 'budget should come before balances');
-    assert.ok(balanceIndex < statusIndex, 'account status should come after everything else, at the bottom');
+    assert.ok(budgetIndex < statusIndex, 'account status should come after everything else, at the bottom');
   });
 
   test('lists every account with a sync issue, not just one', () => {

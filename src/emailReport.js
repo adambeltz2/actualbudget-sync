@@ -98,8 +98,29 @@ function buildReportHtml({
 
     <div style="padding:26px;">`;
 
-  // Section order (requested): new transactions, then account status/failures,
-  // then budget graphics, then account balances.
+  // Section order (requested): total balance first, then new transactions,
+  // then budget graphics, then account status/failures at the bottom.
+  if (includeBalances) {
+    html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED};">Total Balance</div>
+      <div style="font-family:'Sora',sans-serif; font-size:32px; font-weight:800; color:#1E2A32; margin-top:4px; margin-bottom:22px;">${formatCurrency(totalBalance)}</div>
+
+      <div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:4px;">Liability Accounts</div>
+      <div style="margin-bottom:24px;">`;
+    // Prefer explicit Liability Account tags when set; fall back to "any
+    // account with a negative balance" for installs that haven't tagged yet.
+    const liabilityAccounts = liabilityAccountIds.length > 0
+      ? accounts.filter(acc => liabilityAccountIds.includes(acc.id))
+      : accounts.filter(acc => accountBalances[acc.id] < 0);
+    if (liabilityAccounts.length > 0) {
+      liabilityAccounts.forEach((acc, i) => {
+        html += renderAccountRow(acc, accountBalances[acc.id], DOT_PALETTE[i % DOT_PALETTE.length]);
+      });
+    } else {
+      html += `<p style="font-size:13px; color:${MUTED}; margin:0;">No accounts with a negative balance.</p>`;
+    }
+    html += `</div>`;
+  }
+
   if (includeTransactions) {
     html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED};">New Transactions</div>
       <div style="font-family:'Sora',sans-serif; font-size:32px; font-weight:800; color:#1E2A32; margin-top:4px; margin-bottom:${added.length > 0 ? '14px' : '22px'};">${added.length}</div>`;
@@ -136,27 +157,6 @@ function buildReportHtml({
       <div style="margin-bottom:24px;">`;
     budgetVsActual.forEach(cat => { html += renderBudgetRow(cat); });
     html += `<div style="border-top:1px solid #F0EFEB; padding-top:12px; margin-top:4px;">${renderBudgetRow(computeBudgetTotalRow(budgetVsActual))}</div>`;
-    html += `</div>`;
-  }
-
-  if (includeBalances) {
-    html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED};">Total Balance</div>
-      <div style="font-family:'Sora',sans-serif; font-size:32px; font-weight:800; color:#1E2A32; margin-top:4px; margin-bottom:22px;">${formatCurrency(totalBalance)}</div>
-
-      <div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:4px;">Liability Accounts</div>
-      <div style="margin-bottom:24px;">`;
-    // Prefer explicit Liability Account tags when set; fall back to "any
-    // account with a negative balance" for installs that haven't tagged yet.
-    const liabilityAccounts = liabilityAccountIds.length > 0
-      ? accounts.filter(acc => liabilityAccountIds.includes(acc.id))
-      : accounts.filter(acc => accountBalances[acc.id] < 0);
-    if (liabilityAccounts.length > 0) {
-      liabilityAccounts.forEach((acc, i) => {
-        html += renderAccountRow(acc, accountBalances[acc.id], DOT_PALETTE[i % DOT_PALETTE.length]);
-      });
-    } else {
-      html += `<p style="font-size:13px; color:${MUTED}; margin:0;">No accounts with a negative balance.</p>`;
-    }
     html += `</div>`;
   }
 

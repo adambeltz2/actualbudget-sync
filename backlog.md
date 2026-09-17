@@ -224,7 +224,9 @@ User's screenshots (viewed in the Gmail app) showed the Liability Accounts dots 
 Rewrote the three affected rows (`renderAccountRow`, `renderBudgetRow`'s label/status line, and the per-transaction row) as `<table role="presentation">` rows with `vertical-align:middle`/`text-align:right` — the standard, broadly-supported email-safe layout technique — instead of flex divs.
 
 **Follow-up (same day):** user noticed the progress bar's percentage label was also slightly clipped — the one remaining flex usage in the file (`display:flex; align-items:center; justify-content:flex-end` centering it inside the colored bar), same root cause. Without flex support the label fell into normal flow inside the bar's fixed 13px height instead of being vertically centered, clipping it. Replaced with the classic non-flex single-line centering trick (`line-height` matching the bar's height, `text-align:right` + `padding-right` for horizontal placement) rather than another table, since it's plain text with no separate cells to align.
-Verified via `npm test` (166/166 unaffected — existing assertions check rendered text/order via regex, not exact tag structure, so none needed updating).
+
+**Follow-up (same day):** user asked to move Total Balance (and its Liability Accounts sub-list) to the very top of the email, above New Transactions — reordered `buildReportHtml`'s section blocks accordingly; Spend vs Budget and the bottom Account Status alert are unaffected.
+Verified via `npm test` (166/166, including an updated section-order test).
 Affected files: `src/emailReport.js`
 
 ## P39 — Generic, static email subject line — DONE
