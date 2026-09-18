@@ -225,6 +225,10 @@ Shares the existing `sections.transactions` toggle rather than adding a new one,
 Verified via `npm test` (176/176, including new tests for mixed categorized/uncategorized transactions, the zero-count case, the section respecting the transactions toggle, and its position before Spend vs Budget); regenerated `docs/screenshots/email-report.png` to show it.
 Affected files: `src/emailReport.js`, `test/emailReport.test.js`, `README.md`, `docs/screenshots/email-report.png`
 
+**Follow-up (same day):** user noticed the count didn't match Actual's own UI — a sync with 0 new transactions correctly showed "0" uncategorized, but Actual's own badge showed "1" for a transaction that had synced days earlier. Root cause: the count was scoped to *this sync's* new transactions (a filter over `added`), not the budget's actual backlog of uncategorized transactions, which is what Actual's own count reflects. Added `getUncategorizedTransactions()` (`src/actualService.js`) — a dedicated, date-unscoped query matching Actual's own definition: on-budget accounts only, no category, and excluding transfers (`transfer_id: null`) and the automatic starting-balance entry (`starting_balance_flag`), neither of which are meant to carry a category. `syncJob.js` now fetches this alongside Spend vs Budget (both gated the same way, only when their respective email section is enabled) and passes it to `buildReportHtml` as a new `uncategorizedTransactions` param, replacing the old `added.filter(...)`.
+Verified via `npm test` (176/176, existing tests updated to pass an independent `uncategorizedTransactions` list rather than relying on `added`'s category field); regenerated the screenshot again to show a case where the two counts genuinely differ.
+Affected files: `src/actualService.js`, `src/syncJob.js`, `src/emailReport.js`, `test/emailReport.test.js`, `README.md`, `docs/screenshots/email-report.png`
+
 ## P41 — Category groups as a design element + a new Net Worth page — DONE
 
 ### [FEATURE] Surface Actual's category groups everywhere categories are listed — DONE

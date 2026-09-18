@@ -105,10 +105,14 @@ async function syncAndReport() {
     if (config.enableEmail && hasReportableChange) {
       logger.info('Compiling HTML email report...');
       const includeBudget = config.emailSections?.budgetVsActual !== false;
-      const budgetVsActual = includeBudget ? await actualService.getBudgetVsActual() : [];
+      const includeTransactions = config.emailSections?.transactions !== false;
+      const [budgetVsActual, uncategorizedTransactions] = await Promise.all([
+        includeBudget ? actualService.getBudgetVsActual() : Promise.resolve([]),
+        includeTransactions ? actualService.getUncategorizedTransactions() : Promise.resolve([])
+      ]);
       const { subject, html } = buildReportHtml({
         accounts, accountBalances, accountMap, categoryMap, added, bankSyncIssue, accountSyncErrors,
-        totalBalance, budgetVsActual, publicUrl: config.publicUrl,
+        totalBalance, budgetVsActual, uncategorizedTransactions, publicUrl: config.publicUrl,
         sections: config.emailSections, liabilityAccountIds: config.liabilityAccountIds || []
       });
       await sendReport(config, { subject, html });

@@ -80,43 +80,41 @@ describe('buildReportHtml', () => {
     assert.doesNotMatch(withoutTx.html, /Coffee Shop/);
   });
 
-  test('uncategorized transactions get their own section, listed the same way as new transactions', () => {
-    const mixed = [
-      { id: 't1', account: 'acc-1', date: '2026-09-01', payee_name: 'Coffee Shop', amount: -450, category: 'cat-1' },
-      { id: 't2', account: 'acc-1', date: '2026-09-02', payee_name: 'Mystery Charge', amount: -1200, category: null },
-      { id: 't3', account: 'acc-2', date: '2026-09-03', payee_name: 'Cash Withdrawal', amount: -5000 } // category field absent entirely
+  test('uncategorized transactions get their own section, independent of what synced this time', () => {
+    // Nothing new synced this time (`added` is empty) — the uncategorized
+    // count still reflects the whole budget's backlog, not just this sync.
+    const uncategorizedTransactions = [
+      { id: 't2', account: 'acc-1', date: '2026-09-02', payee_name: 'Mystery Charge', amount: -1200 },
+      { id: 't3', account: 'acc-2', date: '2026-09-03', payee_name: 'Cash Withdrawal', amount: -5000 }
     ];
-    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: mixed, bankSyncIssue: null });
+    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, uncategorizedTransactions });
     const uncatIndex = html.indexOf('Uncategorized Transactions');
     assert.ok(uncatIndex !== -1);
     assert.match(html.slice(uncatIndex), /Mystery Charge/);
     assert.match(html.slice(uncatIndex), /Cash Withdrawal/);
-    // The categorized one shouldn't appear in the uncategorized section, even though it's listed above in New Transactions.
-    assert.doesNotMatch(html.slice(uncatIndex), /Coffee Shop/);
     assert.match(html.slice(uncatIndex), />2</); // count headline
   });
 
-  test('uncategorized section shows zero and no rows when everything is categorized', () => {
-    const categorized = [{ id: 't1', account: 'acc-1', date: '2026-09-01', payee_name: 'Coffee Shop', amount: -450, category: 'cat-1' }];
-    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: categorized, bankSyncIssue: null });
+  test('uncategorized section shows zero and no rows when the list is empty', () => {
+    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, uncategorizedTransactions: [] });
     const uncatIndex = html.indexOf('Uncategorized Transactions');
     assert.ok(uncatIndex !== -1);
     assert.match(html.slice(uncatIndex, uncatIndex + 200), />0</);
   });
 
   test('uncategorized section respects the transactions toggle', () => {
-    const uncategorizedTx = [{ id: 't1', account: 'acc-1', date: '2026-09-01', payee_name: 'Mystery Charge', amount: -1200, category: null }];
+    const uncategorizedTransactions = [{ id: 't1', account: 'acc-1', date: '2026-09-01', payee_name: 'Mystery Charge', amount: -1200 }];
     const { html } = buildReportHtml({
-      accounts, accountBalances, accountMap, added: uncategorizedTx, bankSyncIssue: null,
+      accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, uncategorizedTransactions,
       sections: { transactions: false }
     });
     assert.doesNotMatch(html, /Uncategorized Transactions/);
   });
 
   test('uncategorized section renders before Spend vs Budget', () => {
-    const uncategorizedTx = [{ id: 't1', account: 'acc-1', date: '2026-09-01', payee_name: 'Mystery Charge', amount: -1200, category: null }];
+    const uncategorizedTransactions = [{ id: 't1', account: 'acc-1', date: '2026-09-01', payee_name: 'Mystery Charge', amount: -1200 }];
     const budgetVsActual = [{ categoryId: 'c1', name: 'Groceries', budgeted: 800, spent: 685, remaining: 115, pctUsed: 86, overBudget: false }];
-    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: uncategorizedTx, bankSyncIssue: null, budgetVsActual });
+    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, uncategorizedTransactions, budgetVsActual });
     const uncatIndex = html.indexOf('Uncategorized Transactions');
     const budgetIndex = html.indexOf('Spend vs Budget');
     assert.ok(uncatIndex !== -1 && budgetIndex !== -1 && uncatIndex < budgetIndex);
