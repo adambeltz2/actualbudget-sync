@@ -104,7 +104,7 @@ docker compose up -d
 * The version shown in the dashboard footer bumps its patch number automatically on every release (CI commits the bump back to `main` before building the image) — no need to remember to update it by hand.
 * If the local sync cache under `./data` ever goes stale or corrupted relative to the server (rare — shows up in logs as `invalid fileId`, a JSON parse error, or similar), the app clears its own cache and retries automatically on the next sync or dashboard load. Your `config.json` in the same folder is never touched by this.
 * If one or more linked bank accounts fail to sync, every affected account (not just one) shows up in both the sync email's "Account Status" section (at the bottom of the email) and a dashboard "⚠ Account Sync Issues" banner, which persists across page reloads until the next successful sync.
-* The email's "Uncategorized Transactions" section (right below New Transactions) is a filtered view of that same sync's new transactions, not a separate query — it's whichever of them came in without a category assigned yet, so they're easy to spot and fix in Actual before they skew Spend by Category or Spend vs Budget.
+* The email's "Uncategorized Transactions" section (right below New Transactions) counts and lists every uncategorized transaction across your whole budget — matching the count Actual's own UI shows — not just whatever came in during that sync, so they're easy to spot and fix before they skew Spend by Category or Spend vs Budget. Transfers, the automatic starting-balance entry, and off-budget accounts are excluded, since none of those are meant to carry a category.
 
 ## Data Explorer & Dashboard
 

@@ -294,6 +294,30 @@ async function getSpendByCategory({ month, startDate, endDate } = {}) {
     .sort((a, b) => b.total - a.total);
 }
 
+// Matches Actual's own "N uncategorized transactions" definition — every
+// transaction in its own list is unscoped by date, so this is too, rather
+// than only ever looking at whatever came in during the current sync.
+// Transfers and the automatic starting-balance entry never carry a
+// category by design (neither is something to "categorize"), and
+// off-budget accounts aren't tracked against a budget at all, so all three
+// are excluded rather than counted as needing attention.
+async function getUncategorizedTransactions() {
+  const accounts = await getAccounts();
+  const onBudgetAccountIds = accounts.filter(a => !a.offbudget).map(a => a.id);
+
+  const query = q('transactions').options({ splits: 'none' })
+    .filter({ account: { $oneof: onBudgetAccountIds } })
+    .filter({ category: null })
+    .filter({ transfer_id: null })
+    .filter({ starting_balance_flag: { $ne: true } })
+    .select('*')
+    .orderBy(SORT_ORDERS.date_desc);
+  const { data } = await api.runQuery(query);
+
+  const payees = await getPayees();
+  return resolvePayeeNames(data, payees);
+}
+
 // Actual only exposes the current balance, not a history, so the trend is
 // reconstructed by walking backward from the current net worth. When the
 // requested month isn't the current one, the anchor is rolled back further
@@ -990,7 +1014,7 @@ function isReady() {
 module.exports = {
   ensureReady, refreshBudget, getAccounts, getAccountBalance,
   getTransactionsForAccount, getCategories, getCategoryGroups, getPayees, queryTransactions, queryAllTransactions,
-  countTransactions, getNetWorth, getSpendByCategory, getBalanceTrend,
+  countTransactions, getNetWorth, getSpendByCategory, getUncategorizedTransactions, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getFinancialHealthData, getFinancialHealthHistory,
   getMetricTransactions, getFireProgress, getWrappedData, getMonthlySavingsHistory, getTrendsData, getNetWorthHistory,

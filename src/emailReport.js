@@ -107,7 +107,7 @@ function computeBudgetTotalRow(budgetVsActual) {
 
 function buildReportHtml({
   accounts, accountBalances, accountMap, categoryMap = {}, added, bankSyncIssue, accountSyncErrors = [],
-  totalBalance = 0, budgetVsActual = [], publicUrl = '', sections = {}, liabilityAccountIds = []
+  totalBalance = 0, budgetVsActual = [], uncategorizedTransactions = [], publicUrl = '', sections = {}, liabilityAccountIds = []
 }) {
   const includeBalances = sections.balances !== false;
   const includeTransactions = sections.transactions !== false;
@@ -170,11 +170,11 @@ function buildReportHtml({
       html += `</div>`;
     }
 
-    // A subset of the transactions above, not a separate query — anything
-    // that came through this sync without a category assigned yet, so it's
-    // easy to spot and fix in Actual before it skews Spend by Category or
-    // Spend vs Budget below.
-    const uncategorized = added.filter(t => !t.category);
+    // Every uncategorized transaction across the whole budget (matching
+    // Actual's own "N uncategorized transactions" count), not scoped to
+    // just this sync's new transactions — so it's easy to spot and fix in
+    // Actual before it skews Spend by Category or Spend vs Budget below.
+    const uncategorized = uncategorizedTransactions;
     const groupedUncategorized = _.groupBy(uncategorized, 'account');
     html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED};">Uncategorized Transactions</div>
       <div style="font-family:'Sora',sans-serif; font-size:32px; font-weight:800; color:#1E2A32; margin-top:4px; margin-bottom:${uncategorized.length > 0 ? '14px' : '22px'};">${uncategorized.length}</div>`;
