@@ -17,7 +17,7 @@ This service is designed to run independently of your main Actual Budget server.
 
 ![Dashboard screenshot](https://raw.githubusercontent.com/adambeltz2/actualbudget-sync/main/docs/screenshots/dashboard.png)
 
-**Email report** — a sync summary with new transactions, budget status, and account balances, delivered straight to your inbox. The subject line is always generic ("Actual Budget Sync: N New Transactions" or "Actual Budget Sync: Summary") so an inbox preview or lock-screen notification never reveals a connection issue before the email is opened.
+**Email report** — a sync summary with new transactions, uncategorized transactions, budget status, and account balances, delivered straight to your inbox. The subject line is always generic ("Actual Budget Sync: N New Transactions" or "Actual Budget Sync: Summary") so an inbox preview or lock-screen notification never reveals a connection issue before the email is opened.
 
 ![Email report screenshot](https://raw.githubusercontent.com/adambeltz2/actualbudget-sync/main/docs/screenshots/email-report.png)
 
@@ -104,6 +104,7 @@ docker compose up -d
 * The version shown in the dashboard footer bumps its patch number automatically on every release (CI commits the bump back to `main` before building the image) — no need to remember to update it by hand.
 * If the local sync cache under `./data` ever goes stale or corrupted relative to the server (rare — shows up in logs as `invalid fileId`, a JSON parse error, or similar), the app clears its own cache and retries automatically on the next sync or dashboard load. Your `config.json` in the same folder is never touched by this.
 * If one or more linked bank accounts fail to sync, every affected account (not just one) shows up in both the sync email's "Account Status" section (at the bottom of the email) and a dashboard "⚠ Account Sync Issues" banner, which persists across page reloads until the next successful sync.
+* The email's "Uncategorized Transactions" section (right below New Transactions) is a filtered view of that same sync's new transactions, not a separate query — it's whichever of them came in without a category assigned yet, so they're easy to spot and fix in Actual before they skew Spend by Category or Spend vs Budget.
 
 ## Data Explorer & Dashboard
 

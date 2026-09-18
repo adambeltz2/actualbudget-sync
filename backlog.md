@@ -217,6 +217,14 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P42 — Uncategorized Transactions section in the sync email — DONE
+
+### [FEATURE] Count + list uncategorized transactions, right under New Transactions — DONE
+User asked for the total number of uncategorized transactions in the sync email, listed the same way as New Transactions, positioned under that section and before Spend vs Budget. Reused the data already fetched for New Transactions rather than a new query — `added.filter(t => !t.category)` — since it's a subset of the same list, not a separate concept. Factored the per-transaction row markup both sections use into a shared `renderTransactionRow(t, {showCategory, categoryMap})` (`src/emailReport.js`), grouped by account the same way; the uncategorized rows skip the category line (it would just say "Uncategorized" on every row, redundant with the section's own heading) via `showCategory: false`.
+Shares the existing `sections.transactions` toggle rather than adding a new one, since it's presented as directly tied to New Transactions.
+Verified via `npm test` (176/176, including new tests for mixed categorized/uncategorized transactions, the zero-count case, the section respecting the transactions toggle, and its position before Spend vs Budget); regenerated `docs/screenshots/email-report.png` to show it.
+Affected files: `src/emailReport.js`, `test/emailReport.test.js`, `README.md`, `docs/screenshots/email-report.png`
+
 ## P41 — Category groups as a design element + a new Net Worth page — DONE
 
 ### [FEATURE] Surface Actual's category groups everywhere categories are listed — DONE

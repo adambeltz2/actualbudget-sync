@@ -67,6 +67,28 @@ function renderBudgetRow(cat) {
   </div>`;
 }
 
+// Table row, not flexbox — space-between isn't reliably honored by every
+// mail client, which otherwise collapses the payee name and amount right
+// next to each other with no gap. Shared by New Transactions (grouped by
+// account, with each row's category shown) and Uncategorized Transactions
+// (grouped by account too, but the category line would just say
+// "Uncategorized" on every row — redundant with the section's own heading).
+function renderTransactionRow(t, { showCategory = true, categoryMap = {} } = {}) {
+  const amt = t.amount / 100;
+  const amtColor = amt < 0 ? CORAL : '#1C8C74';
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid #F0EFEB;">
+    <tr>
+      <td style="padding:9px 0; vertical-align:top;">
+        <div style="font-weight:600; font-size:14px; color:#33404A;">${_.escape(t.payee_name || 'Unknown')}</div>
+        ${showCategory ? `<div style="font-size:12px; color:${MUTED}; margin-top:2px;">${_.escape(categoryMap[t.category] || 'Uncategorized')}</div>` : ''}
+      </td>
+      <td style="padding:9px 0; text-align:right; vertical-align:top; white-space:nowrap; padding-left:10px;">
+        <span style="font-weight:700; font-size:14px; color:${amtColor};">${formatCurrency(amt)}</span>
+      </td>
+    </tr>
+  </table>`;
+}
+
 // A synthetic "Total" row in the same shape summarizeBudgetCategory()
 // produces, so renderBudgetRow() can draw it identically to a real category.
 function computeBudgetTotalRow(budgetVsActual) {
@@ -142,22 +164,27 @@ function buildReportHtml({
       for (const accountId in groupedTransactions) {
         html += `<p style="font-size:12.5px; color:${MUTED}; margin:14px 0 4px;">${_.escape(accountMap[accountId] || 'Unknown')}</p>`;
         groupedTransactions[accountId].forEach(t => {
-          const amt = t.amount / 100;
-          const amtColor = amt < 0 ? CORAL : '#1C8C74';
-          // Table row, not flexbox — space-between isn't reliably honored
-          // by every mail client, which otherwise collapses the payee name
-          // and amount right next to each other with no gap.
-          html += `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid #F0EFEB;">
-            <tr>
-              <td style="padding:9px 0; vertical-align:top;">
-                <div style="font-weight:600; font-size:14px; color:#33404A;">${_.escape(t.payee_name || 'Unknown')}</div>
-                <div style="font-size:12px; color:${MUTED}; margin-top:2px;">${_.escape(categoryMap[t.category] || 'Uncategorized')}</div>
-              </td>
-              <td style="padding:9px 0; text-align:right; vertical-align:top; white-space:nowrap; padding-left:10px;">
-                <span style="font-weight:700; font-size:14px; color:${amtColor};">${formatCurrency(amt)}</span>
-              </td>
-            </tr>
-          </table>`;
+          html += renderTransactionRow(t, { showCategory: true, categoryMap });
+        });
+      }
+      html += `</div>`;
+    }
+
+    // A subset of the transactions above, not a separate query — anything
+    // that came through this sync without a category assigned yet, so it's
+    // easy to spot and fix in Actual before it skews Spend by Category or
+    // Spend vs Budget below.
+    const uncategorized = added.filter(t => !t.category);
+    const groupedUncategorized = _.groupBy(uncategorized, 'account');
+    html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED};">Uncategorized Transactions</div>
+      <div style="font-family:'Sora',sans-serif; font-size:32px; font-weight:800; color:#1E2A32; margin-top:4px; margin-bottom:${uncategorized.length > 0 ? '14px' : '22px'};">${uncategorized.length}</div>`;
+
+    if (uncategorized.length > 0) {
+      html += `<div style="margin-bottom:24px;">`;
+      for (const accountId in groupedUncategorized) {
+        html += `<p style="font-size:12.5px; color:${MUTED}; margin:14px 0 4px;">${_.escape(accountMap[accountId] || 'Unknown')}</p>`;
+        groupedUncategorized[accountId].forEach(t => {
+          html += renderTransactionRow(t, { showCategory: false });
         });
       }
       html += `</div>`;
