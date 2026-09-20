@@ -23,6 +23,8 @@ function defaultConfig() {
     insightsLookback: '6',
     emergencyFundAccountIds: [], investmentAccountIds: [], liabilityAccountIds: [], financialHealthTargetMonths: 6, financialHealthTargetSavingsPct: 20,
     fireAnnualExpenses: null, fireWithdrawalRatePct: 4,
+    fireBirthdate: '', ssClaimingChoice: '', ssAge62MonthlyBenefit: null,
+    ssFraAgeYears: 67, ssFraAgeMonths: 0, ssFraMonthlyBenefit: null, ssAge70MonthlyBenefit: null,
     emailSections: { balances: true, transactions: true, budgetVsActual: true },
     lastSyncAt: null, lastSyncStatus: null, lastSyncError: null, lastSyncAccountErrors: [],
     webhookEnabled: false, webhookPlatform: 'discord', webhookUrl: '',

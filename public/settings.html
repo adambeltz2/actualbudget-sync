@@ -167,6 +167,53 @@
         </div>
       </div>
 
+      <!-- Social Security -->
+      <div class="card" style="padding:22px;">
+        <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Social Security (Optional)</div>
+        <p class="field-hint" style="margin-top:0; margin-bottom:14px;">Your SSA statement (ssa.gov/myaccount) gives three claiming ages, each with its own monthly benefit — enter as many as you have and pick which one to actually plan around below. Leave everything blank to ignore Social Security entirely (the FIRE Number then works exactly as before). All optional and usually a one-time setup.</p>
+        <div class="grid-2">
+          <div>
+            <label class="field-label">Your Birthdate</label>
+            <input type="date" id="fireBirthdate">
+          </div>
+          <div>
+            <label class="field-label">Plan around</label>
+            <select id="ssClaimingChoice" style="width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-family:inherit; font-size:14px;">
+              <option value="">Don't factor in Social Security</option>
+              <option value="age62">Age 62 (earliest)</option>
+              <option value="fra">Full Retirement Age</option>
+              <option value="age70">Age 70 (latest, largest benefit)</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid-2" style="margin-top:16px;">
+          <div>
+            <label class="field-label">Age 62 — Monthly Benefit</label>
+            <input type="number" id="ssAge62MonthlyBenefit" placeholder="e.g. 1500">
+          </div>
+          <div></div>
+          <div style="display:flex; gap:8px; align-items:flex-end;">
+            <div style="flex:1;">
+              <label class="field-label">Full Retirement Age — Years</label>
+              <input type="number" id="ssFraAgeYears" min="0" placeholder="67">
+            </div>
+            <div style="flex:1;">
+              <label class="field-label">+ Months</label>
+              <input type="number" id="ssFraAgeMonths" min="0" max="11" placeholder="0">
+            </div>
+          </div>
+          <div>
+            <label class="field-label">Full Retirement Age — Monthly Benefit</label>
+            <input type="number" id="ssFraMonthlyBenefit" placeholder="e.g. 2100">
+          </div>
+          <div>
+            <label class="field-label">Age 70 — Monthly Benefit</label>
+            <input type="number" id="ssAge70MonthlyBenefit" placeholder="e.g. 2800">
+          </div>
+        </div>
+        <p class="field-hint" style="margin-top:14px; margin-bottom:0;">Before the age you pick, the FIRE Number still assumes you're covering every expense from savings alone (Social Security hasn't started yet) — it only gets smaller once benefits would actually begin.</p>
+      </div>
+
       <!-- Email Section -->
       <div class="card" style="padding:22px;">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:10px;">
@@ -506,6 +553,14 @@
       investmentAccountIds = config.investmentAccountIds || [];
       liabilityAccountIds = config.liabilityAccountIds || [];
 
+      document.getElementById('fireBirthdate').value = config.fireBirthdate || '';
+      document.getElementById('ssClaimingChoice').value = config.ssClaimingChoice || '';
+      document.getElementById('ssAge62MonthlyBenefit').value = config.ssAge62MonthlyBenefit ?? '';
+      document.getElementById('ssFraAgeYears').value = config.ssFraAgeYears ?? 67;
+      document.getElementById('ssFraAgeMonths').value = config.ssFraAgeMonths ?? 0;
+      document.getElementById('ssFraMonthlyBenefit').value = config.ssFraMonthlyBenefit ?? '';
+      document.getElementById('ssAge70MonthlyBenefit').value = config.ssAge70MonthlyBenefit ?? '';
+
       const sections = config.emailSections || {};
       document.getElementById('emailSectionBalances').checked = sections.balances !== false;
       document.getElementById('emailSectionTransactions').checked = sections.transactions !== false;
@@ -745,6 +800,13 @@
         emergencyFundAccountIds: emergencyFundAccountIds,
         investmentAccountIds: investmentAccountIds,
         liabilityAccountIds: liabilityAccountIds,
+        fireBirthdate: document.getElementById('fireBirthdate').value,
+        ssClaimingChoice: document.getElementById('ssClaimingChoice').value,
+        ssAge62MonthlyBenefit: parseFloat(document.getElementById('ssAge62MonthlyBenefit').value) || null,
+        ssFraAgeYears: parseInt(document.getElementById('ssFraAgeYears').value, 10) || null,
+        ssFraAgeMonths: document.getElementById('ssFraAgeMonths').value === '' ? null : parseInt(document.getElementById('ssFraAgeMonths').value, 10),
+        ssFraMonthlyBenefit: parseFloat(document.getElementById('ssFraMonthlyBenefit').value) || null,
+        ssAge70MonthlyBenefit: parseFloat(document.getElementById('ssAge70MonthlyBenefit').value) || null,
         emailSections: {
           balances: document.getElementById('emailSectionBalances').checked,
           transactions: document.getElementById('emailSectionTransactions').checked,

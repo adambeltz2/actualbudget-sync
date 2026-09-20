@@ -402,7 +402,7 @@
       <!-- Financial Independence (FIRE) -->
       <div id="fireWidget" hidden class="card" style="padding:26px 32px; margin-top:20px;">
         <div class="label-caps" style="margin-bottom:16px; display:flex; align-items:center; gap:6px;">Financial Independence
-          <span class="info-tip" tabindex="0">i<span class="info-tip-content">FIRE Number = Annual Expenses × (100 ÷ withdrawal rate) — the classic "4% rule" is a 25x multiple. % Reached = your net worth ÷ that number. Years to FI projects your current savings pace compounding at your Financial Insights return rate until net worth reaches the FIRE Number. There's no way to derive a personal FIRE target from your data — set your own Annual Expenses below, or leave it blank to use your trailing 12-month average spend, annualized.</span></span>
+          <span class="info-tip" tabindex="0">i<span class="info-tip-content">FIRE Number = Annual Expenses × (100 ÷ withdrawal rate) — the classic "4% rule" is a 25x multiple. % Reached = your net worth ÷ that number. Years to FI projects your current savings pace compounding at your Financial Insights return rate until net worth reaches the FIRE Number. There's no way to derive a personal FIRE target from your data — set your own Annual Expenses below, or leave it blank to use your trailing 12-month average spend, annualized. If you've set a birthdate and Social Security benefit in Settings, the FIRE Number is reduced by your monthly benefit once you'd reach your chosen claiming age — before that age, it still assumes full expenses covered from savings alone.</span></span>
         </div>
 
         <div style="display:flex; align-items:center; gap:28px; flex-wrap:wrap; margin-bottom:22px; padding-bottom:22px; border-bottom:1px solid var(--border);">
@@ -445,8 +445,9 @@
             </div>
           </div>
         </div>
+        <p id="fireSsNote" hidden class="field-hint" style="margin-top:8px; margin-bottom:4px; color:var(--accent);"></p>
         <p class="field-hint" style="margin-top:8px; margin-bottom:4px;">Rule of thumb: 4% (25x expenses) is the standard baseline; a lower rate like 3–3.5% adds a safety margin for a longer retirement.</p>
-        <p class="field-hint" style="margin-top:0; margin-bottom:0;">This is a simple math projection from your own historical data, not financial advice.</p>
+        <p class="field-hint" style="margin-top:0; margin-bottom:0;">This is a simple math projection from your own historical data, not financial advice. Set your birthdate and Social Security benefit estimates in <a href="/settings.html">Settings</a> to factor Social Security into the FIRE Number.</p>
       </div>
         </div>
       </details>
@@ -1283,6 +1284,19 @@
       document.getElementById('fireExpensesValue').innerText = formatCurrency(data.annualExpenses)
         + (data.usesCustomExpenses ? '' : '/yr (auto)');
       document.getElementById('fireExpensesOverride').placeholder = `auto: ${formatCurrency(data.autoAnnualExpenses)}`;
+
+      const ssNote = document.getElementById('fireSsNote');
+      if (data.socialSecurity) {
+        const years = Math.floor(data.socialSecurity.yearsUntilEligible);
+        const months = Math.round((data.socialSecurity.yearsUntilEligible - years) * 12);
+        const eligibleText = data.socialSecurity.yearsUntilEligible <= 0
+          ? 'already eligible'
+          : `in ${years} yr${years === 1 ? '' : 's'}${months > 0 ? ` ${months} mo` : ''}`;
+        ssNote.innerText = `Includes Social Security: ${formatCurrency(data.socialSecurity.annualBenefit / 12)}/mo, ${eligibleText}. Until then, the FIRE Number still assumes full expenses from savings.`;
+        ssNote.hidden = false;
+      } else {
+        ssNote.hidden = true;
+      }
     }
 
     async function loadFireProgress() {
