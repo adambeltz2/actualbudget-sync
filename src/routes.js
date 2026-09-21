@@ -186,6 +186,14 @@ function parseSort(value) {
   return VALID_SORTS.has(value) ? value : 'date_desc';
 }
 
+// Repeated query keys (?accountId=a&accountId=b) parse as an array already;
+// a single occurrence parses as a plain string — normalize both to an array,
+// or undefined when absent, for buildTransactionFilters' $oneof filter.
+function parseIdList(value) {
+  if (value === undefined) return undefined;
+  return [].concat(value);
+}
+
 // --- Data explorer (read-only) ---
 function requireActualConfigured(req, res) {
   const config = getConfig();
@@ -250,8 +258,8 @@ router.get('/api/data/transactions', async (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
     const filters = {
-      accountId: req.query.accountId || undefined,
-      categoryId: req.query.categoryId || undefined,
+      accountId: parseIdList(req.query.accountId),
+      categoryId: parseIdList(req.query.categoryId),
       startDate: req.query.startDate || undefined,
       endDate: req.query.endDate || undefined,
       search: req.query.search || undefined
@@ -487,8 +495,8 @@ router.get('/api/data/transactions/export', async (req, res) => {
     await actualService.ensureReady(config);
 
     const filters = {
-      accountId: req.query.accountId || undefined,
-      categoryId: req.query.categoryId || undefined,
+      accountId: parseIdList(req.query.accountId),
+      categoryId: parseIdList(req.query.categoryId),
       startDate: req.query.startDate || undefined,
       endDate: req.query.endDate || undefined,
       search: req.query.search || undefined

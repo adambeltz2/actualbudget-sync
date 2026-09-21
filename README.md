@@ -59,6 +59,8 @@ You don't need to clone this repo — the image is prebuilt and published to bot
 ```
    Everything else works identically — same tags, same behavior, same volumes.
 
+   Every push to `main` also publishes a version-specific tag (e.g. `:1.0.19`) alongside `:latest`, on both registries, with a matching `git tag` in this repo — so you can pin a specific version in `docker-compose.yaml` instead of always tracking `:latest`, and roll back by changing the tag if a release causes problems.
+
 3. **Open the dashboard:** [http://localhost:3000](http://localhost:3000)
 
    You'll land on a login screen first. Since no dashboard password exists yet, whatever you enter there becomes the password — pick something you'll remember. Every visit after that requires it, and sessions last 7 days.
@@ -117,7 +119,7 @@ Use **Test Connection** in Settings' Actual Budget Configuration card to verify 
 
 **Backup & Restore** in Settings lets you download your full configuration as JSON and restore it later (e.g. after moving to a new host). The backup file contains your Actual Budget and SMTP credentials in plain text regardless of `CONFIG_ENCRYPTION_KEY` — it's meant to be stored securely by you, not left lying around.
 
-The **Data Explorer** (linked from the dashboard) lists account balances and lets you filter transactions by account, category, date range, and payee, with pagination and a CSV export of the current filter. A **Quick Range** dropdown (Last 3/6 Months, Current Year, Prior Year) fills in the From/To dates for you — editing either date by hand switches it back to a custom range. The category filter is grouped by Actual's own category groups (e.g. "Bills," "Fun Money") instead of one flat alphabetical list.
+The **Data Explorer** (linked from the dashboard) lists account balances and lets you filter transactions by account, category, date range, and payee, with pagination and a CSV export of the current filter. Account and category are multi-select — pick as many of each as you want (e.g. two credit cards, or three spending categories at once) and leave either one empty to mean "all." A **Quick Range** dropdown (Last 3/6 Months, Current Year, Prior Year) fills in the From/To dates for you — editing either date by hand switches it back to a custom range. The category filter is grouped by Actual's own category groups (e.g. "Bills," "Fun Money") instead of one flat alphabetical list.
 
 The dashboard's period picker (top right, defaults to **This Month**) also offers **Last 3/6 Months**, **Current Year**, and **Prior Year** alongside This/Last Month — every widget it drives (Income vs Spend, Spend by Category, Balance Trend, Spend vs Budget) updates to cover the selected range.
 

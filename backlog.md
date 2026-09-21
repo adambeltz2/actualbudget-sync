@@ -217,6 +217,22 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P47 — Data Explorer: multi-select account/category filters — DONE
+
+### [FEATURE] Account and category filters accept multiple selections — DONE
+User asked for the Data Explorer's Account and Category filters to be multi-selects rather than single-choice dropdowns, so e.g. two credit cards or several spending categories can be filtered together in one view.
+`src/actualService.js`'s `buildTransactionFilters` now accepts `accountId`/`categoryId` as either a single id or an array (`[].concat(...)` normalizes both), building an ActualQL `$oneof` filter instead of a bare equality one — a single id still produces a one-element `$oneof`, functionally identical to the old equality filter. `src/routes.js` gained `parseIdList()`, normalizing repeated query keys (`?accountId=a&accountId=b`, which Express's `qs` parser already turns into an array) or a single occurrence into a consistent array-or-undefined shape for both `/api/data/transactions` and `/api/data/transactions/export`.
+`public/explorer.html`'s Account/Category `<select>`s are now `multiple`, with the old "All accounts"/"All categories" placeholder options removed (an empty selection means "all," noted via a small "(none = all)" label hint) — `currentFilters()` reads `selectedOptions` and appends each as a repeated query param, and Clear now deselects every option rather than resetting to a placeholder value.
+Verified via updated/new unit tests for `buildTransactionFilters` (single id, multiple ids, empty array) and a Playwright smoke pass confirming the selects render as true multi-selects, multi-selecting two accounts produces `?accountId=a1&accountId=a2` on the request, and no console errors.
+Affected files: `src/actualService.js`, `src/routes.js`, `public/explorer.html`, `test/actualService.test.js`
+
+## P46 — Version-specific Docker tags + git tags on release — DONE
+
+### [BUG] Every release only ever published `:latest`, with no way to pin or roll back — FIXED
+User asked "are we doing release tags incorrectly when we publish this?" after noticing every image on both registries always resolves to the same `:latest` tag. Root cause: `publish.yml` bumps `package.json`'s patch version on every push to `main`, but the `docker/build-push-action@v5` step's `tags:` list only ever contained `:latest` on both GHCR and Docker Hub — the version bump never actually reached the published image, and no corresponding `git tag` existed either, so there was no way to pin a specific version in `docker-compose.yaml` or roll back to a prior release.
+Captured the bumped version as a step output (`id: bump_version`, `echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"`), added `ghcr.io/${{ github.repository }}:${{ steps.bump_version.outputs.version }}` and the Docker Hub equivalent alongside the existing `:latest` tags, and pushed a matching `git tag "v$NEW_VERSION"` right after the version-bump commit lands. `:latest` is left in place unchanged for anyone not pinning a version.
+Affected files: `.github/workflows/publish.yml`, `README.md`
+
 ## P45 — Multi-arch (amd64+arm64) Docker image — DONE
 
 ### [BUG] Docker Hub image was amd64-only, failing to pull on Apple Silicon — FIXED

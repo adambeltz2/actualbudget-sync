@@ -101,12 +101,12 @@
       <div class="card" style="padding:20px; margin-bottom:24px;">
         <div class="filters-grid">
           <div>
-            <label class="field-label">Account</label>
-            <select id="filterAccount"><option value="">All accounts</option></select>
+            <label class="field-label">Account <span style="font-weight:400; color:var(--text-muted);">(none = all)</span></label>
+            <select id="filterAccount" multiple size="4"></select>
           </div>
           <div>
-            <label class="field-label">Category</label>
-            <select id="filterCategory"><option value="">All categories</option></select>
+            <label class="field-label">Category <span style="font-weight:400; color:var(--text-muted);">(none = all)</span></label>
+            <select id="filterCategory" multiple size="4"></select>
           </div>
           <div>
             <label class="field-label">Quick Range</label>
@@ -280,8 +280,7 @@
         </div>`).join('');
 
       const select = document.getElementById('filterAccount');
-      select.innerHTML = '<option value="">All accounts</option>' +
-        accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+      select.innerHTML = accounts.map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
       return true;
     }
 
@@ -299,8 +298,7 @@
       // Grouped via Actual's own category groups (e.g. "Bills", "Fun Money")
       // instead of one flat alphabetical list, easier to navigate once a
       // budget has more than a handful of categories.
-      select.innerHTML = '<option value="">All categories</option>' +
-        categoryGroups.map(g => `<optgroup label="${escapeHtml(g.name)}">${
+      select.innerHTML = categoryGroups.map(g => `<optgroup label="${escapeHtml(g.name)}">${
           (g.categories || []).map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')
         }</optgroup>`).join('');
     }
@@ -334,17 +332,21 @@
       });
     });
 
+    function selectedValues(selectEl) {
+      return Array.from(selectEl.selectedOptions).map(o => o.value);
+    }
+
     function currentFilters() {
       const params = new URLSearchParams();
-      const accountId = document.getElementById('filterAccount').value;
-      const categoryId = document.getElementById('filterCategory').value;
+      const accountIds = selectedValues(document.getElementById('filterAccount'));
+      const categoryIds = selectedValues(document.getElementById('filterCategory'));
       const startDate = document.getElementById('filterStart').value;
       const endDate = document.getElementById('filterEnd').value;
       const search = document.getElementById('filterSearch').value.trim();
       const sort = document.getElementById('filterSort').value;
 
-      if (accountId) params.set('accountId', accountId);
-      if (categoryId) params.set('categoryId', categoryId);
+      accountIds.forEach(id => params.append('accountId', id));
+      categoryIds.forEach(id => params.append('categoryId', id));
       if (startDate) params.set('startDate', startDate);
       if (endDate) params.set('endDate', endDate);
       if (search) params.set('search', search);
@@ -387,8 +389,8 @@
     });
     document.getElementById('applyFiltersBtn').addEventListener('click', () => { offset = 0; loadTransactions(); });
     document.getElementById('clearFiltersBtn').addEventListener('click', () => {
-      document.getElementById('filterAccount').value = '';
-      document.getElementById('filterCategory').value = '';
+      Array.from(document.getElementById('filterAccount').options).forEach(o => { o.selected = false; });
+      Array.from(document.getElementById('filterCategory').options).forEach(o => { o.selected = false; });
       document.getElementById('filterStart').value = '';
       document.getElementById('filterEnd').value = '';
       document.getElementById('filterSearch').value = '';
