@@ -78,9 +78,17 @@ describe('buildTransactionFilters', () => {
     assert.deepEqual(buildTransactionFilters(undefined), []);
   });
 
-  test('builds an equality filter for accountId and categoryId', () => {
+  test('builds a $oneof filter for a single accountId/categoryId', () => {
     const filters = buildTransactionFilters({ accountId: 'acc-1', categoryId: 'cat-1' });
-    assert.deepEqual(filters, [{ account: 'acc-1' }, { category: 'cat-1' }]);
+    assert.deepEqual(filters, [{ account: { $oneof: ['acc-1'] } }, { category: { $oneof: ['cat-1'] } }]);
+  });
+
+  test('builds a $oneof filter for multiple accountIds/categoryIds (multi-select)', () => {
+    const filters = buildTransactionFilters({ accountId: ['acc-1', 'acc-2'], categoryId: ['cat-1', 'cat-2'] });
+    assert.deepEqual(filters, [
+      { account: { $oneof: ['acc-1', 'acc-2'] } },
+      { category: { $oneof: ['cat-1', 'cat-2'] } }
+    ]);
   });
 
   test('builds $gte/$lte range filters for date bounds', () => {
@@ -105,6 +113,11 @@ describe('buildTransactionFilters', () => {
 
   test('falsy values are omitted rather than producing empty-string filters', () => {
     const filters = buildTransactionFilters({ accountId: '', categoryId: undefined, search: null });
+    assert.deepEqual(filters, []);
+  });
+
+  test('an empty array is treated as no filter, same as omitted', () => {
+    const filters = buildTransactionFilters({ accountId: [], categoryId: [] });
     assert.deepEqual(filters, []);
   });
 });

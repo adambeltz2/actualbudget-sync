@@ -149,10 +149,15 @@ function resolvePayeeNames(transactions, payees) {
   return transactions.map(t => ({ ...t, payee_name: t.payee_name || payeeName[t.payee] || null }));
 }
 
+// accountId/categoryId each accept either a single id or an array of ids
+// (the Data Explorer's filters are multi-select) — a single id still just
+// becomes a one-element $oneof, which ActualQL treats the same as equality.
 function buildTransactionFilters({ accountId, categoryId, startDate, endDate, search } = {}) {
   const filters = [];
-  if (accountId) filters.push({ account: accountId });
-  if (categoryId) filters.push({ category: categoryId });
+  const accountIds = [].concat(accountId || []);
+  const categoryIds = [].concat(categoryId || []);
+  if (accountIds.length) filters.push({ account: { $oneof: accountIds } });
+  if (categoryIds.length) filters.push({ category: { $oneof: categoryIds } });
   if (startDate) filters.push({ date: { $gte: startDate } });
   if (endDate) filters.push({ date: { $lte: endDate } });
   if (search) filters.push({ payee_name: { $like: `%${search}%` } });
