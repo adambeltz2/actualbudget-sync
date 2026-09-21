@@ -3,9 +3,10 @@ const path = require('path');
 const api = require('@actual-app/api');
 const { q } = require('@actual-app/api');
 const { logger } = require('./logger');
-const { buildSpendingInsights, buildBalanceProjection, monthsToReachTarget } = require('./insights');
+const { buildSpendingInsights, buildBalanceProjection } = require('./insights');
 const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations, computeNetWorthBreakdown } = require('./financialHealth');
 const { buildCategoryDeltas } = require('./trends');
+const { ageInMonths, resolveSocialSecurityClaim, computeFireTargetAtAge, monthsToReachFireTarget } = require('./socialSecurity');
 
 const DATA_DIR = '/data';
 
@@ -471,7 +472,17 @@ async function getMetricTransactions({ metric, month, range, startDate, endDate 
 // override; left unset, it falls back to your trailing-12-month average
 // spend annualized, the same "use real history instead of a guess"
 // approach the rest of this app takes.
-async function getFireProgress({ fireAnnualExpenses, fireWithdrawalRatePct = 4, annualReturnRatePct = 7 } = {}) {
+// Social Security fields are all optional — a real SSA statement gives
+// three claiming ages (62, Full Retirement Age, and 70) each with their own
+// monthly benefit; ssClaimingChoice picks which one to actually plan
+// around. Left unfilled (no birthdate, or the chosen claim's benefit
+// amount missing), Social Security is ignored entirely and this behaves
+// exactly as it did before — a personal choice this app can't infer, same
+// as annualExpenses itself.
+async function getFireProgress({
+  fireAnnualExpenses, fireWithdrawalRatePct = 4, annualReturnRatePct = 7,
+  birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
+} = {}) {
   const accounts = await getAccounts();
   const balances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
   const netWorth = balances.reduce((sum, b) => sum + b.balance, 0);
@@ -488,12 +499,26 @@ async function getFireProgress({ fireAnnualExpenses, fireWithdrawalRatePct = 4, 
 
   const autoAnnualExpenses = avgMonthlySpend * 12;
   const annualExpenses = fireAnnualExpenses > 0 ? fireAnnualExpenses : autoAnnualExpenses;
-  const fireNumber = annualExpenses * (100 / fireWithdrawalRatePct);
+
+  const currentAgeMonths = birthdate ? ageInMonths(birthdate) : null;
+  const socialSecurity = currentAgeMonths !== null
+    ? resolveSocialSecurityClaim({
+      claimingChoice: ssClaimingChoice,
+      age62MonthlyBenefit: ssAge62MonthlyBenefit,
+      fraAgeYears: ssFraAgeYears, fraAgeMonths: ssFraAgeMonths, fraMonthlyBenefit: ssFraMonthlyBenefit,
+      age70MonthlyBenefit: ssAge70MonthlyBenefit
+    })
+    : null;
+
+  const fireNumber = computeFireTargetAtAge({
+    ageMonths: currentAgeMonths ?? 0, annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, socialSecurity
+  });
   const pctReached = fireNumber > 0 ? Math.min((netWorth / fireNumber) * 100, 100) : 0;
 
   const monthlyContribution = avgMonthlyIncome - avgMonthlySpend;
-  const monthsToFI = monthsToReachTarget({
-    currentBalance: netWorth, monthlyContribution, annualReturnRate: annualReturnRatePct / 100, target: fireNumber
+  const monthsToFI = monthsToReachFireTarget({
+    currentBalance: netWorth, monthlyContribution, annualReturnRate: annualReturnRatePct / 100,
+    annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, currentAgeMonths, socialSecurity
   });
 
   return {
@@ -501,7 +526,12 @@ async function getFireProgress({ fireAnnualExpenses, fireWithdrawalRatePct = 4, 
     usesCustomExpenses: fireAnnualExpenses > 0,
     fireWithdrawalRatePct, pctReached, monthlyContribution,
     yearsToFI: monthsToFI === null ? null : Math.floor(monthsToFI / 12),
-    monthsRemainderToFI: monthsToFI === null ? null : monthsToFI % 12
+    monthsRemainderToFI: monthsToFI === null ? null : monthsToFI % 12,
+    socialSecurity: socialSecurity ? {
+      claimAgeMonths: socialSecurity.claimAgeMonths,
+      annualBenefit: socialSecurity.annualBenefit,
+      yearsUntilEligible: Math.max(socialSecurity.claimAgeMonths - currentAgeMonths, 0) / 12
+    } : null
   };
 }
 

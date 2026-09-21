@@ -162,6 +162,8 @@ Small "i" icons next to calculated figures throughout Financial Health Check and
 
 The **Financial Independence** widget shows a gauge for what % of your "FIRE number" your net worth has reached, and how many years at your current savings pace (compounding at the same return rate as Financial Insights) it'll take to get the rest of the way. Actual can't tell us your personal FIRE target, so set an **Annual Expenses** override directly on the widget — leave it blank and it auto-calculates from your trailing 12-month average spend — and pick a withdrawal rate (3–4.5%, the standard "4% rule" is the default 25x multiple). Both save immediately, no need to visit Settings.
 
+Optionally factor **Social Security** into the FIRE Number under Settings: enter your birthdate and, from your SSA statement (ssa.gov/myaccount), whichever of the three claiming ages (62, Full Retirement Age, 70) you have monthly benefit estimates for, then pick which one to actually plan around. The FIRE Number is reduced by that benefit once you'd reach the chosen age — but not before it, since Social Security hasn't started yet and every expense until then still has to come from savings alone (a "bridge"). Leave it all blank to ignore Social Security entirely, exactly as before.
+
 Financial Health Check and Financial Independence both show a brief "rule of thumb" line next to each target (e.g. "3–6 months of essential expenses," "15–20% of income") — standard personal-finance benchmarks, not the app's own opinion, so the numbers are easier to judge without outside context.
 
 ## Trends

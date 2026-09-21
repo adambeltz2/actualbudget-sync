@@ -423,7 +423,13 @@ router.get('/api/data/fire-progress', async (req, res) => {
       : (config.fireWithdrawalRatePct ?? 4);
     const progress = await actualService.getFireProgress({
       fireAnnualExpenses, fireWithdrawalRatePct,
-      annualReturnRatePct: config.insightsAnnualReturnPct ?? 7
+      annualReturnRatePct: config.insightsAnnualReturnPct ?? 7,
+      birthdate: config.fireBirthdate || null,
+      ssClaimingChoice: config.ssClaimingChoice || null,
+      ssAge62MonthlyBenefit: config.ssAge62MonthlyBenefit,
+      ssFraAgeYears: config.ssFraAgeYears, ssFraAgeMonths: config.ssFraAgeMonths,
+      ssFraMonthlyBenefit: config.ssFraMonthlyBenefit,
+      ssAge70MonthlyBenefit: config.ssAge70MonthlyBenefit
     });
     res.json(progress);
   } catch (err) {
