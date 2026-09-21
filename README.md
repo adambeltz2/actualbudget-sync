@@ -59,6 +59,8 @@ You don't need to clone this repo — the image is prebuilt and published to bot
 ```
    Everything else works identically — same tags, same behavior, same volumes.
 
+   Every push to `main` also publishes a version-specific tag (e.g. `:1.0.19`) alongside `:latest`, on both registries, with a matching `git tag` in this repo — so you can pin a specific version in `docker-compose.yaml` instead of always tracking `:latest`, and roll back by changing the tag if a release causes problems.
+
 3. **Open the dashboard:** [http://localhost:3000](http://localhost:3000)
 
    You'll land on a login screen first. Since no dashboard password exists yet, whatever you enter there becomes the password — pick something you'll remember. Every visit after that requires it, and sessions last 7 days.

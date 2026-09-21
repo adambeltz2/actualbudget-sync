@@ -217,6 +217,13 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P46 — Version-specific Docker tags + git tags on release — DONE
+
+### [BUG] Every release only ever published `:latest`, with no way to pin or roll back — FIXED
+User asked "are we doing release tags incorrectly when we publish this?" after noticing every image on both registries always resolves to the same `:latest` tag. Root cause: `publish.yml` bumps `package.json`'s patch version on every push to `main`, but the `docker/build-push-action@v5` step's `tags:` list only ever contained `:latest` on both GHCR and Docker Hub — the version bump never actually reached the published image, and no corresponding `git tag` existed either, so there was no way to pin a specific version in `docker-compose.yaml` or roll back to a prior release.
+Captured the bumped version as a step output (`id: bump_version`, `echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"`), added `ghcr.io/${{ github.repository }}:${{ steps.bump_version.outputs.version }}` and the Docker Hub equivalent alongside the existing `:latest` tags, and pushed a matching `git tag "v$NEW_VERSION"` right after the version-bump commit lands. `:latest` is left in place unchanged for anyone not pinning a version.
+Affected files: `.github/workflows/publish.yml`, `README.md`
+
 ## P45 — Multi-arch (amd64+arm64) Docker image — DONE
 
 ### [BUG] Docker Hub image was amd64-only, failing to pull on Apple Silicon — FIXED
