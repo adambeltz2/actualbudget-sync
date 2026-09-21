@@ -217,6 +217,14 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P45 — Multi-arch (amd64+arm64) Docker image — DONE
+
+### [BUG] Docker Hub image was amd64-only, failing to pull on Apple Silicon — FIXED
+User reported `docker compose pull` failing with `no matching manifest for linux/arm64/v8 in the manifest list entries` on a MacBook (M2) homelab stack. `docker buildx imagetools inspect adambeltz/actualbudget-sync:latest` confirmed only a `linux/amd64` manifest existed — `publish.yml`'s `docker/build-push-action@v5` step had no `platforms:` set, so it only ever built for the GitHub Actions runner's own amd64 architecture.
+Added `docker/setup-qemu-action@v3` + `docker/setup-buildx-action@v3` before the existing login steps, and `platforms: linux/amd64,linux/arm64` on the build-push step — the version-bump step, both registry logins, tag list, and the README-sync step are all unchanged. Reviewed the two-stage `Dockerfile` (from P16) for arm64 compatibility: `node:20-slim` ships official arm64 variants, and `better-sqlite3` (the one native dependency, via `@actual-app/api`) publishes prebuilt arm64 binaries for recent versions — the `deps` stage's `python3`/`build-essential` fallback toolchain (already present from P16, discarded before the runtime stage) covers the rare case a matching prebuilt binary isn't found, so `npm ci` succeeds either way under QEMU emulation, just slower if it has to compile from source.
+Confirmed the app's container-facing facts referenced in the user's homelab compose file: listens on port 3000 (`EXPOSE 3000` / Express default), `/healthz` unauthenticated health check, and runs as root (no `USER` directive in the `Dockerfile`) — so a permission mismatch on a bind-mounted `./data`/`./logs` host folder is not expected from this image specifically, unlike an image that switches to a non-root user.
+Affected files: `.github/workflows/publish.yml`
+
 ## P44 — Visual day/time picker for the sync schedule — DONE
 
 ### [FEATURE] Pick specific days (e.g. Mon/Wed/Fri) and multiple sync times, not just one raw cron string — DONE
