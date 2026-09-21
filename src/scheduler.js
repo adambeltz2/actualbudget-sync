@@ -3,16 +3,30 @@ const { logger } = require('./logger');
 const { getConfig } = require('./config');
 const { syncAndReport } = require('./syncJob');
 
-let currentCronJob = null;
+let currentCronJobs = [];
 
+// Multiple entries let the schedule picker express "these days, at these
+// times" as one job per time slot (all sharing the same days-of-week
+// field) rather than trying to cram independent hour:minute pairs into a
+// single cron expression, where a comma-list in both fields would fire on
+// every combination instead of just the pairs the user picked.
 function applySchedule() {
   const config = getConfig();
-  if (currentCronJob) currentCronJob.stop();
-  if (config.cronSchedule) {
-    currentCronJob = cron.schedule(config.cronSchedule, syncAndReport, {
+  currentCronJobs.forEach(job => job.stop());
+  currentCronJobs = [];
+
+  const schedules = Array.isArray(config.cronSchedules) ? config.cronSchedules : [];
+  for (const schedule of schedules) {
+    if (!schedule) continue;
+    if (!cron.validate(schedule)) {
+      logger.warn(`Skipping invalid cron schedule: [${schedule}]`);
+      continue;
+    }
+    const job = cron.schedule(schedule, syncAndReport, {
       scheduled: true, timezone: process.env.TIMEZONE || 'America/New_York'
     });
-    logger.info(`Scheduled new cron job: [${config.cronSchedule}]`);
+    currentCronJobs.push(job);
+    logger.info(`Scheduled new cron job: [${schedule}]`);
   }
 }
 

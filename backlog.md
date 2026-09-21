@@ -217,6 +217,15 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P44 — Visual day/time picker for the sync schedule — DONE
+
+### [FEATURE] Pick specific days (e.g. Mon/Wed/Fri) and multiple sync times, not just one raw cron string — DONE
+User asked to enhance the sync schedule beyond a single daily cron pattern — specific days of the week with one or more times each (e.g. "every Mon/Wed/Fri"). Scoped via `AskUserQuestion`: the visual picker is the default, with an "Advanced" toggle revealing raw cron text for anything the picker can't express, rather than replacing raw cron entirely.
+Config's `cronSchedule` (a single string) became `cronSchedules` (an array) — one cron line per time slot, all sharing the same days-of-week field, rather than trying to cram independent hour:minute pairs into one cron expression's comma-lists (which would fire on every combination of hour × minute, not just the pairs picked). `scheduler.js` now loops the array, tracking multiple `node-cron` jobs instead of one, validating each with `cron.validate()` and skipping (with a log warning) any invalid line rather than crashing the whole schedule. `config.js` migrates a pre-existing single `cronSchedule` to `cronSchedules: [cronSchedule]` once, in place, the first time an old config is read.
+The Settings page's schedule picker (day-of-week checkboxes + add/remove time rows) parses the saved `cronSchedules` back into picker state on load — including expanding a legacy multi-value single line (the old default, `0 6,12 * * *`) into its full set of times — and falls back to Advanced mode (raw cron text, one line per entry) the moment a saved schedule doesn't fit the "same days across every entry" shape the picker can express, so nothing set up by hand is ever silently lost or misrepresented.
+Verified via `npm test` (191/191, unaffected — no existing test referenced the old `cronSchedule` field) and `node -e "require(...)"` sanity-checking `config.js`/`scheduler.js` load correctly; the schedule-parsing logic itself is browser-only JS (no existing test harness covers frontend code in this app, consistent with every other rendering/interaction function in `public/*.html`).
+Affected files: `src/config.js`, `src/scheduler.js`, `public/settings.html`, `README.md`
+
 ## P43 — Factor Social Security into the FIRE Number — DONE
 
 ### [FEATURE] Birthdate + SSA claiming-age benefits reduce the FIRE Number once eligible — DONE
