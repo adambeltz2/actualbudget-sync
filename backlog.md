@@ -217,6 +217,13 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P46 — Version-tagged image publishes, not just :latest — DONE
+
+### [DEBT] Every registry push only ever tagged :latest, with no way to pin a release — FIXED
+`publish.yml` bumps `package.json`'s patch version on every merge to main (for the dashboard footer/`GET /api/version`), but never pushed that version as an actual Docker tag — GHCR and Docker Hub only ever received `:latest`, repointed on every single merge. That meant no way to pin a deployment to a known-good release or roll back to a specific prior one; `:latest` was the only reference that ever existed.
+Captured the bump step's version as a step output (`steps.bump.outputs.version`) and added `ghcr.io/.../actualbudget-sync:<version>` and `adambeltz/actualbudget-sync:<version>` to the build-push step's tag list, alongside the existing `:latest` tags (unchanged). Every merge to main now publishes both a moving `:latest` and an immutable `:<version>` (e.g. `:1.0.18`) for anyone who wants to pin.
+Affected files: `.github/workflows/publish.yml`
+
 ## P45 — Multi-arch (amd64+arm64) Docker image — DONE
 
 ### [BUG] Docker Hub image was amd64-only, failing to pull on Apple Silicon — FIXED

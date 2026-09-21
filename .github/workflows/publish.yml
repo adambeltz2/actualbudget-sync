@@ -23,14 +23,20 @@ jobs:
       # dashboard footer (GET /api/version) always moves forward instead of
       # staying frozen at whatever it was last manually set to — previously
       # only the git commit hash changed per release, not the version
-      # number itself. [skip ci] on the bump commit prevents this push from
-      # re-triggering this workflow (or test.yml) a second time.
+      # number itself. Also exposed as this step's `version` output and used
+      # below to push a real :<version> image tag alongside :latest — before
+      # this, only :latest was ever published, so there was no way to pin to
+      # or roll back to a specific prior release. [skip ci] on the bump
+      # commit prevents this push from re-triggering this workflow (or
+      # test.yml) a second time.
       - name: Bump package.json patch version
+        id: bump
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           npm version patch --no-git-tag-version
           NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           git add package.json package-lock.json
           git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
           for i in 1 2 3; do
@@ -68,7 +74,9 @@ jobs:
             GIT_COMMIT=${{ github.sha }}
           tags: |
             ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ steps.bump.outputs.version }}
             ${{ secrets.DOCKERHUB_USERNAME }}/actualbudget-sync:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/actualbudget-sync:${{ steps.bump.outputs.version }}
 
       # Docker Hub's repo overview is unrelated to GitHub and has no idea
       # this repo exists — pushing images here was never going to update it.
