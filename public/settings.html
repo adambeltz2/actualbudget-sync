@@ -151,9 +151,18 @@
             </p>
           </div>
           <div style="grid-column:1/-1;">
-            <label class="field-label">Cron Schedule</label>
-            <input type="text" id="cronSchedule" style="font-family:monospace;" placeholder="0 6,12 * * *">
-            <p class="field-hint">Cron format: <code>0 6,12 * * *</code> syncs at 6:00 AM and 12:00 PM (Noon) daily.</p>
+            <label class="field-label">Sync Schedule</label>
+            <div id="scheduleDaysRow" style="display:flex; gap:14px; flex-wrap:wrap; margin:4px 0 10px;"></div>
+            <div id="scheduleTimesList" style="display:flex; flex-direction:column; gap:8px; margin-bottom:8px;"></div>
+            <button type="button" id="addScheduleTimeBtn" class="btn btn-ghost" style="padding:6px 12px; font-size:13px;">+ Add Time</button>
+            <p class="field-hint" style="margin-top:8px;">Runs a sync at each time above, on the days checked — e.g. check Mon/Wed/Fri and add 6:00 AM and 12:00 PM for a sync twice a day on those three days only.</p>
+
+            <button type="button" id="toggleAdvancedScheduleBtn" class="btn btn-ghost" style="padding:6px 12px; font-size:13px; margin-top:6px;">Advanced (raw cron)</button>
+            <div id="advancedScheduleDiv" hidden style="margin-top:10px;">
+              <label class="field-label">Cron Schedule(s)</label>
+              <textarea id="cronSchedulesRaw" rows="3" style="width:100%; font-family:monospace; padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:13px;" placeholder="0 6,12 * * *"></textarea>
+              <p class="field-hint">One cron expression per line for more than one independent schedule. Format: <code>minute hour day-of-month month day-of-week</code> — e.g. <code>0 6,12 * * *</code> syncs at 6:00 AM and 12:00 PM (Noon) daily.</p>
+            </div>
           </div>
         </div>
       </div>
@@ -436,6 +445,139 @@
     }
     webhookToggle.addEventListener('change', (e) => updateWebhookToggleUI(e.target.checked));
 
+    // --- Sync Schedule ---
+    const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    let scheduleDays = [0, 1, 2, 3, 4, 5, 6];
+    let scheduleTimes = ['06:00', '12:00'];
+    let usingAdvancedSchedule = false;
+
+    // Reverses the "days, times" picker's own output shape back into
+    // {days, times} so re-opening the page shows the same picker state
+    // instead of always falling back to raw cron text. Expands a legacy
+    // single-line schedule with list values (the old default, one entry
+    // with hour "6,12") into its full Cartesian set of times — the
+    // faithful cron reading, not an approximation — but bails out (returns
+    // null) the moment two entries disagree on which days they run, or
+    // anything uses a shape simpler cron fields can't express (ranges,
+    // steps, day-of-month/month restrictions): that's real advanced usage
+    // the picker was never meant to represent, so it's shown as raw text instead.
+    function parseSimpleSchedule(cronSchedules) {
+      if (!Array.isArray(cronSchedules) || cronSchedules.length === 0) return null;
+      let daysKey = null;
+      const timeSet = new Set();
+      for (const line of cronSchedules) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length !== 5) return null;
+        const [minuteField, hourField, dom, month, dow] = parts;
+        if (dom !== '*' || month !== '*') return null;
+        if (!/^\d+(,\d+)*$/.test(minuteField) || !/^\d+(,\d+)*$/.test(hourField)) return null;
+
+        const minutes = minuteField.split(',').map(Number);
+        const hours = hourField.split(',').map(Number);
+        if (minutes.some(n => n < 0 || n > 59) || hours.some(n => n < 0 || n > 23)) return null;
+
+        let dowList;
+        if (dow === '*') dowList = [0, 1, 2, 3, 4, 5, 6];
+        else {
+          if (!/^\d+(,\d+)*$/.test(dow)) return null;
+          dowList = dow.split(',').map(Number);
+          if (dowList.some(d => d < 0 || d > 6)) return null;
+        }
+        const key = [...new Set(dowList)].sort((a, b) => a - b).join(',');
+        if (daysKey === null) daysKey = key;
+        else if (daysKey !== key) return null;
+
+        hours.forEach(h => minutes.forEach(m => timeSet.add(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)));
+      }
+      return { days: daysKey.split(',').map(Number), times: [...timeSet].sort() };
+    }
+
+    function buildSimpleSchedule(days, times) {
+      const dowStr = days.length === 7 ? '*' : [...days].sort((a, b) => a - b).join(',');
+      return times.map(t => {
+        const [h, m] = t.split(':').map(Number);
+        return `${m} ${h} * * ${dowStr}`;
+      });
+    }
+
+    function renderScheduleDays() {
+      document.getElementById('scheduleDaysRow').innerHTML = DAY_LABELS.map((label, i) => `
+        <label style="display:flex; align-items:center; gap:5px; font-size:13px; color:var(--text-secondary); cursor:pointer;">
+          <input type="checkbox" class="scheduleDayCheckbox" value="${i}" ${scheduleDays.includes(i) ? 'checked' : ''}>
+          ${label}
+        </label>`).join('');
+      document.querySelectorAll('.scheduleDayCheckbox').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const day = parseInt(cb.value, 10);
+          scheduleDays = cb.checked ? [...scheduleDays, day] : scheduleDays.filter(d => d !== day);
+        });
+      });
+    }
+
+    function renderScheduleTimes() {
+      const list = document.getElementById('scheduleTimesList');
+      list.innerHTML = scheduleTimes.map((t, i) => `
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input type="time" class="scheduleTimeInput" data-index="${i}" value="${t}" style="padding:6px 8px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-family:inherit;">
+          <button type="button" class="btn btn-ghost removeScheduleTimeBtn" data-index="${i}" style="padding:4px 10px; font-size:12px;" ${scheduleTimes.length <= 1 ? 'disabled' : ''}>Remove</button>
+        </div>`).join('');
+      list.querySelectorAll('.scheduleTimeInput').forEach(input => {
+        input.addEventListener('change', () => {
+          scheduleTimes[parseInt(input.dataset.index, 10)] = input.value;
+        });
+      });
+      list.querySelectorAll('.removeScheduleTimeBtn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          scheduleTimes.splice(parseInt(btn.dataset.index, 10), 1);
+          renderScheduleTimes();
+        });
+      });
+    }
+
+    document.getElementById('addScheduleTimeBtn').addEventListener('click', () => {
+      scheduleTimes.push('06:00');
+      renderScheduleTimes();
+    });
+
+    function setAdvancedScheduleVisible(visible) {
+      usingAdvancedSchedule = visible;
+      document.getElementById('advancedScheduleDiv').hidden = !visible;
+      ['scheduleDaysRow', 'scheduleTimesList', 'addScheduleTimeBtn'].forEach(id => {
+        const el = document.getElementById(id);
+        el.style.opacity = visible ? '0.5' : '1';
+        el.style.pointerEvents = visible ? 'none' : 'auto';
+      });
+      document.getElementById('toggleAdvancedScheduleBtn').innerText = visible ? 'Use the Day/Time Picker Instead' : 'Advanced (raw cron)';
+    }
+
+    document.getElementById('toggleAdvancedScheduleBtn').addEventListener('click', () => {
+      setAdvancedScheduleVisible(!usingAdvancedSchedule);
+    });
+
+    function loadScheduleFromConfig(config) {
+      const cronSchedules = Array.isArray(config.cronSchedules) ? config.cronSchedules : ['0 6,12 * * *'];
+      const parsed = parseSimpleSchedule(cronSchedules);
+      if (parsed && parsed.times.length > 0) {
+        scheduleDays = parsed.days;
+        scheduleTimes = parsed.times;
+        renderScheduleDays();
+        renderScheduleTimes();
+        setAdvancedScheduleVisible(false);
+      } else {
+        document.getElementById('cronSchedulesRaw').value = cronSchedules.join('\n');
+        renderScheduleDays();
+        renderScheduleTimes();
+        setAdvancedScheduleVisible(true);
+      }
+    }
+
+    function currentCronSchedules() {
+      if (usingAdvancedSchedule) {
+        return document.getElementById('cronSchedulesRaw').value.split('\n').map(l => l.trim()).filter(Boolean);
+      }
+      return buildSimpleSchedule(scheduleDays, scheduleTimes);
+    }
+
     // --- Account Classification ---
     let emergencyFundAccountIds = [];
     let investmentAccountIds = [];
@@ -512,7 +654,7 @@
         ? 'Your master login password is saved. Leave blank to keep it, or type a new one to change it.'
         : 'Your master login password.';
       document.getElementById('syncId').value = config.syncId || '';
-      document.getElementById('cronSchedule').value = config.cronSchedule || '0 6,12 * * *';
+      loadScheduleFromConfig(config);
       const isEmailEnabled = config.enableEmail || false;
       emailToggle.checked = isEmailEnabled;
       updateToggleUI(isEmailEnabled);
@@ -780,11 +922,15 @@
 
     document.getElementById('configForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (!usingAdvancedSchedule && scheduleDays.length === 0) {
+        showError('Check at least one day for the sync schedule.');
+        return;
+      }
       const config = {
         actualUrl: document.getElementById('actualUrl').value,
         actualPassword: document.getElementById('actualPassword').value,
         syncId: document.getElementById('syncId').value,
-        cronSchedule: document.getElementById('cronSchedule').value,
+        cronSchedules: currentCronSchedules(),
         enableEmail: emailToggle.checked,
         publicUrl: document.getElementById('publicUrl').value,
         smtpHost: document.getElementById('smtpHost').value,

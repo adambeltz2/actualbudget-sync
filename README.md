@@ -24,7 +24,7 @@ This service is designed to run independently of your main Actual Budget server.
 *(Screenshots use sample data, not real account information.)*
 
 ## Features
-* **Automated Syncing:** Triggers `runBankSync()` automatically using standard cron syntax (e.g., `0 6,12 * * *`).
+* **Automated Syncing:** Triggers `runBankSync()` on a schedule you pick visually — specific days of the week (e.g. Mon/Wed/Fri) and one or more times each — or via raw cron syntax directly if you need something the picker can't express.
 * **Snapshot Comparison:** Fetches current transactions before the sync, waits for the SimpleFIN/bank data to update, and fetches transactions again to find new items.
 * **Email Reporting:** Emails a report of the new items via Nodemailer.
 * **Log Rotation:** Automatically logs actions and rotates log files daily so you can track performance.
@@ -67,7 +67,7 @@ You don't need to clone this repo — the image is prebuilt and published to bot
    * **Actual Budget URL** — your server's address (e.g., `https://your-pikapod.pikapod.net`)
    * **Password** — your Actual Budget password
    * **Sync ID** — from *Settings > Show advanced settings > Sync ID*
-   * **Cron schedule** — when to run (defaults to `0 6,12 * * *`, 6 AM & noon)
+   * **Sync Schedule** — which days and times to run (defaults to every day at 6 AM & noon); check only the days you want (e.g. Mon/Wed/Fri) and add/remove times freely
    * **Email settings** (optional) — SMTP host/port, sender, app password, and recipient, if you want email reports
 
    Settings are saved to `./data/config.json` on your host, so they persist across container restarts/updates.
@@ -97,7 +97,8 @@ docker compose up -d
 | `./logs/` | Daily rotated sync logs (kept for 14 days) |
 
 ## Notes
-* `TIMEZONE` (env var in `docker-compose.yaml`) controls the cron schedule's timezone — defaults to `America/New_York`.
+* `TIMEZONE` (env var in `docker-compose.yaml`) controls the sync schedule's timezone — defaults to `America/New_York`.
+* The Sync Schedule picker (Settings) lets you check specific days and add/remove times freely — each time runs on every day you've checked. Reopening it re-parses your saved schedule back into the picker automatically; if it doesn't fit that shape (e.g. every other day, or a day-of-month restriction), it opens in **Advanced** mode showing the raw cron line(s) instead, one per line, so nothing you'd already set up by hand gets lost.
 * `CONFIG_ENCRYPTION_KEY` (optional env var in `docker-compose.yaml`) encrypts your Actual Budget and SMTP passwords at rest in `data/config.json`. Without it, those two fields are stored in plaintext (as they always have been). If you set it, keep the value somewhere safe — changing or losing it makes previously saved secrets unreadable and you'll need to re-enter them.
 * The container listens on port `3000`; change the left side of the `ports` mapping in `docker-compose.yaml` if that's taken on your host.
 * Both registries are updated together on every push to `main`, so tags stay in sync — no need to worry about one being stale relative to the other.

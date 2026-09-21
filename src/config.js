@@ -13,7 +13,7 @@ const SECRET_FIELDS = ['actualPassword', 'emailPass', 'webhookUrl', 'feedbackGit
 function defaultConfig() {
   return {
     actualUrl: '', actualPassword: '', syncId: '',
-    cronSchedule: '0 6,12 * * *', enableEmail: false,
+    cronSchedules: ['0 6,12 * * *'], enableEmail: false,
     smtpHost: '', smtpPort: '465', emailUser: '', emailPass: '', emailTo: '',
     publicUrl: '',
     dashboardPasswordHash: '', sessionSecret: crypto.randomBytes(32).toString('hex'),
@@ -42,6 +42,14 @@ function getConfig() {
   const stored = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   if (!stored.sessionSecret) {
     stored.sessionSecret = crypto.randomBytes(32).toString('hex');
+    saveConfig(stored);
+  }
+  // Pre-P44 configs stored a single cron string under `cronSchedule`
+  // instead of the `cronSchedules` array multiple sync times now need —
+  // migrated once, in place, the first time an old config is read.
+  if (!stored.cronSchedules && stored.cronSchedule) {
+    stored.cronSchedules = [stored.cronSchedule];
+    delete stored.cronSchedule;
     saveConfig(stored);
   }
 
