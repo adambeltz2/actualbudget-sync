@@ -902,7 +902,18 @@
 
       safeRenderWidget('spendByCategory', () => {
         if (widgets.spendByCategory === false || summary.spendByCategory.length === 0) return;
-        const top = summary.spendByCategory.slice(0, 6);
+
+        // Group by category group (e.g. "Housing", "Food & Dining") rather
+        // than individual category, so one heavily-used child category
+        // doesn't dominate the chart on its own — matches how Actual's own
+        // budget view is organized.
+        const byGroup = new Map();
+        for (const c of summary.spendByCategory) {
+          const key = c.groupName || 'Other';
+          byGroup.set(key, (byGroup.get(key) || 0) + c.total);
+        }
+        const grouped = Array.from(byGroup, ([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+        const top = grouped.slice(0, 6);
         const total = top.reduce((sum, c) => sum + c.total, 0);
 
         const ctx = document.getElementById('spendByCategoryChart');
@@ -925,7 +936,6 @@
             <span style="width:8px;height:8px;border-radius:50%;background:${CATEGORY_PALETTE[i % CATEGORY_PALETTE.length]}; flex-shrink:0;"></span>
             <span style="flex:1; min-width:0; overflow:hidden;">
               <span style="display:block; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${escapeHtml(c.name)}</span>
-              ${c.groupName ? `<span style="display:block; font-size:11px; color:var(--text-muted); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${escapeHtml(c.groupName)}</span>` : ''}
             </span>
             <span style="color:var(--text-muted);">${total > 0 ? Math.round((c.total / total) * 100) : 0}%</span>
           </div>`).join('');
