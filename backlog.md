@@ -217,6 +217,12 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P50 — Dashboard's Spend by Category grouped by category group, not child — DONE
+
+### [BUG] Spend by Category donut was driven by individual child categories — DONE
+User pointed out the dashboard's Spend by Category widget showed a single child category (e.g. "Home Improvement") dominating the chart at 63%, when it should be grouped by its parent category group (e.g. "🏠 Housing") the way Actual's own budget view is organized. `getSpendByCategory()` in `src/actualService.js` was left as-is (it still returns per-child rows with `groupName` attached — other consumers like the Data Explorer's category filter and Trends still need per-category data); the dashboard widget in `public/index.html` now aggregates `summary.spendByCategory` by `groupName` client-side before taking the top 6 and building the donut/legend, so one large child category no longer skews the chart on its own.
+Affected files: `public/index.html`
+
 ## P49 — Optional email on container-restart sync, even with no changes — DONE
 
 ### [FEATURE] "Always send an email after the automatic sync on container restart" toggle — DONE
