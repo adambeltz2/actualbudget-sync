@@ -33,7 +33,7 @@ const server = app.listen(3000, () => {
     const config = getConfig();
     if (config.actualUrl && config.actualPassword && config.syncId) {
       logger.info('Configuration found on startup. Triggering initial sync...');
-      await syncAndReport();
+      await syncAndReport({ isStartup: true });
     } else {
       logger.info('Configuration incomplete. Skipping automatic startup sync.');
     }

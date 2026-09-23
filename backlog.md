@@ -217,6 +217,19 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P49 — Optional email on container-restart sync, even with no changes — DONE
+
+### [FEATURE] "Always send an email after the automatic sync on container restart" toggle — DONE
+User noted that the startup sync (the one `index.js` triggers automatically ~10s after the web server starts) used to always send an email, and asked for that back as an opt-in rather than the default. `syncAndReport()` now takes an `{ isStartup }` option (`index.js` passes `{ isStartup: true }` for the restart-triggered call only, cron-triggered calls pass nothing); when `isStartup` is true and the new `emailOnRestart` config flag is enabled, the email send fires even if `hasReportableChange` is false. Webhook notifications are untouched — the ask was specifically about email.
+New "Always send an email after the automatic sync on container restart" checkbox added to Settings' Email Notifications card (loads/saves alongside the existing `emailSections` fields); `emailOnRestart` defaults to `false` in `defaultConfig()`.
+Affected files: `src/syncJob.js`, `index.js`, `src/config.js`, `public/settings.html`, `README.md`
+
+## P48 — Remove the in-app Feedback feature — DONE
+
+### [REFACTOR] Removed Feedback button/modal/config and the GitHub-issue-filing backend — DONE
+User said no one was using the Feedback feature (P37) and asked to remove it. Deleted `src/feedback.js` and `test/feedback.test.js` outright; removed the `POST /api/feedback` route and the `submitFeedback` import from `src/routes.js`, along with `feedbackGithubToken`/`feedbackGithubTokenSet` from the `/api/config` GET/POST handlers. Removed `feedbackGithubToken` from `SECRET_FIELDS` and `feedbackGithubToken`/`feedbackGithubRepo` from `defaultConfig()` in `src/config.js`. Removed the footer "💬 Feedback" link, the Feedback modal markup, and its click-handler IIFE from every page that had it (Dashboard, Data Explorer, Trends, Net Worth, Settings), plus Settings' "Feedback" config card (GitHub Repository/Token inputs) and its load/save wiring. Removed the "Feedback" section from `README.md`.
+Affected files: `src/feedback.js` (deleted), `test/feedback.test.js` (deleted), `src/routes.js`, `src/config.js`, `public/index.html`, `public/settings.html`, `public/explorer.html`, `public/networth.html`, `public/trends.html`, `README.md`
+
 ## P47 — Data Explorer: multi-select account/category filters — DONE
 
 ### [FEATURE] Account and category filters accept multiple selections — DONE
