@@ -2,7 +2,7 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   linearRegression, projectFutureValue, classifySpendTrend, standardDeviation,
-  buildSpendingInsights, buildBalanceProjection, monthsToReachTarget
+  buildSpendingInsights, buildBalanceProjection, monthsToReachTarget, buildBudgetCalibration
 } = require('../src/insights');
 
 describe('linearRegression', () => {
@@ -163,6 +163,70 @@ describe('buildSpendingInsights', () => {
   test('does not leak the internal dollarImpact ranking field into the result', () => {
     const insights = buildSpendingInsights([{ categoryId: 'groceries', name: 'Groceries', monthlyTotals: sixMonthsRising }]);
     assert.equal('dollarImpact' in insights[0], false);
+  });
+});
+
+describe('buildBudgetCalibration', () => {
+  function monthlyTotals(values) {
+    return values.map((total, i) => ({ month: `2026-${String(i + 1).padStart(2, '0')}`, total }));
+  }
+
+  test('spending consistently above budget is flagged under-budgeted', () => {
+    const trends = [{ categoryId: 'electricity', name: 'Electricity', groupName: 'Bills & Utilities', monthlyTotals: monthlyTotals([210, 215, 220]) }];
+    const budgeted = new Map([['electricity', 150]]);
+    const [result] = buildBudgetCalibration(trends, budgeted);
+    assert.equal(result.windows[3].status, 'under-budgeted');
+    assert.ok(result.windows[3].gap > 0);
+  });
+
+  test('spending consistently below budget is flagged over-budgeted', () => {
+    const trends = [{ categoryId: 'dining', name: 'Dining', groupName: 'Fun Money', monthlyTotals: monthlyTotals([50, 40, 45]) }];
+    const budgeted = new Map([['dining', 200]]);
+    const [result] = buildBudgetCalibration(trends, budgeted);
+    assert.equal(result.windows[3].status, 'over-budgeted');
+    assert.ok(result.windows[3].gap < 0);
+  });
+
+  test('spending within the threshold of budget is on-track', () => {
+    const trends = [{ categoryId: 'electricity', name: 'Electricity', groupName: 'Bills & Utilities', monthlyTotals: monthlyTotals([210, 215, 220]) }];
+    const budgeted = new Map([['electricity', 215]]);
+    const [result] = buildBudgetCalibration(trends, budgeted);
+    assert.equal(result.windows[3].status, 'on-track');
+  });
+
+  test('an unbudgeted category with real spend is flagged under-budgeted', () => {
+    const trends = [{ categoryId: 'misc', name: 'Misc', groupName: 'Other', monthlyTotals: monthlyTotals([30, 25, 35]) }];
+    const budgeted = new Map();
+    const [result] = buildBudgetCalibration(trends, budgeted);
+    assert.equal(result.windows[3].status, 'under-budgeted');
+    assert.equal(result.windows[3].budgeted, 0);
+  });
+
+  test('a window without at least half its months of history is omitted, but a qualifying window still renders', () => {
+    // Only 2 months of data: enough for the 3-month window (needs >= 2),
+    // not enough for 6 or 12 (need >= 3 and >= 6 respectively).
+    const trends = [{ categoryId: 'new-cat', name: 'New Category', groupName: 'Other', monthlyTotals: monthlyTotals([100, 110]) }];
+    const budgeted = new Map([['new-cat', 100]]);
+    const [result] = buildBudgetCalibration(trends, budgeted);
+    assert.ok(result.windows[3]);
+    assert.equal(result.windows[6], undefined);
+    assert.equal(result.windows[12], undefined);
+  });
+
+  test('a category with no window meeting the history requirement is left out entirely', () => {
+    const trends = [{ categoryId: 'new-cat', name: 'New Category', groupName: 'Other', monthlyTotals: monthlyTotals([100]) }];
+    const results = buildBudgetCalibration(trends, new Map([['new-cat', 100]]));
+    assert.deepEqual(results, []);
+  });
+
+  test('computes independent stats for the 3/6/12-month windows in one pass', () => {
+    // Ramps from 100/mo up to 220/mo over a year, so each window's average differs.
+    const values = Array.from({ length: 12 }, (_, i) => 100 + i * 10);
+    const trends = [{ categoryId: 'ramping', name: 'Ramping', groupName: 'Other', monthlyTotals: monthlyTotals(values) }];
+    const [result] = buildBudgetCalibration(trends, new Map([['ramping', 150]]));
+    assert.equal(result.windows[3].avgMonthlySpend, 200);
+    assert.equal(result.windows[6].avgMonthlySpend, 185);
+    assert.equal(result.windows[12].avgMonthlySpend, 155);
   });
 });
 

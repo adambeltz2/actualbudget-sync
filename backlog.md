@@ -217,6 +217,15 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P52 — Budget Calibration: is each category over- or under-budgeted — DONE
+
+### [FEATURE] Compares average monthly spend vs. current budget per category — DONE
+User asked for a way to see, per category, whether the average monthly spend over a trailing 3/6/12-month window is running above or below what's currently budgeted (example given: Electricity budgeted at $215, spending $210-220/mo — within range, so "probably okay"). New pure function `buildBudgetCalibration(categoryTrends, budgetedByCategory)` in `src/insights.js` computes all three windows at once per category (skipping a window if fewer than half its months have data yet), flagging `under-budgeted` (avg > budget by more than 10%), `over-budgeted` (avg < budget by more than 10%), or `on-track` (within 10%, not surfaced in the UI). A category with real spend but nothing budgeted counts as under-budgeted.
+`src/actualService.js`'s new `getBudgetCalibration()` always looks back a full 12 months regardless of the Financial Insights lookback selector, and is now folded into the existing `getFinancialInsights()`/`/api/data/insights` payload — no new endpoint needed.
+New "Budget Calibration" section added to the dashboard's Financial Insights card (`public/index.html`), below Spending Trends, with its own 3/6/12-month window dropdown; switching windows re-renders instantly from data already in hand rather than refetching. Only over/under-budgeted categories are shown (per user's confirmed preference), sorted by dollar gap, capped to 8.
+Verified via 7 new unit tests (`test/insights.test.js`) plus a Playwright smoke pass against fixture data confirming an on-track category is correctly hidden while under/over-budgeted ones show the right averages per window.
+Affected files: `src/insights.js`, `src/actualService.js`, `public/index.html`, `test/insights.test.js`
+
 ## P51 — Data Explorer: checkboxes instead of ctrl-click multi-select — DONE
 
 ### [FEATURE] Account/Category filters use checkbox lists — DONE
