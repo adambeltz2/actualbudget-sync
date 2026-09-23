@@ -115,6 +115,8 @@ Configuration and analytics live on separate pages. **Settings** (`/settings.htm
 
 Set an optional **Dashboard URL** in Settings' Email Notifications section to add a "View Full Report" button to sync emails, linking back to the dashboard.
 
+By default, the automatic sync that runs when the container restarts only emails if something actually changed (new transactions or a bank sync issue) — same as any other sync. Check **"Always send an email after the automatic sync on container restart"** in Email Notifications if you'd rather get a confirmation email every time the container comes back up, whether or not anything new was found.
+
 Use **Test Connection** in Settings' Actual Budget Configuration card to verify your Server URL/Sync ID before saving — it reports back immediately instead of requiring a save-and-sync-then-check-logs cycle.
 
 **Backup & Restore** in Settings lets you download your full configuration as JSON and restore it later (e.g. after moving to a new host). The backup file contains your Actual Budget and SMTP credentials in plain text regardless of `CONFIG_ENCRYPTION_KEY` — it's meant to be stored securely by you, not left lying around.
@@ -134,10 +136,6 @@ Use **Access & Sharing** in Settings to set a separate viewer password for a sec
 ## Account Classification
 
 Actual Budget doesn't distinguish checking/savings/investment/liability accounts — it only knows names and balances. **Account Classification** in Settings (right after the Actual Budget connection settings, since it's usually a one-time setup) lets you tag each account as **Emergency Fund**, **Investment**, **Liability**, or leave it unclassified — an account can only be one of these at a time. These tags drive the Financial Health Check widget, its Net Worth Breakdown, the Financial Insights projection, and the "Liability Accounts" section of sync emails. Until you classify anything, Liability falls back to "any account with a negative balance" so the app still works sensibly out of the box.
-
-## Feedback
-
-The **💬 Feedback** link in the footer (Dashboard, Data Explorer, Trends, Settings) opens a small form to report a bug or idea — submitting it files a GitHub issue on this project directly, no need to leave the app. Set a **GitHub Repository** and **Personal Access Token** (scoped to "Issues: Read and write" on that repo) in Settings' Feedback card to enable it; until then, the button explains it isn't configured yet.
 
 ## Webhook Notifications
 

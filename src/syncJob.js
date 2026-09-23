@@ -27,7 +27,7 @@ function describeBankSyncStatus(status) {
   return BANK_SYNC_STATUS_LABELS[status] || 'Failed to sync';
 }
 
-async function syncAndReport() {
+async function syncAndReport({ isStartup = false } = {}) {
   if (isSyncing) {
     logger.warn('Sync already in progress. Skipping...');
     return;
@@ -101,8 +101,9 @@ async function syncAndReport() {
     const added = actualService.resolvePayeeNames(rawAdded, payees);
     const totalBalance = Object.values(accountBalances).reduce((sum, b) => sum + b, 0);
     const hasReportableChange = added.length > 0 || bankSyncIssue;
+    const forceEmail = isStartup && config.emailOnRestart;
 
-    if (config.enableEmail && hasReportableChange) {
+    if (config.enableEmail && (hasReportableChange || forceEmail)) {
       logger.info('Compiling HTML email report...');
       const includeBudget = config.emailSections?.budgetVsActual !== false;
       const includeTransactions = config.emailSections?.transactions !== false;
