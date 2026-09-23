@@ -125,6 +125,48 @@ function buildSpendingInsights(categoryTrends, { significantPctChange = 15, minM
     .map(({ dollarImpact, ...rest }) => rest);
 }
 
+// Compares each category's recent average monthly spend (over 3/6/12-month
+// trailing windows) against what's currently budgeted for it, to answer "am
+// I over- or under-budgeting this category". A category spending notably
+// more than its budget on average is under-budgeted (the budget should go
+// up); notably less is over-budgeted (money is being set aside faster than
+// it's spent, so the budget could come down); anything within
+// `thresholdPct` of the budget is on-track and not worth flagging.
+// `budgetedByCategory` is a Map<categoryId, budgeted dollars> for the
+// current month — deliberately not itself averaged, since a budget is a
+// forward-looking plan set once, not a trailing figure.
+function buildBudgetCalibration(categoryTrends, budgetedByCategory, { windows = [3, 6, 12], thresholdPct = 10 } = {}) {
+  const results = [];
+  for (const trend of categoryTrends) {
+    const budgeted = budgetedByCategory.get(trend.categoryId) || 0;
+    const byWindow = {};
+    for (const w of windows) {
+      // Requires at least half the window's months of data so a category
+      // that only recently started being used doesn't get judged against
+      // an average built from mostly-zero months.
+      const slice = trend.monthlyTotals.slice(-w);
+      if (slice.length < Math.ceil(w / 2)) continue;
+
+      const avg = average(slice.map(m => m.total));
+      const diffPct = budgeted > 0 ? ((avg - budgeted) / budgeted) * 100 : (avg > 0 ? 100 : 0);
+      let status = 'on-track';
+      if (diffPct > thresholdPct) status = 'under-budgeted';
+      else if (diffPct < -thresholdPct) status = 'over-budgeted';
+
+      byWindow[w] = {
+        avgMonthlySpend: Math.round(avg * 100) / 100,
+        budgeted,
+        gap: Math.round((avg - budgeted) * 100) / 100,
+        diffPct: Math.round(diffPct),
+        status
+      };
+    }
+    if (Object.keys(byWindow).length === 0) continue;
+    results.push({ categoryId: trend.categoryId, name: trend.name, groupName: trend.groupName, windows: byWindow });
+  }
+  return results;
+}
+
 // A single projection point: the straight-line continuation of the current
 // pace (with a Wealthfront/Personal-Capital-style "typical range" band around
 // it, derived from how volatile the actual month-to-month change has
@@ -219,5 +261,5 @@ function buildBalanceProjection(monthlyBalances, investmentMonthlyBalances = [],
 
 module.exports = {
   linearRegression, projectFutureValue, classifySpendTrend, standardDeviation,
-  buildSpendingInsights, buildBalanceProjection, monthsToReachTarget
+  buildSpendingInsights, buildBalanceProjection, monthsToReachTarget, buildBudgetCalibration
 };

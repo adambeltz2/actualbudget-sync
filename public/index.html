@@ -513,6 +513,23 @@
           <div id="spendingTrendsList" style="display:flex; flex-direction:column; gap:12px;"></div>
         </div>
 
+        <div id="budgetCalibrationSection" style="margin-bottom:22px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+            <div style="font-size:13px; font-weight:700; color:var(--text-secondary); display:flex; align-items:center; gap:6px;">Budget Calibration
+              <span class="info-tip" tabindex="0">i<span class="info-tip-content">Compares each category's average monthly spend over the selected window against its currently budgeted amount. Only categories off by more than 10% either way are shown.</span></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-muted);">
+              <span>Average over</span>
+              <select id="budgetCalibrationWindow" style="font-size:13px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); padding:5px 7px;">
+                <option value="3">Last 3 Months</option>
+                <option value="6" selected>Last 6 Months</option>
+                <option value="12">Last 12 Months</option>
+              </select>
+            </div>
+          </div>
+          <div id="budgetCalibrationList" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+
         <div>
           <div style="font-size:13px; font-weight:700; color:var(--text-secondary); margin-bottom:10px;">Balance Projection</div>
           <div style="overflow-x:auto;">
@@ -1064,6 +1081,43 @@
       }).join('');
     }
 
+    // Populated once per Financial Insights load, then re-rendered locally
+    // when the window dropdown changes — all three windows are already
+    // computed server-side in one pass, so switching windows never needs a
+    // fresh request.
+    let budgetCalibrationData = [];
+
+    function renderBudgetCalibration(calibration, windowKey) {
+      budgetCalibrationData = calibration;
+      const list = document.getElementById('budgetCalibrationList');
+      const flagged = calibration
+        .filter(c => c.windows[windowKey] && c.windows[windowKey].status !== 'on-track')
+        .sort((a, b) => Math.abs(b.windows[windowKey].gap) - Math.abs(a.windows[windowKey].gap))
+        .slice(0, 8);
+
+      if (flagged.length === 0) {
+        list.innerHTML = `<p style="color:var(--text-muted); font-size:13px; margin:0;">No categories are notably over- or under-budgeted over this window.</p>`;
+        return;
+      }
+
+      list.innerHTML = flagged.map(c => {
+        const w = c.windows[windowKey];
+        const isUnder = w.status === 'under-budgeted';
+        const color = isUnder ? 'var(--negative)' : 'var(--positive)';
+        const label = isUnder ? 'Under-budgeted' : 'Over-budgeted';
+        const detail = w.budgeted > 0
+          ? `Averaging ${formatCurrency(w.avgMonthlySpend)}/mo vs. ${formatCurrency(w.budgeted)} budgeted.`
+          : `Averaging ${formatCurrency(w.avgMonthlySpend)}/mo with nothing currently budgeted.`;
+        return `<div style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
+          <div style="min-width:0;">
+            <div style="font-size:13.5px; font-weight:600;">${escapeHtml(c.name)} <span style="font-weight:400; color:var(--text-muted); font-size:12px;">${escapeHtml(c.groupName || '')}</span></div>
+            <div style="font-size:12px; color:var(--text-muted);">${detail}</div>
+          </div>
+          <span style="flex-shrink:0; font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:999px; color:${color}; background:color-mix(in srgb, ${color} 14%, var(--card-bg));">${label}</span>
+        </div>`;
+      }).join('');
+    }
+
     function monthLabel(monthStr) {
       const [y, m] = monthStr.split('-');
       return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'short' }) + " '" + y.slice(2);
@@ -1418,6 +1472,7 @@
       try {
         renderSpendingTrends(data.spendingTrends || []);
         renderProjection(data);
+        renderBudgetCalibration(data.budgetCalibration || [], document.getElementById('budgetCalibrationWindow').value);
       } catch (err) {
         console.error('Financial Insights widget failed to render:', err);
       }
@@ -1426,6 +1481,14 @@
     document.getElementById('insightsReturnRate').addEventListener('change', (e) => {
       saveDashboardPreference({ insightsAnnualReturnPct: parseFloat(e.target.value) });
       loadInsights(e.target.value, document.getElementById('insightsLookback').value);
+    });
+
+    // Budget Calibration always has all three windows already computed
+    // server-side (getBudgetCalibration() looks back 12 months regardless of
+    // the Financial Insights lookback above), so switching windows just
+    // re-renders the same data instead of triggering a fetch.
+    document.getElementById('budgetCalibrationWindow').addEventListener('change', (e) => {
+      renderBudgetCalibration(budgetCalibrationData, e.target.value);
     });
 
     document.getElementById('insightsLookback').addEventListener('change', (e) => {

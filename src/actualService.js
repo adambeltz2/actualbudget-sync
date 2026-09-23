@@ -3,7 +3,7 @@ const path = require('path');
 const api = require('@actual-app/api');
 const { q } = require('@actual-app/api');
 const { logger } = require('./logger');
-const { buildSpendingInsights, buildBalanceProjection } = require('./insights');
+const { buildSpendingInsights, buildBalanceProjection, buildBudgetCalibration } = require('./insights');
 const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations, computeNetWorthBreakdown } = require('./financialHealth');
 const { buildCategoryDeltas } = require('./trends');
 const { ageInMonths, resolveSocialSecurityClaim, computeFireTargetAtAge, monthsToReachFireTarget } = require('./socialSecurity');
@@ -767,8 +767,9 @@ async function getBudgetVsActual({ month, startDate, endDate } = {}) {
 // per month (rather than a single multi-key groupBy, which the query builder
 // doesn't support cleanly) — fine at the "6 months" scale this is meant for.
 async function getCategorySpendTrend({ months = 6 } = {}) {
-  const categories = await getCategories();
+  const [categories, categoryGroups] = await Promise.all([getCategories(), getCategoryGroups()]);
   const categoryName = Object.fromEntries(categories.map(c => [c.id, c.name]));
+  const groupNameByCategory = buildCategoryGroupMap(categoryGroups);
 
   const now = new Date();
   const monthRanges = [];
@@ -794,9 +795,25 @@ async function getCategorySpendTrend({ months = 6 } = {}) {
   for (const [categoryId, name] of Object.entries(categoryName)) {
     const monthlyTotals = perMonth.map(({ month, totals }) => ({ month, total: totals[categoryId] || 0 }));
     if (monthlyTotals.every(m => m.total === 0)) continue;
-    trends.push({ categoryId, name, monthlyTotals });
+    trends.push({ categoryId, name, groupName: groupNameByCategory.get(categoryId) || 'Other', monthlyTotals });
   }
   return trends;
+}
+
+// Compares each category's recent average monthly spend against its current
+// budgeted amount (buildBudgetCalibration, insights.js) to flag categories
+// that are consistently over- or under-budgeted. Always looks back a full
+// 12 months (regardless of the Financial Insights lookback the caller might
+// be using for other widgets) so the UI's 3/6/12-month toggle never needs a
+// fresh request — buildBudgetCalibration computes all three windows from
+// the same data in one pass.
+async function getBudgetCalibration() {
+  const [categoryTrends, currentBudget] = await Promise.all([
+    getCategorySpendTrend({ months: 12 }),
+    getBudgetVsActual({ month: currentMonthStr() })
+  ]);
+  const budgetedByCategory = new Map(currentBudget.map(c => [c.categoryId, c.budgeted]));
+  return buildBudgetCalibration(categoryTrends, budgetedByCategory);
 }
 
 // Rolling-window daily balance reconstruction ending today. Used internally
@@ -862,10 +879,11 @@ async function getMonthlyBalanceHistoryForAccounts(accountIds, { months = 6 } = 
 }
 
 async function getFinancialInsights({ months = 6, annualReturnRatePct = 7, investmentAccountIds = [] } = {}) {
-  const [categoryTrends, monthlyBalances, investmentMonthlyBalances] = await Promise.all([
+  const [categoryTrends, monthlyBalances, investmentMonthlyBalances, budgetCalibration] = await Promise.all([
     getCategorySpendTrend({ months }),
     getMonthlyBalanceHistory({ months }),
-    getMonthlyBalanceHistoryForAccounts(investmentAccountIds, { months })
+    getMonthlyBalanceHistoryForAccounts(investmentAccountIds, { months }),
+    getBudgetCalibration()
   ]);
 
   // liquid = total - investment at each matching month, so liquid +
@@ -878,7 +896,8 @@ async function getFinancialInsights({ months = 6, annualReturnRatePct = 7, inves
   return {
     spendingTrends: buildSpendingInsights(categoryTrends),
     balanceProjection: buildBalanceProjection(monthlyBalances, investmentMonthlyBalances, liquidMonthlyBalances, { annualReturnRate: annualReturnRatePct / 100 }),
-    usesInvestmentTagging: investmentMonthlyBalances.length > 0
+    usesInvestmentTagging: investmentMonthlyBalances.length > 0,
+    budgetCalibration
   };
 }
 
@@ -1051,7 +1070,7 @@ module.exports = {
   getTransactionsForAccount, getCategories, getCategoryGroups, getPayees, queryTransactions, queryAllTransactions,
   countTransactions, getNetWorth, getSpendByCategory, getUncategorizedTransactions, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
-  getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getFinancialHealthData, getFinancialHealthHistory,
+  getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getBudgetCalibration, getFinancialHealthData, getFinancialHealthHistory,
   getMetricTransactions, getFireProgress, getWrappedData, getMonthlySavingsHistory, getTrendsData, getNetWorthHistory,
   testConnection,
   runBankSync, getBankSyncStatuses, shutdown, isReady,
