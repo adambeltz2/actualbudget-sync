@@ -65,6 +65,20 @@
     .filters-grid { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 14px; }
     @media (max-width: 900px) { .filters-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
     [hidden] { display: none !important; }
+    .checkbox-list {
+      height: 130px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--card-bg); padding: 6px 8px;
+    }
+    .checkbox-list .group-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--text-muted); margin: 8px 0 2px; padding-top: 4px; border-top: 1px solid var(--border);
+    }
+    .checkbox-list .group-label:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+    .checkbox-list label {
+      display: flex; align-items: center; gap: 7px; padding: 3px 2px; font-size: 13px;
+      cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .checkbox-list input[type="checkbox"] { width: auto; flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -102,11 +116,11 @@
         <div class="filters-grid">
           <div>
             <label class="field-label">Account <span style="font-weight:400; color:var(--text-muted);">(none = all)</span></label>
-            <select id="filterAccount" multiple size="4"></select>
+            <div id="filterAccount" class="checkbox-list"></div>
           </div>
           <div>
             <label class="field-label">Category <span style="font-weight:400; color:var(--text-muted);">(none = all)</span></label>
-            <select id="filterCategory" multiple size="4"></select>
+            <div id="filterCategory" class="checkbox-list"></div>
           </div>
           <div>
             <label class="field-label">Quick Range</label>
@@ -260,8 +274,9 @@
           </span>
         </div>`).join('');
 
-      const select = document.getElementById('filterAccount');
-      select.innerHTML = accounts.map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
+      const list = document.getElementById('filterAccount');
+      list.innerHTML = accounts.map(a => `
+        <label><input type="checkbox" value="${a.id}"> ${escapeHtml(a.name)}</label>`).join('');
       return true;
     }
 
@@ -275,13 +290,14 @@
 
       categoriesById = Object.fromEntries(categories.map(c => [c.id, c]));
 
-      const select = document.getElementById('filterCategory');
+      const list = document.getElementById('filterCategory');
       // Grouped via Actual's own category groups (e.g. "Bills", "Fun Money")
       // instead of one flat alphabetical list, easier to navigate once a
       // budget has more than a handful of categories.
-      select.innerHTML = categoryGroups.map(g => `<optgroup label="${escapeHtml(g.name)}">${
-          (g.categories || []).map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')
-        }</optgroup>`).join('');
+      list.innerHTML = categoryGroups.map(g => `
+          <div class="group-label">${escapeHtml(g.name)}</div>
+          ${(g.categories || []).map(c => `<label><input type="checkbox" value="${c.id}"> ${escapeHtml(c.name)}</label>`).join('')}
+        `).join('');
     }
 
     // Maps a quick-range preset to explicit From/To dates so the existing
@@ -313,8 +329,8 @@
       });
     });
 
-    function selectedValues(selectEl) {
-      return Array.from(selectEl.selectedOptions).map(o => o.value);
+    function selectedValues(containerEl) {
+      return Array.from(containerEl.querySelectorAll('input[type="checkbox"]:checked')).map(el => el.value);
     }
 
     function currentFilters() {
@@ -370,8 +386,7 @@
     });
     document.getElementById('applyFiltersBtn').addEventListener('click', () => { offset = 0; loadTransactions(); });
     document.getElementById('clearFiltersBtn').addEventListener('click', () => {
-      Array.from(document.getElementById('filterAccount').options).forEach(o => { o.selected = false; });
-      Array.from(document.getElementById('filterCategory').options).forEach(o => { o.selected = false; });
+      document.querySelectorAll('#filterAccount input[type="checkbox"], #filterCategory input[type="checkbox"]').forEach(cb => { cb.checked = false; });
       document.getElementById('filterStart').value = '';
       document.getElementById('filterEnd').value = '';
       document.getElementById('filterSearch').value = '';

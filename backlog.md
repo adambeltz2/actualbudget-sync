@@ -217,6 +217,13 @@ User feedback: budgets live in monthly buckets (like Actual's own budget-month m
 - Dashboard headers ("Income vs Spend · This Month", "Spend by Category · This Month", etc.) now update dynamically based on the selected month, including a proper month/year label (e.g. "August 2026") if a month were ever added beyond the two current options.
 Affected files: `src/actualService.js`, `src/routes.js`, `public/index.html`, `test/actualService.test.js`
 
+## P51 — Data Explorer: checkboxes instead of ctrl-click multi-select — DONE
+
+### [FEATURE] Account/Category filters use checkbox lists — DONE
+The Account/Category filters (added in P47 as native `<select multiple>`) only visibly supported picking one option — multi-selecting required knowing to ctrl/cmd-click, which isn't discoverable and doesn't work at all on touch. Replaced both `<select multiple>` elements in `public/explorer.html` with a scrollable `.checkbox-list` div of `<label><input type="checkbox">…</label>` rows (categories keep their group-label headers in place of `<optgroup>`). `selectedValues()` now reads `:checked` checkboxes instead of `selectedOptions`, and Clear unchecks every box instead of deselecting select options — `currentFilters()` itself didn't need to change since it only calls `selectedValues()` by container id.
+Verified via a Playwright smoke pass against a local mock server: checkboxes render for both filters, checking two accounts and a category produces `?accountId=a1&accountId=a2&categoryId=c1` on the request, and Clear unchecks everything.
+Affected files: `public/explorer.html`
+
 ## P50 — Dashboard's Spend by Category grouped by category group, not child — DONE
 
 ### [BUG] Spend by Category donut was driven by individual child categories — DONE
