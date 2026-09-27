@@ -167,6 +167,10 @@ Optionally factor **Social Security** into the FIRE Number under Settings: enter
 
 Financial Health Check and Financial Independence both show a brief "rule of thumb" line next to each target (e.g. "3–6 months of essential expenses," "15–20% of income") — standard personal-finance benchmarks, not the app's own opinion, so the numbers are easier to judge without outside context.
 
+## Retirement Modeling
+
+**🎯 Retirement Modeling** (its own page, linked from every nav) is where the FIRE widget's numbers turn into a plan: pick a **Target Retirement Age** and it solves backward for the monthly savings pace that actually gets you there by then, compares it to what you're really saving today, and shows you the gap. Adjust the **Monthly Contribution** field to try your own number, or click **Use Required Amount** to jump straight to what's needed — a year-by-year chart (contributions vs. interest) and a side-by-side comparison table (your current pace vs. the scenario you're modeling) show exactly what changes. This page is additive: it doesn't touch the Dashboard's FIRE Number or its own saved settings.
+
 ## Trends
 
 **📈 Trends** (linked from the Dashboard, Data Explorer, and Settings nav) is for proactive awareness rather than a single month's snapshot: a monthly **Net Savings** bar chart (green for months you saved, red for months you spent more than you earned) over the last 12 or 24 months, so an overspend spike — a home renovation, a big one-time purchase — is visible at a glance instead of buried in a single number. Below it, a **Year to Date vs. Last Year** comparison (income, spend, net saved) covers the same January-1-through-today window in both years, so it's apples-to-apples rather than a full year vs. a partial one.

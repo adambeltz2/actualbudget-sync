@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const {
   linearRegression, projectFutureValue, classifySpendTrend, standardDeviation,
   buildSpendingInsights, buildBalanceProjection, monthsToReachTarget, buildBudgetCalibration,
-  requiredMonthlyContribution
+  requiredMonthlyContribution, buildContributionSeries
 } = require('../src/insights');
 
 describe('linearRegression', () => {
@@ -255,6 +255,33 @@ describe('requiredMonthlyContribution', () => {
   test('zero or negative months (target age already reached) returns null', () => {
     assert.equal(requiredMonthlyContribution({ currentBalance: 100000, targetValue: 500000, annualReturnRate: 0.07, months: 0 }), null);
     assert.equal(requiredMonthlyContribution({ currentBalance: 100000, targetValue: 500000, annualReturnRate: 0.07, months: -5 }), null);
+  });
+});
+
+describe('buildContributionSeries', () => {
+  test('always includes month 0 and the exact target month as endpoints', () => {
+    const series = buildContributionSeries({ currentBalance: 1000, monthlyContribution: 100, annualReturnRate: 0.07, totalMonths: 130 });
+    assert.equal(series[0].months, 0);
+    assert.equal(series[series.length - 1].months, 130);
+  });
+
+  test('steps by 12 months in between, without duplicating the target when it lands on a step', () => {
+    const series = buildContributionSeries({ currentBalance: 1000, monthlyContribution: 100, annualReturnRate: 0.07, totalMonths: 36 });
+    assert.deepEqual(series.map(p => p.months), [0, 12, 24, 36]);
+  });
+
+  test('contributions and interest reconcile exactly with balance at every point', () => {
+    const series = buildContributionSeries({ currentBalance: 5000, monthlyContribution: 250, annualReturnRate: 0.06, totalMonths: 50 });
+    for (const point of series) {
+      assert.ok(Math.abs((5000 + point.contributions + point.interest) - point.balance) < 1e-6);
+    }
+  });
+
+  test('month 0 has zero contributions and zero interest', () => {
+    const [first] = buildContributionSeries({ currentBalance: 20000, monthlyContribution: 300, annualReturnRate: 0.07, totalMonths: 60 });
+    assert.equal(first.months, 0);
+    assert.equal(first.contributions, 0);
+    assert.equal(first.interest, 0);
   });
 });
 

@@ -187,6 +187,31 @@ function requiredMonthlyContribution({ currentBalance, targetValue, annualReturn
   return (targetValue - currentBalance * growth) / ((growth - 1) / monthlyRate);
 }
 
+// A year-by-year breakdown of a single contribution scenario, from today out
+// to `totalMonths` — the data behind the Retirement Modeling page's bar
+// chart (contributions stacked under interest, per year) and its "Total
+// Contributions"/"Interest Earned" stat tiles. Always includes month 0 and
+// the exact target month as endpoints (even when the target isn't a whole
+// number of years), stepping by `stepMonths` in between, so the chart's
+// last bar always lines up with the target age instead of the nearest
+//12-month mark. `interest` is a plug figure (balance minus starting balance
+// minus contributions) rather than separately compounded, since it has to
+// reconcile exactly with `balance` for the stacked chart to read correctly.
+function buildContributionSeries({ currentBalance, monthlyContribution, annualReturnRate, totalMonths, stepMonths = 12 }) {
+  const monthPoints = [];
+  for (let m = 0; m <= totalMonths; m += stepMonths) {
+    monthPoints.push(m);
+  }
+  if (monthPoints[monthPoints.length - 1] !== totalMonths) monthPoints.push(totalMonths);
+
+  return monthPoints.map(months => {
+    const balance = projectFutureValue({ presentValue: currentBalance, monthlyContribution, annualReturnRate, months });
+    const contributions = monthlyContribution * months;
+    const interest = balance - currentBalance - contributions;
+    return { months, balance, contributions, interest };
+  });
+}
+
 // A single projection point: the straight-line continuation of the current
 // pace (with a Wealthfront/Personal-Capital-style "typical range" band around
 // it, derived from how volatile the actual month-to-month change has
@@ -282,5 +307,5 @@ function buildBalanceProjection(monthlyBalances, investmentMonthlyBalances = [],
 module.exports = {
   linearRegression, projectFutureValue, classifySpendTrend, standardDeviation,
   buildSpendingInsights, buildBalanceProjection, monthsToReachTarget, buildBudgetCalibration,
-  requiredMonthlyContribution
+  requiredMonthlyContribution, buildContributionSeries
 };

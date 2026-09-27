@@ -421,6 +421,47 @@ router.get('/api/data/fire-progress', async (req, res) => {
   }
 });
 
+// Backs the Retirement Modeling page — same target-age goal-seek as
+// fire-progress, but with an adjustable monthly contribution scenario, so
+// query params (not just config) drive every input: none of this is meant
+// to overwrite the Dashboard FIRE widget's own saved settings.
+router.get('/api/data/retirement-model', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const fireAnnualExpenses = req.query.fireAnnualExpenses !== undefined
+      ? parseFloat(req.query.fireAnnualExpenses) || 0
+      : (config.fireAnnualExpenses || 0);
+    const fireWithdrawalRatePct = req.query.fireWithdrawalRatePct !== undefined
+      ? Math.min(Math.max(parseFloat(req.query.fireWithdrawalRatePct), 1), 20)
+      : (config.fireWithdrawalRatePct ?? 4);
+    const annualReturnRatePct = req.query.annualReturnRatePct !== undefined
+      ? Math.min(Math.max(parseFloat(req.query.annualReturnRatePct), -20), 30)
+      : (config.insightsAnnualReturnPct ?? 7);
+    const targetRetirementAge = req.query.targetRetirementAge !== undefined
+      ? parseFloat(req.query.targetRetirementAge) || null
+      : null;
+    const modeledMonthlyContribution = req.query.modeledMonthlyContribution !== undefined && req.query.modeledMonthlyContribution !== ''
+      ? parseFloat(req.query.modeledMonthlyContribution)
+      : null;
+    const model = await actualService.getRetirementModel({
+      targetRetirementAge, modeledMonthlyContribution: Number.isFinite(modeledMonthlyContribution) ? modeledMonthlyContribution : null,
+      fireAnnualExpenses, fireWithdrawalRatePct, annualReturnRatePct,
+      birthdate: config.fireBirthdate || null,
+      ssClaimingChoice: config.ssClaimingChoice || null,
+      ssAge62MonthlyBenefit: config.ssAge62MonthlyBenefit,
+      ssFraAgeYears: config.ssFraAgeYears, ssFraAgeMonths: config.ssFraAgeMonths,
+      ssFraMonthlyBenefit: config.ssFraMonthlyBenefit,
+      ssAge70MonthlyBenefit: config.ssAge70MonthlyBenefit
+    });
+    res.json(model);
+  } catch (err) {
+    logger.error('Retirement model request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to compute the retirement model.' });
+  }
+});
+
 router.get('/api/data/wrapped', async (req, res) => {
   const config = requireActualConfigured(req, res);
   if (!config) return;
