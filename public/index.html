@@ -447,7 +447,21 @@
         </div>
         <p id="fireSsNote" hidden class="field-hint" style="margin-top:8px; margin-bottom:4px; color:var(--accent);"></p>
         <p class="field-hint" style="margin-top:8px; margin-bottom:4px;">Rule of thumb: 4% (25x expenses) is the standard baseline; a lower rate like 3–3.5% adds a safety margin for a longer retirement.</p>
-        <p class="field-hint" style="margin-top:0; margin-bottom:0;">This is a simple math projection from your own historical data, not financial advice. Set your birthdate and Social Security benefit estimates in <a href="/settings.html">Settings</a> to factor Social Security into the FIRE Number.</p>
+        <p class="field-hint" style="margin-top:0; margin-bottom:16px;">This is a simple math projection from your own historical data, not financial advice. Set your birthdate and Social Security benefit estimates in <a href="/settings.html">Settings</a> to factor Social Security into the FIRE Number.</p>
+
+        <div id="targetRetirementSection" style="padding-top:16px; border-top:1px solid var(--border);">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+            <div style="font-size:13px; font-weight:700; color:var(--text-secondary); display:flex; align-items:center; gap:6px;">Target Retirement Age
+              <span class="info-tip" tabindex="0">i<span class="info-tip-content">Solves backward from an age you pick for the monthly savings pace that would actually get you to the FIRE Number by then, and compares it to what you're saving today — so a shortfall shows up as a concrete dollar amount instead of just a distant "years to FI".</span></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input type="number" id="fireTargetRetirementAge" min="1" max="100" placeholder="e.g. 55" style="width:80px; padding:5px 7px; font-size:13px; border-radius:6px; border:1px solid var(--border); background:var(--card-bg); color:var(--text);">
+              <span style="font-size:12.5px; color:var(--text-muted);">years old</span>
+            </div>
+          </div>
+          <p id="targetRetirementNoBirthdate" hidden class="field-hint" style="margin:0;">Set your birthdate in <a href="/settings.html">Settings</a> first — this needs to know your current age.</p>
+          <div id="targetRetirementResult" hidden></div>
+        </div>
       </div>
         </div>
       </details>
@@ -717,6 +731,7 @@
       document.getElementById('widgetFire').checked = widgets.fire !== false;
       document.getElementById('fireExpensesOverride').value = config.fireAnnualExpenses || '';
       document.getElementById('fireWithdrawalRate').value = config.fireWithdrawalRatePct ?? 4;
+      document.getElementById('fireTargetRetirementAge').value = config.fireTargetRetirementAge || '';
 
       const isConfigured = !!(config.actualUrl && config.actualPasswordSet && config.syncId);
       if (isConfigured) {
@@ -1342,14 +1357,51 @@
       } else {
         ssNote.hidden = true;
       }
+
+      renderTargetRetirement(data);
+    }
+
+    function renderTargetRetirement(data) {
+      const noBirthdateNote = document.getElementById('targetRetirementNoBirthdate');
+      const resultEl = document.getElementById('targetRetirementResult');
+      const targetAgeEntered = document.getElementById('fireTargetRetirementAge').value !== '';
+
+      noBirthdateNote.hidden = !(targetAgeEntered && !data.hasBirthdate);
+      resultEl.hidden = true;
+      if (!data.targetRetirement) return;
+
+      const t = data.targetRetirement;
+      if (t.alreadyPassed) {
+        resultEl.innerHTML = `<p class="field-hint" style="margin:0;">Age ${t.targetAge} has already passed at your current age — pick a later target to see what it'd take.</p>`;
+        resultEl.hidden = false;
+        return;
+      }
+
+      const years = Math.floor(t.monthsToTarget / 12);
+      const months = t.monthsToTarget % 12;
+      const timeText = `${years} yr${years === 1 ? '' : 's'}${months > 0 ? ` ${months} mo` : ''}`;
+      const gapAbs = formatCurrency(Math.abs(t.gap));
+
+      let message;
+      if (t.onTrack) {
+        message = `On pace to retire by age ${t.targetAge} (in ${timeText}) — you could save ${gapAbs} less/month and still get there, or keep the surplus as a safety margin.`;
+      } else {
+        message = `To retire by age ${t.targetAge} (in ${timeText}), save ${gapAbs} more/month — via more income or ${gapAbs} less in monthly spending.`;
+      }
+      const color = t.onTrack ? 'var(--positive)' : 'var(--negative)';
+      resultEl.innerHTML = `
+        <p style="margin:0 0 6px; font-size:13.5px; color:${color}; font-weight:600;">${message}</p>
+        <p class="field-hint" style="margin:0;">Needs ${formatCurrency(t.requiredMonthlyContribution)}/mo saved vs. ${formatCurrency(t.actualMonthlyContribution)}/mo actually saved now, to reach a ${formatCurrency(t.targetFireNumber)} FIRE Number at that age.</p>`;
+      resultEl.hidden = false;
     }
 
     async function loadFireProgress() {
       const fireAnnualExpenses = document.getElementById('fireExpensesOverride').value;
       const fireWithdrawalRatePct = document.getElementById('fireWithdrawalRate').value;
+      const targetRetirementAge = document.getElementById('fireTargetRetirementAge').value;
       let res;
       try {
-        res = await fetch(`/api/data/fire-progress?fireAnnualExpenses=${encodeURIComponent(fireAnnualExpenses)}&fireWithdrawalRatePct=${encodeURIComponent(fireWithdrawalRatePct)}`);
+        res = await fetch(`/api/data/fire-progress?fireAnnualExpenses=${encodeURIComponent(fireAnnualExpenses)}&fireWithdrawalRatePct=${encodeURIComponent(fireWithdrawalRatePct)}&targetRetirementAge=${encodeURIComponent(targetRetirementAge)}`);
       } catch (err) {
         return;
       }
@@ -1370,6 +1422,11 @@
     });
     document.getElementById('fireWithdrawalRate').addEventListener('change', (e) => {
       saveDashboardPreference({ fireWithdrawalRatePct: parseFloat(e.target.value) });
+      loadFireProgress();
+    });
+    document.getElementById('fireTargetRetirementAge').addEventListener('change', (e) => {
+      const value = parseFloat(e.target.value) || null;
+      saveDashboardPreference({ fireTargetRetirementAge: value });
       loadFireProgress();
     });
 

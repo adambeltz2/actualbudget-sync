@@ -167,6 +167,26 @@ function buildBudgetCalibration(categoryTrends, budgetedByCategory, { windows = 
   return results;
 }
 
+// The inverse of projectFutureValue: given a target value to reach by a
+// certain number of months, solves algebraically for the monthly
+// contribution (PMT) that gets a present value there — rearranging
+// FV = PV(1+r)^n + PMT*(((1+r)^n-1)/r) for PMT, the same closed-form
+// annuity-payment formula used to answer "how much do I need to save
+// monthly to hit this goal", rather than iterating like
+// monthsToReachTarget does (which solves for months, not a dollar amount,
+// and doesn't have as clean a closed form). Returns null when there are no
+// months left to compound (a target age already reached or passed) — the
+// caller decides what that means (already there, or too late).
+function requiredMonthlyContribution({ currentBalance, targetValue, annualReturnRate, months }) {
+  if (months <= 0) return null;
+  const monthlyRate = annualReturnRate / 12;
+  if (monthlyRate === 0) {
+    return (targetValue - currentBalance) / months;
+  }
+  const growth = (1 + monthlyRate) ** months;
+  return (targetValue - currentBalance * growth) / ((growth - 1) / monthlyRate);
+}
+
 // A single projection point: the straight-line continuation of the current
 // pace (with a Wealthfront/Personal-Capital-style "typical range" band around
 // it, derived from how volatile the actual month-to-month change has
@@ -261,5 +281,6 @@ function buildBalanceProjection(monthlyBalances, investmentMonthlyBalances = [],
 
 module.exports = {
   linearRegression, projectFutureValue, classifySpendTrend, standardDeviation,
-  buildSpendingInsights, buildBalanceProjection, monthsToReachTarget, buildBudgetCalibration
+  buildSpendingInsights, buildBalanceProjection, monthsToReachTarget, buildBudgetCalibration,
+  requiredMonthlyContribution
 };

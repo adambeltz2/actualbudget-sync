@@ -3,7 +3,7 @@ const path = require('path');
 const api = require('@actual-app/api');
 const { q } = require('@actual-app/api');
 const { logger } = require('./logger');
-const { buildSpendingInsights, buildBalanceProjection, buildBudgetCalibration } = require('./insights');
+const { buildSpendingInsights, buildBalanceProjection, buildBudgetCalibration, requiredMonthlyContribution } = require('./insights');
 const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations, computeNetWorthBreakdown } = require('./financialHealth');
 const { buildCategoryDeltas } = require('./trends');
 const { ageInMonths, resolveSocialSecurityClaim, computeFireTargetAtAge, monthsToReachFireTarget } = require('./socialSecurity');
@@ -486,7 +486,8 @@ async function getMetricTransactions({ metric, month, range, startDate, endDate 
 // as annualExpenses itself.
 async function getFireProgress({
   fireAnnualExpenses, fireWithdrawalRatePct = 4, annualReturnRatePct = 7,
-  birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
+  birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit,
+  targetRetirementAge
 } = {}) {
   const accounts = await getAccounts();
   const balances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
@@ -526,6 +527,40 @@ async function getFireProgress({
     annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, currentAgeMonths, socialSecurity
   });
 
+  // "Actions needed to hit targets": rather than just projecting forward
+  // from the current savings pace (yearsToFI above), this solves backward
+  // from a chosen target retirement age for the monthly contribution that
+  // would get there — then compares it to what's actually being saved
+  // today, so a shortfall reads as a concrete dollar amount to save more
+  // (or spend less) instead of just a discouraging FIRE Number.
+  // computeFireTargetAtAge is reused at the target age (not today's age) so
+  // a still-narrowing Social Security bridge is accounted for the same way
+  // the forward projection already does.
+  let targetRetirement = null;
+  if (currentAgeMonths !== null && targetRetirementAge > 0) {
+    const targetAgeMonths = targetRetirementAge * 12;
+    const monthsToTarget = targetAgeMonths - currentAgeMonths;
+    if (monthsToTarget <= 0) {
+      targetRetirement = { targetAge: targetRetirementAge, alreadyPassed: true };
+    } else {
+      const targetFireNumber = computeFireTargetAtAge({
+        ageMonths: targetAgeMonths, annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, socialSecurity
+      });
+      const required = requiredMonthlyContribution({
+        currentBalance: netWorth, targetValue: targetFireNumber, annualReturnRate: annualReturnRatePct / 100, months: monthsToTarget
+      });
+      targetRetirement = {
+        targetAge: targetRetirementAge,
+        targetFireNumber,
+        monthsToTarget,
+        requiredMonthlyContribution: required,
+        actualMonthlyContribution: monthlyContribution,
+        gap: required - monthlyContribution,
+        onTrack: required <= monthlyContribution
+      };
+    }
+  }
+
   return {
     netWorth, fireNumber, annualExpenses, autoAnnualExpenses,
     usesCustomExpenses: fireAnnualExpenses > 0,
@@ -536,7 +571,9 @@ async function getFireProgress({
       claimAgeMonths: socialSecurity.claimAgeMonths,
       annualBenefit: socialSecurity.annualBenefit,
       yearsUntilEligible: Math.max(socialSecurity.claimAgeMonths - currentAgeMonths, 0) / 12
-    } : null
+    } : null,
+    hasBirthdate: currentAgeMonths !== null,
+    targetRetirement
   };
 }
 
