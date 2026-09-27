@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Retirement Modeling — Actual Budget Smart Sync</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap">
+  <script src="/vendor/chart.umd.js"></script>
+  <style>
+    :root {
+      --bg: #F1F0EC; --card-bg: #FFFFFF; --border: #F0EFEB;
+      --text: #1E2A32; --text-secondary: #33404A; --text-muted: #8A93A0;
+      --accent: #0EA894; --accent-dark: #0C8E7D; --accent-soft: #E4F5F2;
+      --positive: #1C8C74; --negative: #C4573F; --negative-soft: #FBECE8;
+      --shadow: 0 1px 2px rgba(30,42,50,0.04), 0 8px 24px rgba(30,42,50,0.06);
+    }
+    html.dark {
+      --bg: #171D21; --card-bg: #1F262B; --border: #2C363D;
+      --text: #EDEFF0; --text-secondary: #C7CDD1; --text-muted: #7C8890;
+      --accent: #14BFA8; --accent-dark: #0EA894; --accent-soft: #16302C;
+      --positive: #2FBF9B; --negative: #E0806A; --negative-soft: #34211E;
+      --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px rgba(0,0,0,0.3);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 40px 24px 64px;
+      background: var(--bg); color: var(--text);
+      font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
+    }
+    .shell { max-width: 1180px; margin: 0 auto; }
+    .num { font-family: 'Sora', system-ui, sans-serif; }
+    a { color: var(--accent); }
+    .card { background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow); padding: 26px 32px; margin-bottom: 24px; }
+    .card-soft { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; }
+    .label-caps { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer;
+      padding: 9px 14px; border-radius: 10px; font-weight: 600; font-size: 13.5px;
+      font-family: inherit; text-decoration: none; transition: opacity 0.15s;
+    }
+    .btn-ghost { background: var(--card-bg); color: var(--text-secondary); box-shadow: var(--shadow); }
+    .btn-ghost:hover { opacity: 0.85; }
+    .field-label { display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; }
+    .field-hint { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; margin: 0; }
+    input, select {
+      width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--card-bg); color: var(--text); font-family: inherit; font-size: 13.5px;
+    }
+    input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .pill { font-size: 11.5px; font-weight: 700; padding: 4px 11px; border-radius: 999px; white-space: nowrap; }
+    .badge-under { color: var(--negative); background: var(--negative-soft); }
+    .badge-ontrack { color: var(--positive); background: var(--accent-soft); }
+    .statGrid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
+    .scenarioGrid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 18px; }
+    table.compare { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    table.compare th { text-align: left; padding: 10px 12px; color: var(--text-muted); font-weight: 700; border-bottom: 1px solid var(--border); }
+    table.compare td { padding: 12px; border-bottom: 1px solid var(--border); }
+    table.compare tr:last-child td { border-bottom: none; }
+    .error-banner {
+      background: color-mix(in srgb, var(--negative) 12%, var(--card-bg));
+      border: 1px solid color-mix(in srgb, var(--negative) 35%, var(--card-bg));
+      color: var(--negative); font-size: 14px; padding: 12px 14px; border-radius: 10px; margin-bottom: 24px;
+    }
+    .notice-banner {
+      background: color-mix(in srgb, var(--accent) 10%, var(--card-bg));
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--card-bg));
+      color: var(--accent-dark); font-size: 14px; padding: 14px 16px; border-radius: 10px; margin-bottom: 24px;
+    }
+    @media (max-width: 900px) { .statGrid, .scenarioGrid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:28px; flex-wrap:wrap; gap:12px;">
+      <div>
+        <div class="num" style="font-size:22px; font-weight:800;">Retirement Modeling</div>
+        <p style="font-size:13.5px; color:var(--text-muted); margin:2px 0 0;">Play out different savings scenarios against your real synced data. The FIRE widget on the Dashboard is unaffected.</p>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="themeToggleBtn" title="Toggle dark mode" class="btn btn-ghost">🌙</button>
+        <a href="/" class="btn btn-ghost">Dashboard</a>
+        <a href="/explorer.html" class="btn btn-ghost">Data Explorer</a>
+        <a href="/trends.html" class="btn btn-ghost">📈 Trends</a>
+        <a href="/networth.html" class="btn btn-ghost">💰 Net Worth</a>
+        <a href="/settings.html" class="btn btn-ghost">⚙ Settings</a>
+        <button id="logoutBtn" class="btn btn-ghost">Logout</button>
+      </div>
+    </div>
+
+    <div id="errorBanner" class="error-banner" hidden></div>
+    <div id="notConfiguredMsg" class="notice-banner" hidden>
+      Actual Budget isn't configured yet. Set it up on the <a href="/settings.html" style="font-weight:700;">Settings</a> page first.
+    </div>
+    <div id="noBirthdateMsg" class="notice-banner" hidden>
+      This page needs your birthdate to compute your age. Set it in <a href="/settings.html" style="font-weight:700;">Settings</a>' Social Security card first — it only takes a second and Social Security itself stays optional.
+    </div>
+
+    <div id="retirementBody" hidden>
+
+      <!-- Where you stand today -->
+      <div class="label-caps" style="margin-bottom:10px;">Where You Stand Today <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted);">— same numbers as the Dashboard's FIRE widget</span></div>
+      <div class="card">
+        <div style="display:flex; align-items:center; gap:28px; flex-wrap:wrap;">
+          <div style="position:relative; width:84px; height:84px; flex-shrink:0;">
+            <svg width="84" height="84" viewBox="0 0 96 96" style="transform:rotate(-90deg);">
+              <circle cx="48" cy="48" r="40" fill="none" stroke="var(--border)" stroke-width="9"/>
+              <circle id="fireRing" cx="48" cy="48" r="40" fill="none" stroke="var(--accent)" stroke-width="9" stroke-linecap="round" stroke-dasharray="251.3" stroke-dashoffset="251.3"/>
+            </svg>
+            <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+              <div id="firePctNumber" class="num" style="font-size:18px; font-weight:800;">—</div>
+              <div style="font-size:8.5px; color:var(--text-muted); text-align:center;">of FIRE<br>reached</div>
+            </div>
+          </div>
+          <div style="flex:1; min-width:180px;">
+            <div id="fireYearsText" class="num" style="font-size:16px; font-weight:800; margin-bottom:2px;">—</div>
+            <div style="font-size:12.5px; color:var(--text-secondary);">at your current savings pace, compounding at your Financial Insights return rate.</div>
+          </div>
+          <div style="display:flex; gap:20px; flex-wrap:wrap;">
+            <div>
+              <div class="label-caps" style="margin-bottom:4px;">Net Worth</div>
+              <div id="fireNetWorth" class="num" style="font-size:17px; font-weight:800;">—</div>
+            </div>
+            <div>
+              <div class="label-caps" style="margin-bottom:4px;">FIRE Number</div>
+              <div id="fireNumberValue" class="num" style="font-size:17px; font-weight:800;">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scenario builder -->
+      <div class="label-caps" style="margin-bottom:10px;">Model a Scenario</div>
+      <div class="card">
+        <div class="scenarioGrid">
+          <div>
+            <label class="field-label">Target Retirement Age</label>
+            <input type="number" id="targetAge" min="1" max="100" placeholder="e.g. 55">
+          </div>
+          <div>
+            <label class="field-label">Monthly Contribution</label>
+            <input type="number" id="modeledContribution" placeholder="auto">
+            <p class="field-hint" id="modeledContributionHint" style="margin-top:4px;"></p>
+          </div>
+          <div>
+            <label class="field-label">Assumed Annual Return</label>
+            <select id="scenarioReturnRate">
+              <option value="4">4%</option>
+              <option value="7" selected>7% (long-run market average)</option>
+              <option value="10">10%</option>
+            </select>
+          </div>
+          <div style="display:flex; align-items:flex-end; gap:8px;">
+            <button id="useRequiredBtn" type="button" class="btn btn-ghost" style="flex:1; justify-content:center;">Use Required Amount</button>
+            <button id="resetContributionBtn" type="button" class="btn btn-ghost" style="flex:1; justify-content:center;">Reset to Actual</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div id="resultSection" hidden>
+        <div class="label-caps" style="margin-bottom:10px;">Result</div>
+        <div class="card">
+          <div id="resultHeadline" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; margin-bottom:22px; padding-bottom:22px; border-bottom:1px solid var(--border);"></div>
+
+          <div class="statGrid" style="margin-bottom:26px;">
+            <div class="card-soft" style="padding:16px 18px;">
+              <div class="label-caps" style="margin-bottom:8px;">Projected Balance at Target</div>
+              <div id="statProjectedBalance" class="num" style="font-size:22px; font-weight:800;">—</div>
+            </div>
+            <div class="card-soft" style="padding:16px 18px;">
+              <div class="label-caps" style="margin-bottom:8px;">Total Contributions</div>
+              <div id="statContributions" class="num" style="font-size:22px; font-weight:800;">—</div>
+            </div>
+            <div class="card-soft" style="padding:16px 18px;">
+              <div class="label-caps" style="margin-bottom:8px;">Interest Earned</div>
+              <div id="statInterest" class="num" style="font-size:22px; font-weight:800; color:var(--accent-dark);">—</div>
+            </div>
+          </div>
+
+          <div class="field-label" style="margin-bottom:12px;">Balance by Year</div>
+          <div style="position:relative; height:260px;"><canvas id="balanceChart"></canvas></div>
+        </div>
+
+        <div class="label-caps" style="margin-bottom:10px;">Compare Scenarios</div>
+        <div class="card" style="padding:10px 26px 20px;">
+          <table class="compare">
+            <thead>
+              <tr>
+                <th>Scenario</th>
+                <th>Monthly Contribution</th>
+                <th>At Target Age</th>
+                <th>Reaches FIRE Number</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="compareTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <p class="field-hint" style="margin-top:4px;">This is a simple math projection from your own historical data, not financial advice. It doesn't touch the Dashboard's FIRE Number or its own settings.</p>
+    </div>
+
+    <footer style="display:flex; align-items:center; justify-content:center; gap:14px; font-size:12px; color:var(--text-muted); margin-top:28px; padding-top:20px; border-top:1px solid var(--border);">
+      <span>Actual Budget Smart Sync <span id="appVersion"></span></span>
+      <a href="https://github.com/adambeltz2/actualbudget-sync" target="_blank" rel="noopener" style="color:var(--text-muted);">GitHub</a>
+      <a href="https://www.buymeacoffee.com/adambeltz" target="_blank" rel="noopener" style="color:var(--text-muted);">☕ Buy Me a Coffee</a>
+    </footer>
+  </div>
+
+  <script>
+    fetch('/api/version').then(r => r.json()).then(({ version, commit }) => {
+      document.getElementById('appVersion').innerText = version ? `v${version}${commit ? ` (${commit})` : ''}` : '';
+    }).catch(() => {});
+
+    // --- Theme ---
+    function applyTheme(isDark) {
+      document.documentElement.classList.toggle('dark', isDark);
+      document.getElementById('themeToggleBtn').innerText = isDark ? '☀️' : '🌙';
+    }
+    try {
+      const stored = localStorage.getItem('theme');
+      applyTheme(stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
+    } catch (e) { /* localStorage may be unavailable */ }
+    document.getElementById('themeToggleBtn').addEventListener('click', () => {
+      const isDark = !document.documentElement.classList.contains('dark');
+      applyTheme(isDark);
+      try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch (e) { /* ignore */ }
+    });
+
+    // --- Error banner ---
+    const errorBanner = document.getElementById('errorBanner');
+    function showError(message) { errorBanner.innerText = message; errorBanner.hidden = false; }
+    function hideError() { errorBanner.hidden = true; }
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    });
+
+    function formatCurrency(amount) {
+      const text = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+      return amount < 0 ? `-$${text}` : `$${text}`;
+    }
+
+    // A user has typed a contribution amount the moment they edit the field
+    // by hand — after that, loads triggered by other controls (target age,
+    // return rate) must keep sending it instead of silently reverting to
+    // "auto" (which the server reads as "use my actual current pace").
+    let contributionTouched = false;
+    document.getElementById('modeledContribution').addEventListener('input', () => { contributionTouched = true; });
+
+    document.getElementById('resetContributionBtn').addEventListener('click', () => {
+      document.getElementById('modeledContribution').value = '';
+      contributionTouched = false;
+      loadModel();
+    });
+    document.getElementById('useRequiredBtn').addEventListener('click', () => {
+      if (lastModel && lastModel.scenario && lastModel.scenario.requiredMonthlyContribution != null) {
+        document.getElementById('modeledContribution').value = Math.round(lastModel.scenario.requiredMonthlyContribution);
+        contributionTouched = true;
+        loadModel();
+      }
+    });
+
+    document.getElementById('targetAge').addEventListener('change', loadModel);
+    document.getElementById('modeledContribution').addEventListener('change', loadModel);
+    document.getElementById('scenarioReturnRate').addEventListener('change', loadModel);
+
+    let lastModel = null;
+    let balanceChart = null;
+
+    function renderResult(data) {
+      document.getElementById('firePctNumber').innerText = `${Math.round(data.pctReached)}%`;
+      const circumference = 2 * Math.PI * 40;
+      document.getElementById('fireRing').style.strokeDashoffset = circumference - (data.pctReached / 100) * circumference;
+      document.getElementById('fireYearsText').innerText = data.yearsToFI === null
+        ? 'Not on track at your current pace'
+        : (data.yearsToFI === 0 && data.monthsRemainderToFI === 0 ? "You've reached FIRE!" : `${data.yearsToFI} yr ${data.monthsRemainderToFI} mo to reach financial independence`);
+      document.getElementById('fireNetWorth').innerText = formatCurrency(data.netWorth);
+      document.getElementById('fireNumberValue').innerText = formatCurrency(data.fireNumber);
+
+      const hint = document.getElementById('modeledContributionHint');
+      hint.innerText = data.monthlyContribution != null ? `Your actual current pace: ${formatCurrency(data.monthlyContribution)}/mo` : '';
+
+      const resultSection = document.getElementById('resultSection');
+      if (!data.scenario) {
+        resultSection.hidden = true;
+        return;
+      }
+      resultSection.hidden = false;
+
+      const headline = document.getElementById('resultHeadline');
+      if (data.scenario.alreadyPassed) {
+        headline.innerHTML = `<p class="field-hint" style="margin:0;">Age ${data.scenario.targetAge} has already passed at your current age — pick a later target.</p>`;
+        document.getElementById('compareTableBody').innerHTML = '';
+        document.getElementById('statProjectedBalance').innerText = '—';
+        document.getElementById('statContributions').innerText = '—';
+        document.getElementById('statInterest').innerText = '—';
+        if (balanceChart) { balanceChart.destroy(); balanceChart = null; }
+        return;
+      }
+
+      const s = data.scenario;
+      const years = Math.floor(s.monthsToTarget / 12);
+      const months = s.monthsToTarget % 12;
+      const timeText = `${years} yr${years === 1 ? '' : 's'}${months > 0 ? ` ${months} mo` : ''}`;
+      const onTrack = s.reachesTargetAtModeledPace;
+      headline.innerHTML = `
+        <div style="font-size:14.5px;">To retire at age <strong>${s.targetAge}</strong> (in ${timeText}), this pace needs <strong>${formatCurrency(s.requiredMonthlyContribution)}/mo</strong> — you're modeling <strong>${formatCurrency(s.modeledMonthlyContribution)}/mo</strong>.</div>
+        <span class="pill ${onTrack ? 'badge-ontrack' : 'badge-under'}">${onTrack ? 'ON TRACK' : 'SHORT OF TARGET'}</span>`;
+
+      document.getElementById('statProjectedBalance').innerText = formatCurrency(s.projectedBalanceAtTarget);
+      document.getElementById('statContributions').innerText = formatCurrency(s.totalContributions);
+      document.getElementById('statInterest').innerText = formatCurrency(s.interestEarned);
+
+      renderBalanceChart(s.yearlySeries);
+
+      const currentPaceShortfall = s.targetFireNumber - s.currentPaceProjectedBalanceAtTarget;
+      const currentPaceOnTrack = currentPaceShortfall <= 0;
+      const modeledShortfall = s.targetFireNumber - s.projectedBalanceAtTarget;
+      document.getElementById('compareTableBody').innerHTML = `
+        <tr>
+          <td>Current pace <span class="field-hint">(no change)</span></td>
+          <td class="num" style="font-weight:700;">${formatCurrency(s.actualMonthlyContribution)}/mo</td>
+          <td class="num" style="font-weight:700;">${formatCurrency(s.currentPaceProjectedBalanceAtTarget)}</td>
+          <td class="field-hint">${currentPaceOnTrack ? 'yes' : 'no'}</td>
+          <td><span class="pill ${currentPaceOnTrack ? 'badge-ontrack' : 'badge-under'}">${currentPaceOnTrack ? 'ON TRACK' : `SHORT BY ${formatCurrency(currentPaceShortfall)}`}</span></td>
+        </tr>
+        <tr>
+          <td>This scenario</td>
+          <td class="num" style="font-weight:700; color:var(--accent-dark);">${formatCurrency(s.modeledMonthlyContribution)}/mo</td>
+          <td class="num" style="font-weight:700;">${formatCurrency(s.projectedBalanceAtTarget)}</td>
+          <td class="field-hint">${onTrack ? 'yes' : 'no'}</td>
+          <td><span class="pill ${onTrack ? 'badge-ontrack' : 'badge-under'}">${onTrack ? 'ON TRACK' : `SHORT BY ${formatCurrency(modeledShortfall)}`}</span></td>
+        </tr>`;
+    }
+
+    function renderBalanceChart(yearlySeries) {
+      const ctx = document.getElementById('balanceChart');
+      if (balanceChart) balanceChart.destroy();
+      const labels = yearlySeries.map(p => `Age ${Math.round(p.age)}`);
+      balanceChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Contributions', data: yearlySeries.map(p => p.contributions), backgroundColor: '#0EA894', stack: 'balance' },
+            { label: 'Interest', data: yearlySeries.map(p => p.interest), backgroundColor: '#0C8E7D', stack: 'balance' }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { stacked: true },
+            y: { stacked: true, ticks: { callback: (v) => formatCurrency(v) } }
+          },
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 10 } },
+            tooltip: {
+              callbacks: {
+                label: (item) => `${item.dataset.label}: ${formatCurrency(item.raw)}`,
+                afterBody: (items) => {
+                  const total = items.reduce((sum, item) => sum + item.raw, 0);
+                  return [`Total Balance: ${formatCurrency(total)}`];
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    async function loadModel() {
+      const targetAge = document.getElementById('targetAge').value;
+      const scenarioReturnRatePct = document.getElementById('scenarioReturnRate').value;
+      const modeledContribution = contributionTouched ? document.getElementById('modeledContribution').value : '';
+
+      const params = new URLSearchParams({ annualReturnRatePct: scenarioReturnRatePct });
+      if (targetAge) params.set('targetRetirementAge', targetAge);
+      if (modeledContribution !== '') params.set('modeledMonthlyContribution', modeledContribution);
+
+      let res;
+      try {
+        res = await fetch(`/api/data/retirement-model?${params.toString()}`);
+      } catch (err) {
+        showError('Could not reach the server.');
+        return;
+      }
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      const data = await res.json();
+      if (data.error) { showError(data.error); return; }
+      hideError();
+
+      lastModel = data;
+      try {
+        renderResult(data);
+      } catch (err) {
+        console.error('Retirement Modeling page failed to render:', err);
+      }
+    }
+
+    (async function init() {
+      let configRes;
+      try {
+        configRes = await fetch('/api/config');
+      } catch (err) {
+        showError('Could not reach the server. Check your connection and reload.');
+        return;
+      }
+      if (configRes.status === 401) { window.location.href = '/login.html'; return; }
+      const config = await configRes.json();
+      if (!config.actualUrl || !config.actualPasswordSet || !config.syncId) {
+        document.getElementById('notConfiguredMsg').hidden = false;
+        return;
+      }
+
+      document.getElementById('retirementBody').hidden = false;
+      document.getElementById('targetAge').value = config.fireTargetRetirementAge || '';
+      document.getElementById('scenarioReturnRate').value = config.insightsAnnualReturnPct ?? 7;
+
+      await loadModel();
+      if (lastModel && !lastModel.hasBirthdate) {
+        document.getElementById('noBirthdateMsg').hidden = false;
+      }
+    })();
+  </script>
+</body>
+</html>

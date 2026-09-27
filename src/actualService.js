@@ -3,7 +3,10 @@ const path = require('path');
 const api = require('@actual-app/api');
 const { q } = require('@actual-app/api');
 const { logger } = require('./logger');
-const { buildSpendingInsights, buildBalanceProjection, buildBudgetCalibration, requiredMonthlyContribution } = require('./insights');
+const {
+  buildSpendingInsights, buildBalanceProjection, buildBudgetCalibration,
+  requiredMonthlyContribution, buildContributionSeries, projectFutureValue
+} = require('./insights');
 const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations, computeNetWorthBreakdown } = require('./financialHealth');
 const { buildCategoryDeltas } = require('./trends');
 const { ageInMonths, resolveSocialSecurityClaim, computeFireTargetAtAge, monthsToReachFireTarget } = require('./socialSecurity');
@@ -484,10 +487,14 @@ async function getMetricTransactions({ metric, month, range, startDate, endDate 
 // amount missing), Social Security is ignored entirely and this behaves
 // exactly as it did before — a personal choice this app can't infer, same
 // as annualExpenses itself.
-async function getFireProgress({
-  fireAnnualExpenses, fireWithdrawalRatePct = 4, annualReturnRatePct = 7,
-  birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit,
-  targetRetirementAge
+//
+// Shared by getFireProgress (the Dashboard's lightweight FIRE widget) and
+// getRetirementModel (the fuller Retirement Modeling page) so both start
+// from the same net worth/income-spend/age/Social Security snapshot instead
+// of duplicating this fetch-and-derive logic.
+async function computeFireInputs({
+  fireAnnualExpenses, fireWithdrawalRatePct = 4,
+  birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
 } = {}) {
   const accounts = await getAccounts();
   const balances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
@@ -520,8 +527,22 @@ async function getFireProgress({
     ageMonths: currentAgeMonths ?? 0, annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, socialSecurity
   });
   const pctReached = fireNumber > 0 ? Math.min((netWorth / fireNumber) * 100, 100) : 0;
-
   const monthlyContribution = avgMonthlyIncome - avgMonthlySpend;
+
+  return { netWorth, annualExpenses, autoAnnualExpenses, currentAgeMonths, socialSecurity, fireNumber, pctReached, monthlyContribution };
+}
+
+async function getFireProgress({
+  fireAnnualExpenses, fireWithdrawalRatePct = 4, annualReturnRatePct = 7,
+  birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit,
+  targetRetirementAge
+} = {}) {
+  const { netWorth, annualExpenses, autoAnnualExpenses, currentAgeMonths, socialSecurity, fireNumber, pctReached, monthlyContribution } =
+    await computeFireInputs({
+      fireAnnualExpenses, fireWithdrawalRatePct, birthdate, ssClaimingChoice,
+      ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
+    });
+
   const monthsToFI = monthsToReachFireTarget({
     currentBalance: netWorth, monthlyContribution, annualReturnRate: annualReturnRatePct / 100,
     annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, currentAgeMonths, socialSecurity
@@ -574,6 +595,85 @@ async function getFireProgress({
     } : null,
     hasBirthdate: currentAgeMonths !== null,
     targetRetirement
+  };
+}
+
+// The Retirement Modeling page's data: the same target-age goal-seek as
+// getFireProgress's targetRetirement, but paired with a chosen (or
+// default-to-actual) monthly contribution scenario — the year-by-year
+// contribution/interest breakdown behind the page's bar chart
+// (buildContributionSeries), the stat tiles it feeds, and a side-by-side
+// comparison against staying on the current pace unchanged. Kept separate
+// from getFireProgress (still used by the Dashboard's lightweight FIRE
+// widget) so that widget's request doesn't pay for computing a chart series
+// and comparison it doesn't render.
+async function getRetirementModel({
+  targetRetirementAge, modeledMonthlyContribution, fireAnnualExpenses, fireWithdrawalRatePct = 4, annualReturnRatePct = 7,
+  birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
+} = {}) {
+  const { netWorth, annualExpenses, autoAnnualExpenses, currentAgeMonths, socialSecurity, fireNumber, pctReached, monthlyContribution } =
+    await computeFireInputs({
+      fireAnnualExpenses, fireWithdrawalRatePct, birthdate, ssClaimingChoice,
+      ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
+    });
+
+  const monthsToFI = monthsToReachFireTarget({
+    currentBalance: netWorth, monthlyContribution, annualReturnRate: annualReturnRatePct / 100,
+    annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, currentAgeMonths, socialSecurity
+  });
+
+  const base = {
+    netWorth, fireNumber, annualExpenses, autoAnnualExpenses,
+    usesCustomExpenses: fireAnnualExpenses > 0,
+    fireWithdrawalRatePct, pctReached, monthlyContribution,
+    yearsToFI: monthsToFI === null ? null : Math.floor(monthsToFI / 12),
+    monthsRemainderToFI: monthsToFI === null ? null : monthsToFI % 12,
+    hasBirthdate: currentAgeMonths !== null
+  };
+
+  if (currentAgeMonths === null || !(targetRetirementAge > 0)) {
+    return { ...base, scenario: null };
+  }
+
+  const targetAgeMonths = targetRetirementAge * 12;
+  const monthsToTarget = targetAgeMonths - currentAgeMonths;
+  if (monthsToTarget <= 0) {
+    return { ...base, scenario: { targetAge: targetRetirementAge, alreadyPassed: true } };
+  }
+
+  const annualReturnRate = annualReturnRatePct / 100;
+  const targetFireNumber = computeFireTargetAtAge({
+    ageMonths: targetAgeMonths, annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, socialSecurity
+  });
+  const required = requiredMonthlyContribution({
+    currentBalance: netWorth, targetValue: targetFireNumber, annualReturnRate, months: monthsToTarget
+  });
+  // Defaults to the actual current pace so a scenario nobody has touched yet
+  // just reflects reality, same convention as getFireProgress's targetRetirement.
+  const modeled = modeledMonthlyContribution != null ? modeledMonthlyContribution : monthlyContribution;
+
+  const projectedBalanceAtTarget = projectFutureValue({
+    presentValue: netWorth, monthlyContribution: modeled, annualReturnRate, months: monthsToTarget
+  });
+  const totalContributions = modeled * monthsToTarget;
+  const interestEarned = projectedBalanceAtTarget - netWorth - totalContributions;
+  const currentPaceProjectedBalanceAtTarget = projectFutureValue({
+    presentValue: netWorth, monthlyContribution, annualReturnRate, months: monthsToTarget
+  });
+  const yearlySeries = buildContributionSeries({
+    currentBalance: netWorth, monthlyContribution: modeled, annualReturnRate, totalMonths: monthsToTarget
+  }).map(point => ({ ...point, age: (currentAgeMonths + point.months) / 12 }));
+
+  return {
+    ...base,
+    scenario: {
+      targetAge: targetRetirementAge, targetFireNumber, monthsToTarget,
+      requiredMonthlyContribution: required, actualMonthlyContribution: monthlyContribution,
+      gap: required - monthlyContribution, onTrackAtActualPace: required <= monthlyContribution,
+      modeledMonthlyContribution: modeled, projectedBalanceAtTarget, totalContributions, interestEarned,
+      reachesTargetAtModeledPace: projectedBalanceAtTarget >= targetFireNumber,
+      currentPaceProjectedBalanceAtTarget, yearlySeries
+    }
   };
 }
 
@@ -1108,7 +1208,7 @@ module.exports = {
   countTransactions, getNetWorth, getSpendByCategory, getUncategorizedTransactions, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getBudgetCalibration, getFinancialHealthData, getFinancialHealthHistory,
-  getMetricTransactions, getFireProgress, getWrappedData, getMonthlySavingsHistory, getTrendsData, getNetWorthHistory,
+  getMetricTransactions, getFireProgress, getRetirementModel, getWrappedData, getMonthlySavingsHistory, getTrendsData, getNetWorthHistory,
   testConnection,
   runBankSync, getBankSyncStatuses, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
