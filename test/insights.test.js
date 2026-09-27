@@ -2,7 +2,8 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   linearRegression, projectFutureValue, classifySpendTrend, standardDeviation,
-  buildSpendingInsights, buildBalanceProjection, monthsToReachTarget, buildBudgetCalibration
+  buildSpendingInsights, buildBalanceProjection, monthsToReachTarget, buildBudgetCalibration,
+  requiredMonthlyContribution
 } = require('../src/insights');
 
 describe('linearRegression', () => {
@@ -227,6 +228,33 @@ describe('buildBudgetCalibration', () => {
     assert.equal(result.windows[3].avgMonthlySpend, 200);
     assert.equal(result.windows[6].avgMonthlySpend, 185);
     assert.equal(result.windows[12].avgMonthlySpend, 155);
+  });
+});
+
+describe('requiredMonthlyContribution', () => {
+  test('is the inverse of projectFutureValue: feeding its own output back in reaches the target exactly', () => {
+    const currentBalance = 50000;
+    const annualReturnRate = 0.07;
+    const months = 120;
+    const targetValue = 500000;
+    const pmt = requiredMonthlyContribution({ currentBalance, targetValue, annualReturnRate, months });
+    const projected = projectFutureValue({ presentValue: currentBalance, monthlyContribution: pmt, annualReturnRate, months });
+    assert.ok(Math.abs(projected - targetValue) < 0.01);
+  });
+
+  test('a zero return rate falls back to simple division', () => {
+    const pmt = requiredMonthlyContribution({ currentBalance: 10000, targetValue: 22000, annualReturnRate: 0, months: 12 });
+    assert.equal(pmt, 1000);
+  });
+
+  test('a target already met by compounding alone returns a negative (or zero) required contribution', () => {
+    const pmt = requiredMonthlyContribution({ currentBalance: 950000, targetValue: 960000, annualReturnRate: 0.07, months: 12 });
+    assert.ok(pmt < 0);
+  });
+
+  test('zero or negative months (target age already reached) returns null', () => {
+    assert.equal(requiredMonthlyContribution({ currentBalance: 100000, targetValue: 500000, annualReturnRate: 0.07, months: 0 }), null);
+    assert.equal(requiredMonthlyContribution({ currentBalance: 100000, targetValue: 500000, annualReturnRate: 0.07, months: -5 }), null);
   });
 });
 

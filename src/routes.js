@@ -400,6 +400,9 @@ router.get('/api/data/fire-progress', async (req, res) => {
     const fireWithdrawalRatePct = req.query.fireWithdrawalRatePct !== undefined
       ? Math.min(Math.max(parseFloat(req.query.fireWithdrawalRatePct), 1), 20)
       : (config.fireWithdrawalRatePct ?? 4);
+    const targetRetirementAge = req.query.targetRetirementAge !== undefined
+      ? parseFloat(req.query.targetRetirementAge) || null
+      : (config.fireTargetRetirementAge || null);
     const progress = await actualService.getFireProgress({
       fireAnnualExpenses, fireWithdrawalRatePct,
       annualReturnRatePct: config.insightsAnnualReturnPct ?? 7,
@@ -408,7 +411,8 @@ router.get('/api/data/fire-progress', async (req, res) => {
       ssAge62MonthlyBenefit: config.ssAge62MonthlyBenefit,
       ssFraAgeYears: config.ssFraAgeYears, ssFraAgeMonths: config.ssFraAgeMonths,
       ssFraMonthlyBenefit: config.ssFraMonthlyBenefit,
-      ssAge70MonthlyBenefit: config.ssAge70MonthlyBenefit
+      ssAge70MonthlyBenefit: config.ssAge70MonthlyBenefit,
+      targetRetirementAge
     });
     res.json(progress);
   } catch (err) {
