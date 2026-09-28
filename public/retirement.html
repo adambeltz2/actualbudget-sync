@@ -122,11 +122,12 @@
               <div id="fireNetWorth" class="num" style="font-size:17px; font-weight:800;">—</div>
             </div>
             <div>
-              <div class="label-caps" style="margin-bottom:4px;">FIRE Number</div>
+              <div class="label-caps" style="margin-bottom:4px;">FIRE Number <span style="font-weight:400; text-transform:none; letter-spacing:0;">(at today's age)</span></div>
               <div id="fireNumberValue" class="num" style="font-size:17px; font-weight:800;">—</div>
             </div>
           </div>
         </div>
+        <p id="fireSsNote" hidden class="field-hint" style="margin-top:16px; margin-bottom:0; padding-top:16px; border-top:1px solid var(--border); color:var(--accent-dark);"></p>
       </div>
 
       <!-- Scenario builder -->
@@ -161,7 +162,8 @@
       <div id="resultSection" hidden>
         <div class="label-caps" style="margin-bottom:10px;">Result</div>
         <div class="card">
-          <div id="resultHeadline" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; margin-bottom:22px; padding-bottom:22px; border-bottom:1px solid var(--border);"></div>
+          <div id="resultHeadline" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; margin-bottom:12px;"></div>
+          <div id="targetFireNumberLine" style="margin-bottom:22px; padding-bottom:22px; border-bottom:1px solid var(--border); font-size:13px; color:var(--text-secondary);"></div>
 
           <div class="statGrid" style="margin-bottom:26px;">
             <div class="card-soft" style="padding:16px 18px;">
@@ -184,13 +186,14 @@
 
         <div class="label-caps" style="margin-bottom:10px;">Compare Scenarios</div>
         <div class="card" style="padding:10px 26px 20px;">
+          <p id="compareTableCaption" class="field-hint" style="margin:12px 0 0;"></p>
           <table class="compare">
             <thead>
               <tr>
                 <th>Scenario</th>
                 <th>Monthly Contribution</th>
-                <th>At Target Age</th>
-                <th>Reaches FIRE Number</th>
+                <th>Balance at Target Age</th>
+                <th>Reaches the Target Age's FIRE Number?</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -281,6 +284,15 @@
       document.getElementById('fireNetWorth').innerText = formatCurrency(data.netWorth);
       document.getElementById('fireNumberValue').innerText = formatCurrency(data.fireNumber);
 
+      const ssNote = document.getElementById('fireSsNote');
+      if (data.socialSecurity) {
+        const claimAge = Math.round(data.socialSecurity.claimAgeMonths / 12);
+        ssNote.innerText = `Includes Social Security (${formatCurrency(data.socialSecurity.annualBenefit / 12)}/mo starting at age ${claimAge}). The FIRE Number above is for today's age, so it still has to "bridge" every expense from savings alone all the way to age ${claimAge}. A target at an older age has fewer years left to bridge — shrinking that FIRE Number the closer the target gets to ${claimAge}, and flattening out at its smallest once the target reaches or passes ${claimAge}. That's why the "FIRE Number at age..." figure below can differ from the one shown here.`;
+        ssNote.hidden = false;
+      } else {
+        ssNote.hidden = true;
+      }
+
       const hint = document.getElementById('modeledContributionHint');
       hint.innerText = data.monthlyContribution != null ? `Your actual current pace: ${formatCurrency(data.monthlyContribution)}/mo` : '';
 
@@ -292,8 +304,11 @@
       resultSection.hidden = false;
 
       const headline = document.getElementById('resultHeadline');
+      const targetLine = document.getElementById('targetFireNumberLine');
       if (data.scenario.alreadyPassed) {
         headline.innerHTML = `<p class="field-hint" style="margin:0;">Age ${data.scenario.targetAge} has already passed at your current age — pick a later target.</p>`;
+        targetLine.innerHTML = '';
+        document.getElementById('compareTableCaption').innerText = '';
         document.getElementById('compareTableBody').innerHTML = '';
         document.getElementById('statProjectedBalance').innerText = '—';
         document.getElementById('statContributions').innerText = '—';
@@ -311,6 +326,27 @@
         <div style="font-size:14.5px;">To retire at age <strong>${s.targetAge}</strong> (in ${timeText}), this pace needs <strong>${formatCurrency(s.requiredMonthlyContribution)}/mo</strong> — you're modeling <strong>${formatCurrency(s.modeledMonthlyContribution)}/mo</strong>.</div>
         <span class="pill ${onTrack ? 'badge-ontrack' : 'badge-under'}">${onTrack ? 'ON TRACK' : 'SHORT OF TARGET'}</span>`;
 
+      // The FIRE Number above (in "Where You Stand Today") is always computed
+      // at today's age. Every number in this Result section is instead
+      // measured against the FIRE Number AT THE TARGET AGE, which can be a
+      // different dollar amount once Social Security is configured — shown
+      // explicitly here so the two are never silently compared against each
+      // other as if they were the same target.
+      const fireNumberDiff = s.targetFireNumber - data.fireNumber;
+      let diffText;
+      if (Math.abs(fireNumberDiff) < 1) {
+        diffText = ' — the same as the FIRE Number shown above, since Social Security isn\'t a factor here.';
+      } else if (fireNumberDiff < 0) {
+        const claimAge = data.socialSecurity ? Math.round(data.socialSecurity.claimAgeMonths / 12) : null;
+        const reason = claimAge !== null && s.targetAge >= claimAge
+          ? `since Social Security would already have started by age ${s.targetAge}`
+          : `since fewer years remain until Social Security starts${claimAge !== null ? ` at age ${claimAge}` : ''}, shortening the savings "bridge" this target needs`;
+        diffText = ` — ${formatCurrency(Math.abs(fireNumberDiff))} <strong>less</strong> than the ${formatCurrency(data.fireNumber)} FIRE Number shown above for today's age, ${reason}.`;
+      } else {
+        diffText = ` — ${formatCurrency(fireNumberDiff)} <strong>more</strong> than the FIRE Number shown above for today's age.`;
+      }
+      targetLine.innerHTML = `Every figure below targets <strong>${formatCurrency(s.targetFireNumber)}</strong> — the FIRE Number specifically at age ${s.targetAge}${diffText}`;
+
       document.getElementById('statProjectedBalance').innerText = formatCurrency(s.projectedBalanceAtTarget);
       document.getElementById('statContributions').innerText = formatCurrency(s.totalContributions);
       document.getElementById('statInterest').innerText = formatCurrency(s.interestEarned);
@@ -320,6 +356,7 @@
       const currentPaceShortfall = s.targetFireNumber - s.currentPaceProjectedBalanceAtTarget;
       const currentPaceOnTrack = currentPaceShortfall <= 0;
       const modeledShortfall = s.targetFireNumber - s.projectedBalanceAtTarget;
+      document.getElementById('compareTableCaption').innerText = `Both rows are measured against the same ${formatCurrency(s.targetFireNumber)} target — the FIRE Number at age ${s.targetAge}.`;
       document.getElementById('compareTableBody').innerHTML = `
         <tr>
           <td>Current pace <span class="field-hint">(no change)</span></td>
