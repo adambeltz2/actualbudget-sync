@@ -628,7 +628,17 @@ async function getRetirementModel({
     fireWithdrawalRatePct, pctReached, monthlyContribution,
     yearsToFI: monthsToFI === null ? null : Math.floor(monthsToFI / 12),
     monthsRemainderToFI: monthsToFI === null ? null : monthsToFI % 12,
-    hasBirthdate: currentAgeMonths !== null
+    hasBirthdate: currentAgeMonths !== null,
+    // The FIRE Number above is always computed at TODAY's age — with Social
+    // Security configured, a target at a different (older) age can be a
+    // meaningfully different dollar amount, since less of it needs to be
+    // self-funded once benefits have started. Surfaced here so the page can
+    // explain that explicitly rather than leaving two differently-scoped
+    // FIRE Numbers to be silently compared against each other.
+    socialSecurity: socialSecurity ? {
+      claimAgeMonths: socialSecurity.claimAgeMonths,
+      annualBenefit: socialSecurity.annualBenefit
+    } : null
   };
 
   if (currentAgeMonths === null || !(targetRetirementAge > 0)) {
