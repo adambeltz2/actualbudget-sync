@@ -107,14 +107,17 @@ async function syncAndReport({ isStartup = false } = {}) {
       logger.info('Compiling HTML email report...');
       const includeBudget = config.emailSections?.budgetVsActual !== false;
       const includeTransactions = config.emailSections?.transactions !== false;
-      const [budgetVsActual, uncategorizedTransactions] = await Promise.all([
+      const includeBalances = config.emailSections?.balances !== false;
+      const [budgetVsActual, uncategorizedTransactions, recentIncomeVsSpend] = await Promise.all([
         includeBudget ? actualService.getBudgetVsActual() : Promise.resolve([]),
-        includeTransactions ? actualService.getUncategorizedTransactions() : Promise.resolve([])
+        includeTransactions ? actualService.getUncategorizedTransactions() : Promise.resolve([]),
+        includeBalances ? actualService.getRecentIncomeVsSpend({ months: 3 }) : Promise.resolve([])
       ]);
       const { subject, html } = buildReportHtml({
         accounts, accountBalances, accountMap, categoryMap, added, bankSyncIssue, accountSyncErrors,
-        totalBalance, budgetVsActual, uncategorizedTransactions, publicUrl: config.publicUrl,
-        sections: config.emailSections, liabilityAccountIds: config.liabilityAccountIds || []
+        totalBalance, budgetVsActual, uncategorizedTransactions, recentIncomeVsSpend, publicUrl: config.publicUrl,
+        sections: config.emailSections, liabilityAccountIds: config.liabilityAccountIds || [],
+        investmentAccountIds: config.investmentAccountIds || []
       });
       await sendReport(config, { subject, html });
       logger.info('Email report successfully dispatched.');

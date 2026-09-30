@@ -264,7 +264,11 @@ router.get('/api/data/summary', async (req, res) => {
       actualService.getBalanceTrend({ month, startDate, endDate }),
       actualService.getBudgetVsActual({ month, startDate, endDate })
     ]);
-    res.json({ incomeVsSpend, incomeVsSpendYTD, spendByCategory, balanceTrend, budgetVsActual });
+    // Grouped under each category's parent group (e.g. "Food & Dining"
+    // holding Groceries + Restaurants), same as the sync email's Spend vs
+    // Budget section, so the two never disagree on how a group total is
+    // computed.
+    res.json({ incomeVsSpend, incomeVsSpendYTD, spendByCategory, balanceTrend, budgetVsActual: actualService.groupBudgetCategoriesByParent(budgetVsActual) });
   } catch (err) {
     logger.error('Dashboard summary request failed: ' + err.message);
     res.status(500).json({ error: 'Failed to load dashboard summary.' });
