@@ -17,7 +17,7 @@ This service is designed to run independently of your main Actual Budget server.
 
 ![Dashboard screenshot](https://raw.githubusercontent.com/adambeltz2/actualbudget-sync/main/docs/screenshots/dashboard.png)
 
-**Email report** — a sync summary with new transactions, uncategorized transactions, budget status, and account balances, delivered straight to your inbox. The subject line is always generic ("Actual Budget Sync: N New Transactions" or "Actual Budget Sync: Summary") so an inbox preview or lock-screen notification never reveals a connection issue before the email is opened.
+**Email report** — a sync summary with a Cash vs Investments balance breakdown, a compact Income vs Spend chart for the last 3 months, new transactions, uncategorized transactions, a Total Liability line, and a Spend vs Budget breakdown folded under each category group, delivered straight to your inbox. The subject line is always generic ("Actual Budget Sync: N New Transactions" or "Actual Budget Sync: Summary") so an inbox preview or lock-screen notification never reveals a connection issue before the email is opened.
 
 ![Email report screenshot](https://raw.githubusercontent.com/adambeltz2/actualbudget-sync/main/docs/screenshots/email-report.png)
 
@@ -125,7 +125,7 @@ The **Data Explorer** (linked from the dashboard) lists account balances and let
 
 The dashboard's period picker (top right, defaults to **This Month**) also offers **Last 3/6 Months**, **Current Year**, and **Prior Year** alongside This/Last Month — every widget it drives (Income vs Spend, Spend by Category, Balance Trend, Spend vs Budget) updates to cover the selected range.
 
-**Spend vs Budget** is rollover-aware: a category with a small monthly budget that's been accumulating for a planned purchase (a home renovation, an annual premium) won't read as wildly over budget the month you actually spend it, as long as the accumulated balance covers it — matching what Actual's own Balance column shows, rather than comparing spend against just that one month's budgeted figure.
+**Spend vs Budget** folds categories under their parent category group with a group total (e.g. "Food & Dining" showing "Groceries" and "Restaurants & Out to Eat" nested beneath it, same as the sync email), and is rollover-aware: a category with a small monthly budget that's been accumulating for a planned purchase (a home renovation, an annual premium) won't read as wildly over budget the month you actually spend it, as long as the accumulated balance covers it — matching what Actual's own Balance column shows, rather than comparing spend against just that one month's budgeted figure.
 
 Click any **Income**, **Spend**, **Income YTD**, or **Spend YTD** figure to see exactly which transactions make it up, with an Export CSV button — the same on-budget, categorized transactions the budget engine itself uses (transfers and off-budget accounts are excluded), so you can verify the number independently instead of just trusting it.
 
@@ -135,7 +135,7 @@ Use **Access & Sharing** in Settings to set a separate viewer password for a sec
 
 ## Account Classification
 
-Actual Budget doesn't distinguish checking/savings/investment/liability accounts — it only knows names and balances. **Account Classification** in Settings (right after the Actual Budget connection settings, since it's usually a one-time setup) lets you tag each account as **Emergency Fund**, **Investment**, **Liability**, or leave it unclassified — an account can only be one of these at a time. These tags drive the Financial Health Check widget, its Net Worth Breakdown, the Financial Insights projection, and the "Liability Accounts" section of sync emails. Until you classify anything, Liability falls back to "any account with a negative balance" so the app still works sensibly out of the box.
+Actual Budget doesn't distinguish checking/savings/investment/liability accounts — it only knows names and balances. **Account Classification** in Settings (right after the Actual Budget connection settings, since it's usually a one-time setup) lets you tag each account as **Emergency Fund**, **Investment**, **Liability**, or leave it unclassified — an account can only be one of these at a time. These tags drive the Financial Health Check widget, its Net Worth Breakdown, the Financial Insights projection, and the sync email's "Liability Accounts" section (with its Total Liability line) and Cash vs Investments balance breakdown. Until you classify anything, Liability falls back to "any account with a negative balance," and the email's Total Balance shows no Cash/Investments split, so the app still works sensibly out of the box.
 
 ## Webhook Notifications
 
