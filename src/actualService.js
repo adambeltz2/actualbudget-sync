@@ -392,6 +392,23 @@ async function getIncomeVsSpend({ month, startDate, endDate } = {}) {
   };
 }
 
+// Income/spend/net for the last `months` calendar months, current
+// (possibly partial) month included — the sync email's small "Income vs
+// Spend" chart, and generic enough for a future dashboard use. One query
+// per month via the existing single-month getIncomeVsSpend, same approach
+// getCategorySpendTrend already uses at this small a scale.
+async function getRecentIncomeVsSpend({ months = 3 } = {}) {
+  const now = new Date();
+  const monthStrs = Array.from({ length: months }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const figures = await Promise.all(monthStrs.map(m => getIncomeVsSpend({ month: m })));
+  return monthStrs.map((month, i) => ({
+    month, income: figures[i].income, spend: figures[i].spend, net: figures[i].income - figures[i].spend
+  }));
+}
+
 async function getIncomeVsSpendYTD() {
   const now = new Date();
   const year = now.getFullYear();
@@ -841,22 +858,54 @@ async function getTrendsData({ months = 12 } = {}) {
 // monthly figure the moment the purchase happens, even though it was funded
 // entirely from savings built up over many months and Actual's own UI shows
 // it fully covered (balance stays positive).
+// Shared by summarizeBudgetCategory (one category) and
+// groupBudgetCategoriesByParent (a whole category group's totals) so both
+// derive overBudget/pctUsed the same way.
+function computeBudgetStats(spent, remaining) {
+  const overBudget = remaining < 0;
+  const available = remaining + spent;
+  const pctUsed = available > 0 ? Math.round((spent / available) * 100) : (spent > 0 ? 100 : 0);
+  return { overBudget, pctUsed };
+}
+
 function summarizeBudgetCategory(cat) {
   const budgeted = (cat.budgeted || 0) / 100;
   const spent = Math.abs(cat.spent || 0) / 100;
   const remaining = (cat.balance || 0) / 100;
-  const overBudget = remaining < 0;
-  const available = remaining + spent;
-  const pctUsed = available > 0 ? Math.round((spent / available) * 100) : (spent > 0 ? 100 : 0);
+  const { overBudget, pctUsed } = computeBudgetStats(spent, remaining);
   return {
     categoryId: cat.id,
     name: cat.name,
+    groupName: cat.groupName || 'Other',
     budgeted,
     spent,
     remaining,
     pctUsed,
     overBudget
   };
+}
+
+// Rolls a flat Spend vs Budget category list (as summarizeBudgetCategory
+// produces) up under its parent category group, with a group-level total
+// computed the same way a single category's stats are — so e.g. "Groceries"
+// and "Restaurants & Out to Eat" can be seen individually AND as one "Food &
+// Dining" figure, the same grouping Spend by Category/Trends already use
+// applied to this list. Both the dashboard widget and the sync email use
+// this so the two never disagree on how a group total is computed.
+function groupBudgetCategoriesByParent(categories) {
+  const groups = new Map();
+  for (const cat of categories) {
+    const key = cat.groupName || 'Other';
+    if (!groups.has(key)) groups.set(key, { groupName: key, categories: [], budgeted: 0, spent: 0, remaining: 0 });
+    const group = groups.get(key);
+    group.categories.push(cat);
+    group.budgeted += cat.budgeted;
+    group.spent += cat.spent;
+    group.remaining += cat.remaining;
+  }
+  return [...groups.values()]
+    .map(group => ({ ...group, ...computeBudgetStats(group.spent, group.remaining), categories: group.categories.sort((a, b) => b.spent - a.spent) }))
+    .sort((a, b) => b.spent - a.spent);
 }
 
 async function getBudgetVsActual({ month, startDate, endDate } = {}) {
@@ -879,7 +928,7 @@ async function getBudgetVsActual({ month, startDate, endDate } = {}) {
         if (group.is_income || group.hidden) continue;
         for (const cat of group.categories) {
           if (cat.hidden) continue;
-          const existing = merged.get(cat.id) || { id: cat.id, name: cat.name, budgeted: 0, spent: 0, balance: 0 };
+          const existing = merged.get(cat.id) || { id: cat.id, name: cat.name, groupName: group.name, budgeted: 0, spent: 0, balance: 0 };
           existing.budgeted += cat.budgeted || 0;
           existing.spent += cat.spent || 0;
           existing.balance = cat.balance || 0;
@@ -903,7 +952,7 @@ async function getBudgetVsActual({ month, startDate, endDate } = {}) {
     for (const cat of group.categories) {
       if (cat.hidden) continue;
       if (!cat.budgeted && !cat.spent) continue;
-      categories.push(summarizeBudgetCategory(cat));
+      categories.push(summarizeBudgetCategory({ ...cat, groupName: group.name }));
     }
   }
   return categories.sort((a, b) => b.spent - a.spent);
@@ -1216,12 +1265,12 @@ module.exports = {
   ensureReady, refreshBudget, getAccounts, getAccountBalance,
   getTransactionsForAccount, getCategories, getCategoryGroups, getPayees, queryTransactions, queryAllTransactions,
   countTransactions, getNetWorth, getSpendByCategory, getUncategorizedTransactions, getBalanceTrend,
-  getBudgetMonths, getIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
+  getBudgetMonths, getIncomeVsSpend, getRecentIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getBudgetCalibration, getFinancialHealthData, getFinancialHealthHistory,
   getMetricTransactions, getFireProgress, getRetirementModel, getWrappedData, getMonthlySavingsHistory, getTrendsData, getNetWorthHistory,
   testConnection,
   runBankSync, getBankSyncStatuses, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
-  buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, monthsInRange, classifyMetricTransactions,
+  buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, groupBudgetCategoriesByParent, resolvePayeeNames, monthDateRange, monthsInRange, classifyMetricTransactions,
   isCorruptedCacheError, purgeLocalCache, buildCategoryGroupMap
 };

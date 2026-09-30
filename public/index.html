@@ -843,23 +843,52 @@
         </div>`).join('') || `<p style="color:var(--text-muted); font-size:13px;">No accounts yet.</p>`;
     }
 
-    function renderBudgetRows(categories) {
-      const container = document.getElementById('budgetRows');
-      container.innerHTML = categories.slice(0, 8).map(cat => {
-        const pct = Math.min(cat.pctUsed, 100);
-        const barColor = cat.overBudget ? 'var(--negative)' : 'var(--accent)';
-        const status = cat.overBudget
-          ? `<span style="color:var(--negative); font-weight:700;">-${formatCurrency(Math.abs(cat.remaining))} over</span>`
-          : `<span style="color:var(--text-secondary); font-weight:700;">${formatCurrency(cat.remaining)} remaining</span>`;
-        return `<div>
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-            <span style="font-size:13.5px; font-weight:600;">${cat.name}</span>
-            <span style="font-size:12.5px;">${status}</span>
+    // Shared by a group's own total row and each of its nested categories --
+    // `size` just scales the row down a notch for the nested ones so the
+    // group total reads as the parent at a glance.
+    function renderOneBudgetRow(cat, { size = 'normal' } = {}) {
+      const pct = Math.min(cat.pctUsed, 100);
+      const barColor = cat.overBudget ? 'var(--negative)' : 'var(--accent)';
+      const status = cat.overBudget
+        ? `<span style="color:var(--negative); font-weight:700;">-${formatCurrency(Math.abs(cat.remaining))} over</span>`
+        : `<span style="color:var(--text-secondary); font-weight:700;">${formatCurrency(cat.remaining)} remaining</span>`;
+      const nameSize = size === 'normal' ? '13.5px' : '12.5px';
+      const nameWeight = size === 'normal' ? '700' : '600';
+      const statusSize = size === 'normal' ? '12.5px' : '12px';
+      const barHeight = size === 'normal' ? '16px' : '12px';
+      const pctSize = size === 'normal' ? '11px' : '10px';
+      return `<div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <span style="font-size:${nameSize}; font-weight:${nameWeight};">${escapeHtml(cat.name)}</span>
+          <span style="font-size:${statusSize};">${status}</span>
+        </div>
+        <div style="position:relative; height:${barHeight}; background:var(--track); border-radius:5px;">
+          <div style="position:absolute; left:0; top:0; bottom:0; width:${pct}%; background:${barColor}; border-radius:5px; display:flex; align-items:center; justify-content:flex-end; padding-right:8px;">
+            <span class="num" style="font-size:${pctSize}; font-weight:700; color:white;">${cat.pctUsed}%</span>
           </div>
-          <div style="position:relative; height:16px; background:var(--track); border-radius:5px;">
-            <div style="position:absolute; left:0; top:0; bottom:0; width:${pct}%; background:${barColor}; border-radius:5px; display:flex; align-items:center; justify-content:flex-end; padding-right:8px;">
-              <span class="num" style="font-size:11px; font-weight:700; color:white;">${cat.pctUsed}%</span>
-            </div>
+        </div>
+      </div>`;
+    }
+
+    // `groups` is the /api/data/summary response's budgetVsActual, already
+    // rolled up under each category's parent group (groupBudgetCategoriesByParent
+    // server-side) -- each group renders as its own total row, with its
+    // individual categories nested underneath at a smaller size, e.g. "Food
+    // & Dining" as the total with "Groceries"/"Restaurants & Out to Eat"
+    // indented below it.
+    function renderBudgetRows(groups) {
+      const container = document.getElementById('budgetRows');
+      container.innerHTML = groups.slice(0, 8).map(group => {
+        // A single-category group's total is identical to that one
+        // category -- showing both the group total and its lone child
+        // underneath would just repeat the same row twice.
+        if (group.categories.length === 1) {
+          return `<div style="margin-bottom:18px;">${renderOneBudgetRow(group.categories[0], { size: 'normal' })}</div>`;
+        }
+        return `<div style="margin-bottom:18px;">
+          ${renderOneBudgetRow(group, { size: 'normal' })}
+          <div style="margin-top:10px; padding-left:16px; border-left:2px solid var(--border); display:flex; flex-direction:column; gap:10px;">
+            ${group.categories.map(cat => renderOneBudgetRow(cat, { size: 'nested' })).join('')}
           </div>
         </div>`;
       }).join('') || `<p style="color:var(--text-muted); font-size:13px;">No budgeted categories yet.</p>`;

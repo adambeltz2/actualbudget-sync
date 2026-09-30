@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, resolvePayeeNames, monthDateRange, monthsInRange, classifyMetricTransactions, isCorruptedCacheError, purgeLocalCache, buildCategoryGroupMap } = require('../src/actualService');
+const { buildTransactionFilters, SORT_ORDERS, summarizeBudgetCategory, groupBudgetCategoriesByParent, resolvePayeeNames, monthDateRange, monthsInRange, classifyMetricTransactions, isCorruptedCacheError, purgeLocalCache, buildCategoryGroupMap } = require('../src/actualService');
 
 describe('isCorruptedCacheError', () => {
   test('recognizes known @actual-app/api local-cache corruption signatures', () => {
@@ -188,6 +188,56 @@ describe('summarizeBudgetCategory', () => {
     // not spent ÷ this month's budgeted, which would wrongly read as 1731%.
     assert.equal(result.pctUsed, Math.round(4328 / (1343.46 + 4328) * 100));
     assert.ok(result.pctUsed < 100);
+  });
+
+  test('carries the category group name through, defaulting to "Other" when absent', () => {
+    const withGroup = summarizeBudgetCategory({ id: 'c6', name: 'Groceries', groupName: 'Food & Dining', budgeted: 0, spent: 0, balance: 0 });
+    assert.equal(withGroup.groupName, 'Food & Dining');
+    const withoutGroup = summarizeBudgetCategory({ id: 'c7', name: 'Misc', budgeted: 0, spent: 0, balance: 0 });
+    assert.equal(withoutGroup.groupName, 'Other');
+  });
+});
+
+describe('groupBudgetCategoriesByParent', () => {
+  function cat({ groupName, budgeted, spent, remaining }) {
+    return { categoryId: `${groupName}-${budgeted}-${spent}`, name: 'x', groupName, budgeted, spent, remaining, overBudget: remaining < 0 };
+  }
+
+  test('sums budgeted/spent/remaining across categories sharing a group', () => {
+    const groceries = cat({ groupName: 'Food & Dining', budgeted: 500, spent: 480, remaining: 20 });
+    const dining = cat({ groupName: 'Food & Dining', budgeted: 200, spent: 250, remaining: -50 });
+    const [group] = groupBudgetCategoriesByParent([groceries, dining]);
+    assert.equal(group.groupName, 'Food & Dining');
+    assert.equal(group.budgeted, 700);
+    assert.equal(group.spent, 730);
+    assert.equal(group.remaining, -30);
+    assert.equal(group.overBudget, true);
+    assert.equal(group.categories.length, 2);
+  });
+
+  test('a single-category group total matches that category exactly', () => {
+    const mortgage = cat({ groupName: 'Housing', budgeted: 2000, spent: 2000, remaining: 0 });
+    const [group] = groupBudgetCategoriesByParent([mortgage]);
+    assert.equal(group.budgeted, 2000);
+    assert.equal(group.spent, 2000);
+    assert.equal(group.pctUsed, 100);
+  });
+
+  test('sorts groups by total spend descending, and categories within a group by spend descending', () => {
+    const smallGroup = cat({ groupName: 'Small', budgeted: 10, spent: 10, remaining: 0 });
+    const bigGroupA = cat({ groupName: 'Big', budgeted: 100, spent: 90, remaining: 10 });
+    const bigGroupB = cat({ groupName: 'Big', budgeted: 300, spent: 290, remaining: 10 });
+    const groups = groupBudgetCategoriesByParent([smallGroup, bigGroupA, bigGroupB]);
+    assert.equal(groups[0].groupName, 'Big');
+    assert.equal(groups[1].groupName, 'Small');
+    assert.equal(groups[0].categories[0].spent, 290);
+    assert.equal(groups[0].categories[1].spent, 90);
+  });
+
+  test('categories with no groupName fall under "Other"', () => {
+    const uncategorized = { categoryId: 'u1', name: 'x', budgeted: 0, spent: 5, remaining: -5, overBudget: true };
+    const [group] = groupBudgetCategoriesByParent([uncategorized]);
+    assert.equal(group.groupName, 'Other');
   });
 });
 

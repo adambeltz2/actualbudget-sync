@@ -229,6 +229,65 @@ describe('buildReportHtml', () => {
     assert.match(html, /Savings[\s\S]*?Rate limited/);
   });
 
+  test('a Total Liability row sums across all liability accounts', () => {
+    const { html } = buildReportHtml({
+      accounts, accountBalances, accountMap, added: [], bankSyncIssue: null,
+      liabilityAccountIds: ['acc-1', 'acc-2']
+    });
+    assert.match(html, /Total Liability[\s\S]*?\$1,208\.50/); // 1250.50 + -42.00 = 1208.50
+  });
+
+  test('no Cash vs Investments breakdown when no account is tagged Investment', () => {
+    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, totalBalance: 1208.50 });
+    assert.doesNotMatch(html, /Investments:/);
+  });
+
+  test('Cash vs Investments breakdown splits balances once accounts are tagged', () => {
+    const { html } = buildReportHtml({
+      accounts, accountBalances, accountMap, added: [], bankSyncIssue: null,
+      totalBalance: 1208.50, investmentAccountIds: ['acc-1']
+    });
+    assert.match(html, /Cash:[\s\S]*?-\$42\.00/);
+    assert.match(html, /Investments:[\s\S]*?\$1,250\.50/);
+  });
+
+  test('Income vs Spend chart renders a bar per month and omits when there is no data', () => {
+    const recentIncomeVsSpend = [
+      { month: '2026-07', income: 5000, spend: 4000, net: 1000 },
+      { month: '2026-08', income: 4500, spend: 5200, net: -700 },
+      { month: '2026-09', income: 5100, spend: 4800, net: 300 }
+    ];
+    const { html } = buildReportHtml({
+      accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, recentIncomeVsSpend
+    });
+    assert.match(html, /Income vs Spend/);
+    assert.match(html, /July/);
+    assert.match(html, /August/);
+    assert.match(html, /September/);
+    assert.match(html, /Total \(3 mo\)/);
+    assert.match(html, /\+\$600\.00/); // 1000 - 700 + 300
+
+    const { html: withoutData } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null });
+    assert.doesNotMatch(withoutData, /Income vs Spend/);
+  });
+
+  test('Spend vs Budget folds categories under their parent group with a group total', () => {
+    const budgetVsActual = [
+      { categoryId: 'c1', name: 'Groceries', groupName: 'Food & Dining', budgeted: 500, spent: 400, remaining: 100, pctUsed: 80, overBudget: false },
+      { categoryId: 'c2', name: 'Restaurants & Out to Eat', groupName: 'Food & Dining', budgeted: 300, spent: 350, remaining: -50, pctUsed: 117, overBudget: true },
+      { categoryId: 'c3', name: 'Gas', groupName: 'Transportation', budgeted: 150, spent: 90, remaining: 60, pctUsed: 60, overBudget: false }
+    ];
+    const { html } = buildReportHtml({ accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, budgetVsActual });
+    assert.match(html, /Food &amp; Dining/);
+    assert.match(html, /Groceries/);
+    assert.match(html, /Restaurants &amp; Out to Eat/);
+    // Group total: (500+300) budgeted vs (400+350) spent -> remaining 50
+    assert.match(html, /Food &amp; Dining[\s\S]*?\$50\.00 remaining/);
+    // A single-category group (Transportation) renders just that category, not a duplicate group header
+    assert.match(html, /Gas/);
+    assert.doesNotMatch(html, /Transportation/);
+  });
+
   test('user-provided text is HTML-escaped', () => {
     const maliciousAccounts = [{ id: 'acc-1', name: '<script>alert(1)</script>' }];
     const { html } = buildReportHtml({

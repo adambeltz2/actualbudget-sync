@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const _ = require('lodash');
+const { groupBudgetCategoriesByParent } = require('./actualService');
 
 const ACCENT = '#0EA894';
 const CORAL = '#C4573F';
@@ -31,7 +32,10 @@ function renderAccountRow(acc, balance, dotColor) {
   </table>`;
 }
 
-function renderBudgetRow(cat) {
+// `nested` draws a category slightly smaller/thinner, used for a category
+// rendered under its parent group's own total row (renderBudgetGroup below)
+// so the group total visually reads as the parent at a glance.
+function renderBudgetRow(cat, { nested = false } = {}) {
   const pct = Math.min(cat.pctUsed, 100);
   const barColor = cat.overBudget ? CORAL : ACCENT;
   const status = cat.overBudget
@@ -46,25 +50,84 @@ function renderBudgetRow(cat) {
   // sliver. Below that width, the label moves to its own cell just after
   // the bar (in normal document flow, so it can't overflow) instead.
   const pctLabel = `${cat.pctUsed}%`;
+  const barHeight = nested ? 11 : 13;
   const labelFitsInBar = pct >= 15;
+  const nameSize = nested ? 12 : 13;
+  const nameWeight = nested ? 400 : 600;
+  const statusSize = nested ? 11 : 12;
   return `<div style="margin-bottom:12px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:5px;">
       <tr>
-        <td style="font-size:13px; font-weight:600; color:#33404A;">${_.escape(cat.name)}</td>
-        <td style="font-size:12px; text-align:right; white-space:nowrap; padding-left:10px;">${status}</td>
+        <td style="font-size:${nameSize}px; font-weight:${nameWeight}; color:#33404A;">${_.escape(cat.name)}</td>
+        <td style="font-size:${statusSize}px; text-align:right; white-space:nowrap; padding-left:10px;">${status}</td>
       </tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       <tr>
-        <td style="position:relative; height:13px; background:#F0EFEB; border-radius:4px;">
+        <td style="position:relative; height:${barHeight}px; background:#F0EFEB; border-radius:4px;">
           <div style="position:absolute; left:0; top:0; bottom:0; width:${pct}%; background:${barColor}; border-radius:4px;">
-            ${labelFitsInBar ? `<div style="font-size:9px; font-weight:700; color:white; line-height:13px; text-align:right; padding-right:6px; white-space:nowrap;">${pctLabel}</div>` : ''}
+            ${labelFitsInBar ? `<div style="font-size:9px; font-weight:700; color:white; line-height:${barHeight}px; text-align:right; padding-right:6px; white-space:nowrap;">${pctLabel}</div>` : ''}
           </div>
         </td>
         ${labelFitsInBar ? '' : `<td style="vertical-align:middle; white-space:nowrap; padding-left:6px;"><span style="font-size:9px; font-weight:700; color:${barColor};">${pctLabel}</span></td>`}
       </tr>
     </table>
   </div>`;
+}
+
+// One category group: its own total row (renderBudgetRow at normal size),
+// then each of its categories nested underneath — unless it's the only
+// category in the group, in which case the group total and that category
+// would be identical, so just the one row is drawn.
+function renderBudgetGroup(group) {
+  if (group.categories.length === 1) {
+    return renderBudgetRow(group.categories[0]);
+  }
+  return `<div style="margin-bottom:16px;">
+    ${renderBudgetRow({ ...group, name: group.groupName })}
+    <div style="margin-left:4px; padding-left:12px; border-left:2px solid #F0EFEB;">
+      ${group.categories.map(cat => renderBudgetRow(cat, { nested: true })).join('')}
+    </div>
+  </div>`;
+}
+
+function monthLabel(monthStr) {
+  const [y, m] = monthStr.split('-');
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'long' });
+}
+
+// A compact net-per-month bar chart: one bar per month, green for a net
+// increase (income > spend) and red for a net decrease — not a separate
+// income bar and spend bar, since the "which way did this month go, and by
+// how much" question is what a quick email scan actually needs. Bar widths
+// are scaled against the largest |net| in the window so the chart reads
+// correctly regardless of income level; an all-zero window (no data yet)
+// skips the bars rather than dividing by zero.
+function renderIncomeVsSpendChart(recentIncomeVsSpend) {
+  const maxAbsNet = Math.max(...recentIncomeVsSpend.map(m => Math.abs(m.net)), 0);
+  const maxBarWidth = 140;
+  const rows = recentIncomeVsSpend.map(m => {
+    const color = m.net >= 0 ? ACCENT : CORAL;
+    const width = maxAbsNet > 0 ? Math.round((Math.abs(m.net) / maxAbsNet) * maxBarWidth) : 0;
+    const sign = m.net >= 0 ? '+' : '-';
+    return `<tr>
+      <td style="width:70px; font-size:12.5px; font-weight:600; color:#33404A; padding:4px 0;">${monthLabel(m.month)}</td>
+      <td style="padding:4px 0;"><div style="width:${width}px; height:12px; background:${color}; border-radius:3px;"></div></td>
+      <td style="padding:4px 0 4px 8px; text-align:right; font-size:12.5px; font-weight:700; color:${color}; white-space:nowrap;">${sign}${formatCurrency(Math.abs(m.net))}</td>
+    </tr>`;
+  }).join('');
+
+  const totalNet = recentIncomeVsSpend.reduce((sum, m) => sum + m.net, 0);
+  const totalColor = totalNet >= 0 ? ACCENT : CORAL;
+  const totalSign = totalNet >= 0 ? '+' : '-';
+
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #F0EFEB; margin-top:8px; padding-top:8px;">
+      <tr>
+        <td style="font-size:12.5px; font-weight:700; color:#33404A;">Total (${recentIncomeVsSpend.length} mo)</td>
+        <td style="text-align:right; font-size:13.5px; font-weight:700; color:${totalColor};">${totalSign}${formatCurrency(Math.abs(totalNet))}</td>
+      </tr>
+    </table>`;
 }
 
 // Table row, not flexbox — space-between isn't reliably honored by every
@@ -107,7 +170,8 @@ function computeBudgetTotalRow(budgetVsActual) {
 
 function buildReportHtml({
   accounts, accountBalances, accountMap, categoryMap = {}, added, bankSyncIssue, accountSyncErrors = [],
-  totalBalance = 0, budgetVsActual = [], uncategorizedTransactions = [], publicUrl = '', sections = {}, liabilityAccountIds = []
+  totalBalance = 0, budgetVsActual = [], uncategorizedTransactions = [], publicUrl = '', sections = {}, liabilityAccountIds = [],
+  recentIncomeVsSpend = [], investmentAccountIds = []
 }) {
   const includeBalances = sections.balances !== false;
   const includeTransactions = sections.transactions !== false;
@@ -136,9 +200,29 @@ function buildReportHtml({
   // then budget graphics, then account status/failures at the bottom.
   if (includeBalances) {
     html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED};">Total Balance</div>
-      <div style="font-family:'Sora',sans-serif; font-size:32px; font-weight:800; color:#1E2A32; margin-top:4px; margin-bottom:22px;">${formatCurrency(totalBalance)}</div>
+      <div style="font-family:'Sora',sans-serif; font-size:32px; font-weight:800; color:#1E2A32; margin-top:4px; margin-bottom:${investmentAccountIds.length > 0 ? '10px' : '22px'};">${formatCurrency(totalBalance)}</div>`;
 
-      <div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:4px;">Liability Accounts</div>
+    // Only rendered when at least one account is tagged Investment — with
+    // none tagged, Total Balance looks exactly as it did before this split.
+    if (investmentAccountIds.length > 0) {
+      const investmentBalance = accounts
+        .filter(acc => investmentAccountIds.includes(acc.id))
+        .reduce((sum, acc) => sum + accountBalances[acc.id], 0);
+      const cashBalance = totalBalance - investmentBalance;
+      html += `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
+        <tr>
+          <td style="font-size:11px; color:${MUTED};">Cash: <span style="font-weight:700; color:#33404A;">${formatCurrency(cashBalance)}</span></td>
+          <td style="font-size:11px; color:${MUTED}; text-align:right;">Investments: <span style="font-weight:700; color:#33404A;">${formatCurrency(investmentBalance)}</span></td>
+        </tr>
+      </table>`;
+    }
+
+    if (recentIncomeVsSpend.length > 0) {
+      html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:8px;">Income vs Spend</div>
+        <div style="margin-bottom:24px;">${renderIncomeVsSpendChart(recentIncomeVsSpend)}</div>`;
+    }
+
+    html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:4px;">Liability Accounts</div>
       <div style="margin-bottom:24px;">`;
     // Prefer explicit Liability Account tags when set; fall back to "any
     // account with a negative balance" for installs that haven't tagged yet.
@@ -146,6 +230,13 @@ function buildReportHtml({
       ? accounts.filter(acc => liabilityAccountIds.includes(acc.id))
       : accounts.filter(acc => accountBalances[acc.id] < 0);
     if (liabilityAccounts.length > 0) {
+      const totalLiability = liabilityAccounts.reduce((sum, acc) => sum + accountBalances[acc.id], 0);
+      html += `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-bottom:2px solid #F0EFEB; margin-bottom:4px;">
+        <tr>
+          <td style="padding:2px 0 9px; font-weight:700; font-size:13.5px; color:#33404A;">Total Liability</td>
+          <td style="padding:2px 0 9px; text-align:right; font-weight:700; font-size:14px; color:${CORAL};">${formatCurrency(totalLiability)}</td>
+        </tr>
+      </table>`;
       liabilityAccounts.forEach((acc, i) => {
         html += renderAccountRow(acc, accountBalances[acc.id], DOT_PALETTE[i % DOT_PALETTE.length]);
       });
@@ -194,7 +285,7 @@ function buildReportHtml({
   if (includeBudget && budgetVsActual.length > 0) {
     html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:12px;">Spend vs Budget</div>
       <div style="margin-bottom:24px;">`;
-    budgetVsActual.forEach(cat => { html += renderBudgetRow(cat); });
+    groupBudgetCategoriesByParent(budgetVsActual).forEach(group => { html += renderBudgetGroup(group); });
     html += `<div style="border-top:1px solid #F0EFEB; padding-top:12px; margin-top:4px;">${renderBudgetRow(computeBudgetTotalRow(budgetVsActual))}</div>`;
     html += `</div>`;
   }
