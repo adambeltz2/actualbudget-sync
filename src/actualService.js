@@ -23,6 +23,19 @@ function fingerprint(config) {
   return `${config.actualUrl}|${config.syncId}|${config.actualPassword}`;
 }
 
+// @actual-app/api's init()/shutdown()/downloadBudget() aren't safe to call
+// concurrently against the same DATA_DIR — two dashboard tabs hitting
+// different /api/data/* routes, or a scheduled sync firing while a
+// dashboard load is in flight, could otherwise interleave a shutdown() with
+// another call's init()/download(). This serializes every such call through
+// one FIFO queue instead of locking per-call, so callers never race.
+let apiOpQueue = Promise.resolve();
+function withApiLock(fn) {
+  const result = apiOpQueue.then(fn, fn);
+  apiOpQueue = result.catch(() => {});
+  return result;
+}
+
 // @actual-app/api throws these when its local SQLite/JSON cache under
 // DATA_DIR is corrupted or stale relative to the server — e.g. metadata
 // left truncated by an interrupted write, or the server no longer
@@ -73,23 +86,25 @@ async function downloadWithSelfHeal(config) {
 }
 
 async function ensureReady(config) {
-  const fp = fingerprint(config);
-  if (initialized && fp === currentFingerprint) return;
+  return withApiLock(async () => {
+    const fp = fingerprint(config);
+    if (initialized && fp === currentFingerprint) return;
 
-  if (initialized) {
-    logger.info('Actual Budget configuration changed; reinitializing data service...');
-    await shutdown();
-  }
+    if (initialized) {
+      logger.info('Actual Budget configuration changed; reinitializing data service...');
+      await shutdown();
+    }
 
-  await api.init({ dataDir: DATA_DIR, serverURL: config.actualUrl, password: config.actualPassword });
-  await downloadWithSelfHeal(config);
-  initialized = true;
-  currentFingerprint = fp;
+    await api.init({ dataDir: DATA_DIR, serverURL: config.actualUrl, password: config.actualPassword });
+    await downloadWithSelfHeal(config);
+    initialized = true;
+    currentFingerprint = fp;
+  });
 }
 
 async function refreshBudget(config) {
   await ensureReady(config);
-  await downloadWithSelfHeal(config);
+  await withApiLock(() => downloadWithSelfHeal(config));
 }
 
 // Used by the dashboard's "Test Connection" button. Reuses ensureReady, so a
