@@ -11,6 +11,8 @@ This service is designed to run independently of your main Actual Budget server.
 
 **Available on both [GitHub Container Registry](https://github.com/adambeltz2/actualbudget-sync/pkgs/container/actualbudget-sync) and [Docker Hub](https://hub.docker.com/r/adambeltz/actualbudget-sync)** — pick whichever registry you prefer, the image is identical.
 
+> **Validated against Actual Budget server [v26.10.0](https://actualbudget.org/blog/release-26.10.0/)** (via `@actual-app/api@26.10.0`). This app talks to your self-hosted Actual Budget server over its sync API, so it's generally tolerant of the server running a newer or slightly older version — but this is the version it's actively tested against.
+
 ## Screenshots
 
 **Dashboard** — Income vs Spend, account balances, spend by category, balance trend, budget vs actual, and financial projections, all from your own synced data.

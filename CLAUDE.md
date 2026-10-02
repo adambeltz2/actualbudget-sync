@@ -31,8 +31,8 @@ Act as a senior software engineer and technical investigator. Optimize for corre
 *   **Format:** Append items to `backlog.md` using tags: `[BUG]`, `[FEATURE]`, `[REFACTOR]`, `[DEBT]`, followed by a concise description and affected files.
 
 ## 6. Technology Stack & Environment Rules
-*   **Primary Ecosystem:** Node.js (20-slim) single-service app; entry point `index.js`; `express` serves the web dashboard (`public/index.html`) and API/config routes.
-*   **Infrastructure:** Docker / Docker Compose only — no Kubernetes or cloud-specific tooling. Built from `Dockerfile` (multi-stage-free, `node:20-slim` base) and published to both GHCR and Docker Hub via CI on push to `main`. Container listens on port `3000`; host volumes `./data` (config + Actual Budget sync cache) and `./logs` (rotated logs) provide persistence.
+*   **Primary Ecosystem:** Node.js (22-slim) single-service app; entry point `index.js`; `express` serves the web dashboard (`public/index.html`) and API/config routes.
+*   **Infrastructure:** Docker / Docker Compose only — no Kubernetes or cloud-specific tooling. Built from `Dockerfile` (multi-stage-free, `node:22-slim` base) and published to both GHCR and Docker Hub via CI on push to `main`. Container listens on port `3000`; host volumes `./data` (config + Actual Budget sync cache) and `./logs` (rotated logs) provide persistence.
 *   **Automation & Data:** `node-cron` drives the scheduled sync (`runBankSync()` via `@actual-app/api`); `winston` + `winston-daily-rotate-file` handle structured, daily-rotated logging; `nodemailer` sends the transaction-diff email report; `lodash` is used for data comparison/utility helpers. Configuration is persisted as JSON at `/data/config.json` (mounted from `./data`) rather than environment variables, except `TIMEZONE`, which is set via `docker-compose.yaml`.
 *   **Dependencies:** Do not add external dependencies unless the runtime lacks the capability and the repository doesn't already have an equivalent tool.
 
