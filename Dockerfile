@@ -4,7 +4,7 @@
 # python3/build-essential/node-gyp) when no prebuilt matches the platform.
 # That fallback toolchain is only ever needed here, during install — kept in
 # its own stage so it never ships in the final image.
-FROM node:20-slim AS deps
+FROM node:22-slim AS deps
 WORKDIR /app
 COPY package*.json ./
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && npm ci --omit=dev
 
 # --- runtime stage: just the app + its already-built dependencies ---
-FROM node:20-slim
+FROM node:22-slim
 WORKDIR /app
 
 # Baked in by the publish workflow (docker/build-push-action's build-args) so
