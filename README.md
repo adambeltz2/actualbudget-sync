@@ -19,7 +19,7 @@ This service is designed to run independently of your main Actual Budget server.
 
 ![Dashboard screenshot](https://raw.githubusercontent.com/adambeltz2/actualbudget-sync/main/docs/screenshots/dashboard.png)
 
-**Email report** — a sync summary with a Cash vs Investments balance breakdown, a compact Income vs Spend chart for the last 3 months plus a tiny 12-month strip (one bar per month, a running-total line, and that month's net/rolling-total figures underneath), new transactions, uncategorized transactions, a Total Liability line, and a Spend vs Budget breakdown folded under each category group, delivered straight to your inbox. The subject line is always generic ("Actual Budget Sync: N New Transactions" or "Actual Budget Sync: Summary") so an inbox preview or lock-screen notification never reveals a connection issue before the email is opened.
+**Email report** — a sync summary with a Cash vs Investments balance breakdown, a compact Income vs Spend chart for the last 3 months plus a tiny 12-month strip (one bar per month, a running-total dot above/below the zero line, and that month's net/rolling-total figures underneath), new transactions, uncategorized transactions, a Total Liability line, and a Spend vs Budget breakdown folded under each category group, delivered straight to your inbox. The subject line is always generic ("Actual Budget Sync: N New Transactions" or "Actual Budget Sync: Summary") so an inbox preview or lock-screen notification never reveals a connection issue before the email is opened.
 
 ![Email report screenshot](https://raw.githubusercontent.com/adambeltz2/actualbudget-sync/main/docs/screenshots/email-report.png)
 
