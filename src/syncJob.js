@@ -111,7 +111,10 @@ async function syncAndReport({ isStartup = false } = {}) {
       const [budgetVsActual, uncategorizedTransactions, recentIncomeVsSpend] = await Promise.all([
         includeBudget ? actualService.getBudgetVsActual() : Promise.resolve([]),
         includeTransactions ? actualService.getUncategorizedTransactions() : Promise.resolve([]),
-        includeBalances ? actualService.getRecentIncomeVsSpend({ months: 6 }) : Promise.resolve([])
+        // Fetched once at the longer (12-month) window — buildReportHtml
+        // derives both the 3-month vertical list and the 12-month strip
+        // from this same array, rather than two separate queries.
+        includeBalances ? actualService.getRecentIncomeVsSpend({ months: 12 }) : Promise.resolve([])
       ]);
       const { subject, html } = buildReportHtml({
         accounts, accountBalances, accountMap, categoryMap, added, bankSyncIssue, accountSyncErrors,

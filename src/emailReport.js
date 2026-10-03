@@ -96,6 +96,18 @@ function monthLabel(monthStr) {
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'long' });
 }
 
+function monthInitial(monthStr) {
+  return monthLabel(monthStr).charAt(0);
+}
+
+// No $ sign, no thousands separator, no decimals — used only in the
+// 12-month strip's per-column micro-labels, where every character counts
+// against a ~40px-wide column.
+function compactSigned(n) {
+  const rounded = Math.round(n);
+  return `${rounded >= 0 ? '+' : '-'}${Math.abs(rounded)}`;
+}
+
 // A compact net-per-month bar chart: one bar per month, green for a net
 // increase (income > spend) and red for a net decrease — not a separate
 // income bar and spend bar, since the "which way did this month go, and by
@@ -128,6 +140,79 @@ function renderIncomeVsSpendChart(recentIncomeVsSpend) {
         <td style="text-align:right; font-size:13.5px; font-weight:700; color:${totalColor};">${totalSign}${formatCurrency(Math.abs(totalNet))}</td>
       </tr>
     </table>`;
+}
+
+// A much more compact companion to the chart above: one tiny diverging bar
+// per month, time running left-to-right instead of stacked top-to-bottom,
+// for a longer window (12 months) than the vertical list is legible at.
+// Bars are scaled against the largest single-month |net| in the window, same
+// idea as renderIncomeVsSpendChart. A cumulative running-total line is
+// overlaid on the SAME zero baseline the bars pivot on (not its own
+// independent min/max range) — scaled separately against the largest
+// |running total|, since that's a much larger number than any single
+// month's net, but anchored to the same zero so the line visibly dips below
+// the baseline whenever the rolling total itself goes negative, not just
+// when a single month does. Drawn with inline SVG (polyline + circle
+// markers, a white halo behind the dark line for legibility crossing both
+// bar colors) since a smooth diagonal line can't be built from table cells
+// the way the bars themselves are; if a mail client strips SVG, the bars
+// and month labels still render fine on their own, just without the line.
+function renderIncomeVsSpend12MoStrip(months) {
+  if (months.length === 0) return '';
+  const n = months.length;
+  const barHalf = 17; // px — half of the 34px bar box, where the bars pivot
+  const lineHalf = 15; // px — slightly inside the box, same zero baseline as the bars
+
+  const maxAbsNet = Math.max(...months.map(m => Math.abs(m.net)), 0);
+  let cumulative = 0;
+  const cumulativeByMonth = months.map(m => { cumulative += m.net; return cumulative; });
+  const maxAbsCumulative = Math.max(...cumulativeByMonth.map(c => Math.abs(c)), 0);
+
+  const bars = months.map((m, i) => {
+    const barPx = maxAbsNet > 0 ? Math.round((Math.abs(m.net) / maxAbsNet) * barHalf) : 0;
+    const isPositive = m.net >= 0;
+    const color = isPositive ? ACCENT : CORAL;
+    const barStyle = isPositive
+      ? `bottom:${barHalf}px; height:${barPx}px; border-radius:2px 2px 0 0;`
+      : `top:${barHalf}px; height:${barPx}px; border-radius:0 0 2px 2px;`;
+    return `<td style="width:${(100 / n).toFixed(4)}%; padding:0 1px;">
+      <div style="position:relative; height:34px;">
+        <div style="position:absolute; left:0; right:0; top:${barHalf}px; height:1px; background:#F0EFEB;"></div>
+        <div style="position:absolute; left:2px; right:2px; ${barStyle} background:${color};"></div>
+      </div>
+      <div style="text-align:center; font-size:8px; color:${MUTED}; margin-top:2px;">${monthInitial(m.month)}</div>
+      <div style="text-align:center; font-size:6.5px; font-weight:700; color:${color}; line-height:1.3; margin-top:1px;">${compactSigned(m.net)}</div>
+      <div style="text-align:center; font-size:6px; color:${MUTED}; line-height:1.3;">${compactSigned(cumulativeByMonth[i])}</div>
+    </td>`;
+  }).join('');
+
+  const colWidth = 120 / n;
+  const linePoints = cumulativeByMonth.map((c, i) => {
+    const x = (i + 0.5) * colWidth;
+    const y = maxAbsCumulative > 0 ? barHalf - (c / maxAbsCumulative) * lineHalf : barHalf;
+    return { x, y };
+  });
+  const pointsAttr = linePoints.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+  const circles = linePoints.map(p => `<circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="1.1" fill="#33404A" />`).join('');
+
+  const totalNet = months.reduce((sum, m) => sum + m.net, 0);
+  const totalColor = totalNet >= 0 ? ACCENT : CORAL;
+  const totalSign = totalNet >= 0 ? '+' : '-';
+
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:6px;">
+      <tr>
+        <td style="font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:${MUTED};">Last ${n} Months <span style="text-transform:none; font-weight:400; color:#A7AEB6;">(line = running total)</span></td>
+        <td style="text-align:right; font-size:11px; font-weight:700; color:${totalColor};">Total (${n} mo): ${totalSign}${formatCurrency(Math.abs(totalNet))}</td>
+      </tr>
+    </table>
+    <div style="position:relative;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${bars}</tr></table>
+      <svg style="position:absolute; top:0; left:0; width:100%; height:34px; display:block;" viewBox="0 0 120 34" preserveAspectRatio="none">
+        <polyline points="${pointsAttr}" fill="none" stroke="#FFFFFF" stroke-width="1.1" stroke-linejoin="round" stroke-linecap="round" />
+        <polyline points="${pointsAttr}" fill="none" stroke="#33404A" stroke-width="0.45" stroke-linejoin="round" stroke-linecap="round" />
+        ${circles}
+      </svg>
+    </div>`;
 }
 
 // Table row, not flexbox — space-between isn't reliably honored by every
@@ -218,8 +303,16 @@ function buildReportHtml({
     }
 
     if (recentIncomeVsSpend.length > 0) {
+      // The vertical list always shows just the most recent 3 months,
+      // regardless of how much history was fetched — the 12-month strip
+      // below it (when there's enough history to make one worthwhile) is
+      // for the longer trend, not a duplicate of the same few months.
+      const showStrip = recentIncomeVsSpend.length > 3;
       html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:8px;">Income vs Spend</div>
-        <div style="margin-bottom:24px;">${renderIncomeVsSpendChart(recentIncomeVsSpend)}</div>`;
+        <div style="margin-bottom:${showStrip ? '10px' : '24px'};">${renderIncomeVsSpendChart(recentIncomeVsSpend.slice(-3))}</div>`;
+      if (showStrip) {
+        html += `<div style="margin-bottom:24px; padding-top:14px; border-top:1px solid #F0EFEB;">${renderIncomeVsSpend12MoStrip(recentIncomeVsSpend)}</div>`;
+      }
     }
 
     html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${MUTED}; margin-bottom:4px;">Liability Accounts</div>
