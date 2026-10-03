@@ -271,6 +271,60 @@ describe('buildReportHtml', () => {
     assert.doesNotMatch(withoutData, /Income vs Spend/);
   });
 
+  test('the 12-month strip only appears when more than 3 months of history were fetched', () => {
+    const threeMonths = [
+      { month: '2026-07', income: 5000, spend: 4000, net: 1000 },
+      { month: '2026-08', income: 4500, spend: 5200, net: -700 },
+      { month: '2026-09', income: 5100, spend: 4800, net: 300 }
+    ];
+    const { html: withThree } = buildReportHtml({
+      accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, recentIncomeVsSpend: threeMonths
+    });
+    assert.doesNotMatch(withThree, /Last 3 Months/);
+    assert.doesNotMatch(withThree, /running total/);
+
+    const recentIncomeVsSpend = [
+      { month: '2025-10', income: 6000, spend: 5700, net: 300 },
+      { month: '2025-11', income: 5600, spend: 6400, net: -800 },
+      { month: '2025-12', income: 5800, spend: 7000, net: -1200 },
+      { month: '2026-01', income: 6100, spend: 5900, net: 200 },
+      { month: '2026-02', income: 5900, spend: 6000, net: -100 },
+      { month: '2026-03', income: 6200, spend: 5800, net: 400 },
+      { month: '2026-04', income: 7200, spend: 5600, net: 1600 },
+      { month: '2026-05', income: 6000, spend: 6300, net: -300 },
+      { month: '2026-06', income: 6300, spend: 5800, net: 500 },
+      { month: '2026-07', income: 6900, spend: 5550, net: 1350 },
+      { month: '2026-08', income: 6100, spend: 6700, net: -600 },
+      { month: '2026-09', income: 6400, spend: 5300, net: 1100 }
+    ];
+    const { html } = buildReportHtml({
+      accounts, accountBalances, accountMap, added: [], bankSyncIssue: null, recentIncomeVsSpend
+    });
+    assert.match(html, /Last 12 Months/);
+    assert.match(html, /running total/);
+    // Vertical list still shows only the most recent 3 months (Jul/Aug/Sep),
+    // not all 12 — October shouldn't appear as a row in that list.
+    assert.match(html, /Total \(3 mo\)/);
+    const verticalListSection = html.slice(html.indexOf('Income vs Spend'), html.indexOf('Last 12 Months'));
+    assert.doesNotMatch(verticalListSection, /October/);
+    // 12-month total: sums to +$2,450.00
+    assert.match(html, /Total \(12 mo\): \+\$2,450\.00/);
+    // The running-total line is drawn as an SVG polyline, anchored to the
+    // same zero baseline the bars pivot on (y=17), not an independent
+    // min/max range — so it actually crosses below 17 during the Nov-Mar
+    // stretch where the cumulative total goes negative.
+    assert.match(html, /<svg[\s\S]*?<polyline points="[\s\S]*?"[\s\S]*?\/>/);
+    const svgMatch = html.match(/<polyline points="([^"]+)"/);
+    assert.ok(svgMatch, 'expected a polyline with points');
+    const yValues = svgMatch[1].split(' ').map(pair => Number(pair.split(',')[1]));
+    assert.ok(yValues.some(y => y > 17), 'line should dip below the zero baseline when the running total goes negative');
+    assert.ok(yValues.some(y => y < 17), 'line should rise above the zero baseline when the running total is positive');
+    // Per-month micro-labels: month's own net, then rolling cumulative net,
+    // in compact (+/-NNN, no $ or commas) form.
+    assert.match(html, />\+300</); // October's own net
+    assert.match(html, />-1700</); // December's rolling total
+  });
+
   test('Spend vs Budget folds categories under their parent group with a group total', () => {
     const budgetVsActual = [
       { categoryId: 'c1', name: 'Groceries', groupName: 'Food & Dining', budgeted: 500, spent: 400, remaining: 100, pctUsed: 80, overBudget: false },
