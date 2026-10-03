@@ -282,6 +282,7 @@ describe('buildReportHtml', () => {
     });
     assert.doesNotMatch(withThree, /Last 3 Months/);
     assert.doesNotMatch(withThree, /running total/);
+    assert.doesNotMatch(withThree, /width:5px; height:5px;/); // no running-total dots either
 
     const recentIncomeVsSpend = [
       { month: '2025-10', income: 6000, spend: 5700, net: 300 },
@@ -309,16 +310,22 @@ describe('buildReportHtml', () => {
     assert.doesNotMatch(verticalListSection, /October/);
     // 12-month total: sums to +$2,450.00
     assert.match(html, /Total \(12 mo\): \+\$2,450\.00/);
-    // The running-total line is drawn as an SVG polyline, anchored to the
-    // same zero baseline the bars pivot on (y=17), not an independent
-    // min/max range — so it actually crosses below 17 during the Nov-Mar
-    // stretch where the cumulative total goes negative.
-    assert.match(html, /<svg[\s\S]*?<polyline points="[\s\S]*?"[\s\S]*?\/>/);
-    const svgMatch = html.match(/<polyline points="([^"]+)"/);
-    assert.ok(svgMatch, 'expected a polyline with points');
-    const yValues = svgMatch[1].split(' ').map(pair => Number(pair.split(',')[1]));
-    assert.ok(yValues.some(y => y > 17), 'line should dip below the zero baseline when the running total goes negative');
-    assert.ok(yValues.some(y => y < 17), 'line should rise above the zero baseline when the running total is positive');
+    // The running-total marker is a small positioned <div> dot (not an SVG
+    // line — an earlier version used inline SVG, but a real sync email
+    // showed Gmail's app strips <svg> entirely), anchored to the same
+    // zero baseline the bars pivot on (top:17px), not an independent
+    // min/max range — so it actually sits below that baseline during the
+    // Nov-Mar stretch where the cumulative total goes negative, and above
+    // it once the running total turns positive again. Colored green/red to
+    // match, same as the bars.
+    const dotMatches = [...html.matchAll(/top:(-?[\d.]+)px; width:5px; height:5px;[^>]*background:(#[0-9A-F]+);/g)];
+    assert.equal(dotMatches.length, 12, 'expected one running-total dot per month');
+    const dotTops = dotMatches.map(m => Number(m[1]));
+    const dotColors = dotMatches.map(m => m[2]);
+    assert.ok(dotTops.some(top => top > 17), 'a dot should sit below the zero baseline when the running total is negative');
+    assert.ok(dotTops.some(top => top < 17), 'a dot should sit above the zero baseline when the running total is positive');
+    assert.ok(dotColors.includes('#C4573F'), 'a negative-running-total dot should be red');
+    assert.ok(dotColors.includes('#0EA894'), 'a positive-running-total dot should be green');
     // Per-month micro-labels: month's own net, then rolling cumulative net,
     // in compact (+/-NNN, no $ or commas) form.
     assert.match(html, />\+300</); // October's own net
