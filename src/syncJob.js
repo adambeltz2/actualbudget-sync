@@ -111,7 +111,7 @@ async function syncAndReport({ isStartup = false } = {}) {
       const [budgetVsActual, uncategorizedTransactions, recentIncomeVsSpend] = await Promise.all([
         includeBudget ? actualService.getBudgetVsActual() : Promise.resolve([]),
         includeTransactions ? actualService.getUncategorizedTransactions() : Promise.resolve([]),
-        includeBalances ? actualService.getRecentIncomeVsSpend({ months: 3 }) : Promise.resolve([])
+        includeBalances ? actualService.getRecentIncomeVsSpend({ months: 6 }) : Promise.resolve([])
       ]);
       const { subject, html } = buildReportHtml({
         accounts, accountBalances, accountMap, categoryMap, added, bankSyncIssue, accountSyncErrors,
