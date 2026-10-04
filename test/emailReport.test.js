@@ -316,16 +316,19 @@ describe('buildReportHtml', () => {
     // zero baseline the bars pivot on (top:17px), not an independent
     // min/max range — so it actually sits below that baseline during the
     // Nov-Mar stretch where the cumulative total goes negative, and above
-    // it once the running total turns positive again. Colored green/red to
-    // match, same as the bars.
+    // it once the running total turns positive again. The dot is always
+    // the same neutral navy regardless of sign — a real sync email showed
+    // that coloring it green/red routinely contradicted its bar's own
+    // color (a positive month sitting on a still-negative cumulative total
+    // drew a green bar with a red dot right on it), so position alone now
+    // carries the sign.
     const dotMatches = [...html.matchAll(/top:(-?[\d.]+)px; width:5px; height:5px;[^>]*background:(#[0-9A-F]+);/g)];
     assert.equal(dotMatches.length, 12, 'expected one running-total dot per month');
     const dotTops = dotMatches.map(m => Number(m[1]));
     const dotColors = dotMatches.map(m => m[2]);
     assert.ok(dotTops.some(top => top > 17), 'a dot should sit below the zero baseline when the running total is negative');
     assert.ok(dotTops.some(top => top < 17), 'a dot should sit above the zero baseline when the running total is positive');
-    assert.ok(dotColors.includes('#C4573F'), 'a negative-running-total dot should be red');
-    assert.ok(dotColors.includes('#0EA894'), 'a positive-running-total dot should be green');
+    assert.ok(dotColors.every(c => c === '#33404A'), 'every dot should be the same neutral color regardless of sign');
     // Per-month micro-labels: month's own net, then rolling cumulative net,
     // in compact (+/-NNN, no $ or commas) form.
     assert.match(html, />\+300</); // October's own net

@@ -152,13 +152,19 @@ function renderIncomeVsSpendChart(recentIncomeVsSpend) {
 // against the largest |running total|, since that's a much larger number
 // than any single month's net, but anchored to the same zero so the dot
 // visibly sits below the baseline whenever the rolling total itself goes
-// negative, not just when a single month does, and is colored green/red to
-// match. An earlier version drew this as a connecting inline-SVG polyline;
-// real-world testing (a live sync email, not just a preview) showed Gmail's
-// app strips <svg> entirely, so nothing rendered at all. Dots built from
-// plain positioned <div>s inside each month's own box, like everything else
-// in this email, are the tradeoff: no connecting line between months, but
-// guaranteed to actually render.
+// negative, not just when a single month does. The dot is always the same
+// neutral navy, NOT green/red — a real sync email showed that coloring it
+// by the running total's own sign routinely contradicts its bar's color
+// (a month can be individually positive, drawing a green bar, while the
+// cumulative total it sits on is still negative, coloring the dot red right
+// next to the green bar it's on — reads as a bug, not two different
+// quantities). Position alone (above/below the shared baseline) carries the
+// sign now; color is reserved for the bar. An earlier version drew the
+// marker as a connecting inline-SVG polyline; real-world testing (a live
+// sync email, not just a preview) showed Gmail's app strips <svg> entirely,
+// so nothing rendered at all. Dots built from plain positioned <div>s
+// inside each month's own box, like everything else in this email, are the
+// tradeoff: no connecting line between months, but guaranteed to render.
 function renderIncomeVsSpend12MoStrip(months) {
   if (months.length === 0) return '';
   const n = months.length;
@@ -178,14 +184,13 @@ function renderIncomeVsSpend12MoStrip(months) {
       ? `bottom:${barHalf}px; height:${barPx}px; border-radius:2px 2px 0 0;`
       : `top:${barHalf}px; height:${barPx}px; border-radius:0 0 2px 2px;`;
     const runningTotal = cumulativeByMonth[i];
-    const dotColor = runningTotal >= 0 ? ACCENT : CORAL;
     const dotOffset = maxAbsCumulative > 0 ? (runningTotal / maxAbsCumulative) * dotHalf : 0;
     const dotTop = barHalf - dotOffset; // px from the box's top; above barHalf = positive, below = negative
     return `<td style="width:${(100 / n).toFixed(4)}%; padding:0 1px;">
       <div style="position:relative; height:34px;">
         <div style="position:absolute; left:0; right:0; top:${barHalf}px; height:1px; background:#F0EFEB;"></div>
         <div style="position:absolute; left:2px; right:2px; ${barStyle} background:${color};"></div>
-        <div style="position:absolute; left:50%; top:${dotTop.toFixed(1)}px; width:5px; height:5px; margin-left:-3px; margin-top:-3px; border-radius:50%; background:${dotColor}; border:1px solid #FFFFFF;"></div>
+        <div style="position:absolute; left:50%; top:${dotTop.toFixed(1)}px; width:5px; height:5px; margin-left:-3px; margin-top:-3px; border-radius:50%; background:#33404A; border:1px solid #FFFFFF;"></div>
       </div>
       <div style="text-align:center; font-size:8px; color:${MUTED}; margin-top:2px;">${monthInitial(m.month)}</div>
       <div style="text-align:center; font-size:6.5px; font-weight:700; color:${color}; line-height:1.3; margin-top:1px;">${compactSigned(m.net)}</div>
