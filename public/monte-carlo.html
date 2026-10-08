@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monte Carlo Retirement Analysis — Actual Budget Smart Sync</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap">
+  <script src="/vendor/chart.umd.js"></script>
+  <style>
+    :root {
+      --bg: #F1F0EC; --card-bg: #FFFFFF; --border: #F0EFEB;
+      --text: #1E2A32; --text-secondary: #33404A; --text-muted: #8A93A0;
+      --accent: #0EA894; --accent-dark: #0C8E7D; --accent-soft: #E4F5F2;
+      --positive: #1C8C74; --positive-soft: #E4F5F2;
+      --negative: #C4573F; --negative-soft: #FBECE8;
+      --warning: #C98A2E; --warning-soft: #FBF1E2;
+      --shadow: 0 1px 2px rgba(30,42,50,0.04), 0 8px 24px rgba(30,42,50,0.06);
+    }
+    html.dark {
+      --bg: #171D21; --card-bg: #1F262B; --border: #2C363D;
+      --text: #EDEFF0; --text-secondary: #C7CDD1; --text-muted: #7C8890;
+      --accent: #14BFA8; --accent-dark: #0EA894; --accent-soft: #16302C;
+      --positive: #2FBF9B; --positive-soft: #16302C;
+      --negative: #E0806A; --negative-soft: #34211E;
+      --warning: #E0A94D; --warning-soft: #332817;
+      --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px rgba(0,0,0,0.3);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 40px 24px 64px;
+      background: var(--bg); color: var(--text);
+      font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
+    }
+    .shell { max-width: 1180px; margin: 0 auto; }
+    .num { font-family: 'Sora', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+    a { color: var(--accent); }
+    .card { background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow); padding: 26px 30px; margin-bottom: 20px; min-width: 0; }
+    .label-caps { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+    .field-hint { font-size: 12.5px; color: var(--text-muted); line-height: 1.55; margin: 0; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer;
+      padding: 9px 14px; border-radius: 10px; font-weight: 600; font-size: 13.5px;
+      font-family: inherit; text-decoration: none; transition: opacity 0.15s; white-space: nowrap;
+    }
+    .btn-ghost { background: var(--card-bg); color: var(--text-secondary); box-shadow: var(--shadow); }
+    .btn-ghost:hover { opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:disabled, .btn-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
+    .pill { font-size: 11.5px; font-weight: 700; padding: 4px 11px; border-radius: 999px; white-space: nowrap; display: inline-block; }
+    .pill-good { color: var(--positive); background: var(--positive-soft); }
+    .pill-watch { color: var(--warning); background: var(--warning-soft); }
+    .pill-risk { color: var(--negative); background: var(--negative-soft); }
+    .error-banner {
+      background: color-mix(in srgb, var(--negative) 12%, var(--card-bg));
+      border: 1px solid color-mix(in srgb, var(--negative) 35%, var(--card-bg));
+      color: var(--negative); font-size: 14px; padding: 12px 14px; border-radius: 10px; margin-bottom: 24px;
+    }
+    .notice-banner {
+      background: color-mix(in srgb, var(--accent) 10%, var(--card-bg));
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--card-bg));
+      color: var(--accent-dark); font-size: 14px; padding: 14px 16px; border-radius: 10px; margin-bottom: 24px;
+    }
+    .statGrid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 16px; margin-bottom: 20px; }
+    .statTile { background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow); padding: 22px 24px; min-width: 0; }
+    .rateGrid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+    .rateCell { border: 1px solid var(--border); border-radius: 12px; padding: 14px; text-align: center; }
+    .rateCell.active { border-color: var(--accent); background: var(--accent-soft); }
+    .assumpGrid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 18px; }
+    .assumpItem { min-width: 0; }
+    .stressRow { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; align-items: stretch; }
+    .scenarioRow { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+    .scenarioRow + .scenarioRow { margin-top: 20px; }
+    .scenarioGroup { flex: 1; min-width: 220px; }
+    .scenarioGroup .groupLabel { font-size: 13.5px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; }
+    .ageGrid { display: flex; gap: 8px; flex-wrap: wrap; }
+    .agePill {
+      border: 1px solid var(--border); background: var(--card-bg); color: var(--text-secondary);
+      font-family: 'Sora', sans-serif; font-weight: 700; font-size: 13.5px; padding: 9px 15px; border-radius: 10px; cursor: pointer;
+    }
+    .agePill.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
+    .ssToggleRow { display: flex; align-items: center; gap: 12px; }
+    .switch { position: relative; width: 44px; height: 25px; flex-shrink: 0; border: none; border-radius: 999px; background: var(--border); cursor: pointer; padding: 0; }
+    .switch.on { background: var(--accent); }
+    .switch .knob { position: absolute; top: 2.5px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+    .switch.on .knob { transform: translateX(19px); }
+    table.compare { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    table.compare th { text-align: center; padding: 10px 12px; color: var(--text-muted); font-weight: 700; font-size: 11.5px; border-bottom: 1px solid var(--border); }
+    table.compare th:first-child, table.compare td:first-child { text-align: left; }
+    table.compare td { padding: 11px 12px; text-align: center; border-bottom: 1px solid var(--border); }
+    table.compare tr:last-child td { border-bottom: none; }
+    table.compare td.current { background: var(--accent-soft); border-radius: 8px; font-weight: 800; color: var(--accent-dark); }
+    @media (max-width: 900px) {
+      .statGrid, .stressRow { grid-template-columns: 1fr; }
+      .rateGrid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .assumpGrid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:26px; flex-wrap:wrap; gap:12px;">
+      <div>
+        <div class="num" style="font-size:22px; font-weight:800;">🎲 Monte Carlo Retirement Analysis</div>
+        <p style="font-size:13.5px; color:var(--text-muted); margin:2px 0 0;">Simulated market paths against your real synced data — tests sequence-of-returns risk instead of assuming one average year after another.</p>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="themeToggleBtn" title="Toggle dark mode" class="btn btn-ghost">🌙</button>
+        <a href="/" class="btn btn-ghost">Dashboard</a>
+        <a href="/explorer.html" class="btn btn-ghost">Data Explorer</a>
+        <a href="/retirement.html" class="btn btn-ghost">🎯 Retirement Modeling</a>
+        <a href="/trends.html" class="btn btn-ghost">📈 Trends</a>
+        <a href="/networth.html" class="btn btn-ghost">💰 Net Worth</a>
+        <a href="/settings.html" class="btn btn-ghost">⚙ Settings</a>
+        <button id="logoutBtn" class="btn btn-ghost">Logout</button>
+      </div>
+    </div>
+
+    <div id="errorBanner" class="error-banner" hidden></div>
+    <div id="notConfiguredMsg" class="notice-banner" hidden>
+      Actual Budget isn't configured yet. Set it up on the <a href="/settings.html" style="font-weight:700;">Settings</a> page first.
+    </div>
+    <div id="noBirthdateMsg" class="notice-banner" hidden>
+      This page needs your birthdate to compute your age. Set it in <a href="/settings.html" style="font-weight:700;">Settings</a>' Social Security card first — it only takes a second and Social Security itself stays optional.
+    </div>
+
+    <div id="mcBody" hidden>
+      <div class="card">
+        <div class="label-caps" style="margin-bottom:14px;">Scenario</div>
+        <div class="scenarioRow">
+          <div class="scenarioGroup">
+            <div class="groupLabel">Retirement age</div>
+            <div class="ageGrid" id="ageGrid">
+              <button class="agePill active" data-age="55">55</button>
+              <button class="agePill" data-age="60">60</button>
+              <button class="agePill" data-age="63">63</button>
+              <button class="agePill" data-age="65">65</button>
+              <button class="agePill" data-age="70">70</button>
+            </div>
+          </div>
+          <div class="scenarioGroup">
+            <div class="groupLabel">Inflation assumption</div>
+            <div class="ageGrid" id="inflationGrid">
+              <button class="agePill" data-inflation="2.5">Low · 2.5%</button>
+              <button class="agePill active" data-inflation="3.0">Moderate · 3.0%</button>
+              <button class="agePill" data-inflation="4.0">High · 4.0%</button>
+            </div>
+          </div>
+          <div class="scenarioGroup">
+            <div class="groupLabel">Social Security</div>
+            <div class="ssToggleRow">
+              <button class="switch on" id="ssSwitch" aria-pressed="true"><span class="knob"></span></button>
+              <span style="font-size:13.5px; font-weight:600;" id="ssLabel">Included</span>
+            </div>
+            <p class="field-hint" style="margin-top:8px;" id="ssHint"></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="label-caps" style="margin-bottom:14px;">Advanced Assumptions</div>
+        <div class="scenarioRow">
+          <div class="scenarioGroup">
+            <div class="groupLabel">Annual contribution (until retirement)</div>
+            <div class="ageGrid" id="contribGrid">
+              <button class="agePill" data-contrib="0">$0</button>
+              <button class="agePill" data-contrib="10000">$10K</button>
+              <button class="agePill active" data-contrib="20000">$20K</button>
+              <button class="agePill" data-contrib="30000">$30K</button>
+            </div>
+            <p class="field-hint" style="margin-top:8px;" id="contribHint"></p>
+          </div>
+          <div class="scenarioGroup">
+            <div class="groupLabel">Investment mix</div>
+            <div class="ageGrid" id="allocGrid">
+              <button class="agePill" data-alloc="conservative">Conservative</button>
+              <button class="agePill active" data-alloc="moderate">Moderate</button>
+              <button class="agePill" data-alloc="aggressive">Aggressive</button>
+            </div>
+            <p class="field-hint" style="margin-top:8px;" id="allocHint"></p>
+          </div>
+          <div class="scenarioGroup">
+            <div class="groupLabel">Spending in retirement</div>
+            <div class="ssToggleRow">
+              <button class="switch on" id="glidepathSwitch" aria-pressed="true"><span class="knob"></span></button>
+              <span style="font-size:13.5px; font-weight:600;" id="glidepathLabel">"Smile" curve</span>
+            </div>
+            <p class="field-hint" style="margin-top:8px;" id="glidepathHint"></p>
+          </div>
+        </div>
+        <div class="scenarioRow">
+          <div class="scenarioGroup">
+            <div class="groupLabel">Pension / other guaranteed income</div>
+            <div class="ageGrid" id="pensionGrid">
+              <button class="agePill active" data-pension="0">None</button>
+              <button class="agePill" data-pension="1500">$1,500/mo</button>
+              <button class="agePill" data-pension="3000">$3,000/mo</button>
+            </div>
+          </div>
+          <div class="scenarioGroup">
+            <div class="groupLabel">One-time expense</div>
+            <div class="ageGrid" id="expenseGrid">
+              <button class="agePill active" data-expense="0">None</button>
+              <button class="agePill" data-expense="25000">$25K</button>
+              <button class="agePill" data-expense="50000">$50K</button>
+              <button class="agePill" data-expense="100000">$100K</button>
+            </div>
+            <p class="field-hint" style="margin-top:8px;" id="expenseHint"></p>
+          </div>
+          <div class="scenarioGroup">
+            <div class="groupLabel">Plan for</div>
+            <div class="ssToggleRow">
+              <button class="switch" id="survivorSwitch" aria-pressed="false"><span class="knob"></span></button>
+              <span style="font-size:13.5px; font-weight:600;" id="survivorLabel">Just me</span>
+            </div>
+            <p class="field-hint" style="margin-top:8px;">A joint plan needs savings to outlast two lifespans, not one — modeled here with a longer simulated horizon.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="loadingNotice" class="field-hint" style="margin-bottom:12px;">Running simulation…</div>
+
+      <div class="statGrid">
+        <div class="statTile">
+          <div class="label-caps" style="margin-bottom:10px;">Probability of Success</div>
+          <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+            <div class="num" style="font-size:40px; font-weight:800;" id="statSuccess">—</div>
+            <span class="pill" id="statSuccessPill"></span>
+          </div>
+          <p class="field-hint" style="margin-top:8px;" id="statSuccessHint">of simulated paths still had money left at the end of the horizon.</p>
+        </div>
+        <div class="statTile">
+          <div class="label-caps" style="margin-bottom:10px;">Money Lasts Until</div>
+          <div class="num" style="font-size:40px; font-weight:800;" id="statLongevity">—</div>
+          <p class="field-hint" style="margin-top:8px;" id="statLongevityHint"></p>
+        </div>
+        <div class="statTile">
+          <div class="label-caps" style="margin-bottom:10px;">Median Ending Balance</div>
+          <div class="num" style="font-size:40px; font-weight:800;" id="statBalance">—</div>
+          <p class="field-hint" style="margin-top:8px;" id="statBalanceRange"></p>
+        </div>
+        <div class="statTile">
+          <div class="label-caps" style="margin-bottom:10px;">Safe Withdrawal Amount</div>
+          <div class="num" style="font-size:40px; font-weight:800;" id="statWithdrawal">—</div>
+          <p class="field-hint" style="margin-top:8px;">at your current withdrawal rate, from the median balance at retirement.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:4px;">
+          <div class="label-caps">Simulated Balance Range</div>
+          <div style="display:flex; gap:14px; font-size:11.5px; color:var(--text-muted); flex-wrap:wrap;">
+            <span><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:var(--accent); margin-right:5px; vertical-align:-1px;"></span>Median</span>
+            <span><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:color-mix(in srgb, var(--accent) 35%, transparent); margin-right:5px; vertical-align:-1px;"></span>25th–75th</span>
+            <span><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:color-mix(in srgb, var(--accent) 15%, transparent); margin-right:5px; vertical-align:-1px;"></span>10th–90th</span>
+          </div>
+        </div>
+        <p class="field-hint" style="margin-bottom:10px;" id="chartCaption"></p>
+        <div style="height:320px;"><canvas id="fanChart"></canvas></div>
+      </div>
+
+      <div class="stressRow">
+        <div class="card" style="margin-bottom:0;">
+          <div class="label-caps" style="margin-bottom:4px;">Probability of Success by Withdrawal Rate</div>
+          <p class="field-hint" style="margin-bottom:14px;">Same simulation, replayed at each rate.</p>
+          <div class="rateGrid" id="rateGrid"></div>
+        </div>
+        <div class="card" style="margin-bottom:0; background:var(--warning-soft); box-shadow:none; border:1px solid color-mix(in srgb, var(--warning) 35%, transparent);">
+          <div class="label-caps" style="margin-bottom:8px; color:var(--warning);">⚠ Sequence-of-Returns Stress Test</div>
+          <p style="font-size:13.5px; color:var(--text-secondary); line-height:1.55; margin:0;">If the <strong>first 5 years of retirement</strong> land in the worst quarter of simulated markets, success drops to <strong class="num" id="statStress" style="color:var(--negative);">—</strong> — even though the long-run average return is unchanged. Early losses compound against withdrawals longer.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="label-caps" style="margin-bottom:4px;">Compare Scenarios</div>
+        <p class="field-hint" style="margin-bottom:14px;">Probability of success at each retirement age, with and without Social Security — at your current advanced assumptions and withdrawal rate.</p>
+        <table class="compare">
+          <thead><tr><th>Retirement Age</th><th>Without Social Security</th><th>With Social Security</th></tr></thead>
+          <tbody id="compareBody"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+          <div class="label-caps" style="margin-bottom:0;">Assumptions</div>
+          <div style="display:flex; gap:10px;">
+            <a id="exportZipBtn" class="btn btn-ghost" href="#">⬇ Export (.zip)</a>
+            <a id="exportPdfBtn" class="btn btn-ghost" href="#">⬇ PDF Report</a>
+          </div>
+        </div>
+        <div class="assumpGrid">
+          <div class="assumpItem"><div class="field-hint" style="margin-bottom:3px;">Expected return (nominal)</div><div class="num" style="font-size:16px; font-weight:700;" id="assumpReturn">—</div></div>
+          <div class="assumpItem"><div class="field-hint" style="margin-bottom:3px;">Inflation</div><div class="num" style="font-size:16px; font-weight:700;" id="assumpInflation">—</div></div>
+          <div class="assumpItem"><div class="field-hint" style="margin-bottom:3px;">Volatility (std. dev.)</div><div class="num" style="font-size:16px; font-weight:700;" id="assumpVol">—</div></div>
+          <div class="assumpItem"><div class="field-hint" style="margin-bottom:3px;">Simulated paths</div><div class="num" style="font-size:16px; font-weight:700;" id="assumpPaths">—</div></div>
+        </div>
+        <p class="field-hint" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">Return and volatility are long-run nominal assumptions for your chosen investment mix, resampled randomly for each simulated path — not a guarantee of future performance. Figures account for inflation explicitly in the drawdown phase; nothing here accounts for taxes or fees. Treat this as a starting point for a conversation with an actual advisor, not a plan.</p>
+      </div>
+    </div>
+
+    <footer style="display:flex; align-items:center; justify-content:center; gap:14px; font-size:12px; color:var(--text-muted); margin-top:28px; padding-top:20px; border-top:1px solid var(--border);">
+      <span>Actual Budget Smart Sync <span id="appVersion"></span></span>
+      <a href="https://github.com/adambeltz2/actualbudget-sync" target="_blank" rel="noopener" style="color:var(--text-muted);">GitHub</a>
+      <a href="https://www.buymeacoffee.com/adambeltz" target="_blank" rel="noopener" style="color:var(--text-muted);">☕ Buy Me a Coffee</a>
+    </footer>
+  </div>
+
+  <script>
+    fetch('/api/version').then(r => r.json()).then(({ version, commit }) => {
+      document.getElementById('appVersion').innerText = version ? `v${version}${commit ? ` (${commit})` : ''}` : '';
+    }).catch(() => {});
+
+    // --- Theme ---
+    function applyTheme(isDark) {
+      document.documentElement.classList.toggle('dark', isDark);
+      document.getElementById('themeToggleBtn').innerText = isDark ? '☀️' : '🌙';
+    }
+    try {
+      const stored = localStorage.getItem('theme');
+      applyTheme(stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
+    } catch (e) { /* localStorage may be unavailable */ }
+    document.getElementById('themeToggleBtn').addEventListener('click', () => {
+      const isDark = !document.documentElement.classList.contains('dark');
+      applyTheme(isDark);
+      try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch (e) { /* ignore */ }
+      if (lastData) renderChart(lastData.result);
+    });
+
+    const errorBanner = document.getElementById('errorBanner');
+    function showError(message) { errorBanner.innerText = message; errorBanner.hidden = false; }
+    function hideError() { errorBanner.hidden = true; }
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    });
+
+    function formatCurrency(amount) {
+      const text = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+      return amount < 0 ? `-$${text}` : `$${text}`;
+    }
+    function fmtShort(v) {
+      if (Math.abs(v) >= 1000000) return '$' + (v / 1000000).toFixed(1) + 'M';
+      if (Math.abs(v) >= 1000) return '$' + Math.round(v / 1000) + 'K';
+      return formatCurrency(v);
+    }
+    function classifyPct(pct) {
+      if (pct >= 80) return { pill: 'pill-good', text: 'Strong' };
+      if (pct >= 60) return { pill: 'pill-watch', text: 'Moderate' };
+      return { pill: 'pill-risk', text: 'At Risk' };
+    }
+
+    // --- Scenario state ---
+    const state = {
+      retireAge: 55, inflationPct: 3.0, includeSocialSecurity: true,
+      annualContribution: 20000, allocation: 'moderate', glidepath: true,
+      pensionMonthly: 0, oneTimeExpense: 0, survivor: false,
+      withdrawalRatePct: 3.8
+    };
+    const ALLOCATION_LABELS = {
+      conservative: { label: 'Conservative', mean: 0.050, vol: 0.07 },
+      moderate: { label: 'Moderate', mean: 0.070, vol: 0.12 },
+      aggressive: { label: 'Aggressive', mean: 0.090, vol: 0.17 }
+    };
+
+    let lastData = null;
+    let fanChart = null;
+    let hasBirthdateKnown = true;
+    let loadSeq = 0;
+
+    function buildQuery(overrides = {}) {
+      const params = new URLSearchParams({
+        retireAge: String(state.retireAge),
+        allocation: state.allocation,
+        inflationPct: String(state.inflationPct),
+        withdrawalRatePct: String(state.withdrawalRatePct),
+        includeSocialSecurity: String(state.includeSocialSecurity),
+        annualContribution: String(state.annualContribution),
+        glidepath: String(state.glidepath),
+        pensionMonthly: String(state.pensionMonthly),
+        oneTimeExpense: String(state.oneTimeExpense),
+        survivor: String(state.survivor)
+      });
+      Object.entries(overrides).forEach(([k, v]) => params.set(k, String(v)));
+      return params;
+    }
+
+    function updateExportLinks() {
+      document.getElementById('exportZipBtn').href = `/api/data/monte-carlo/export?${buildQuery().toString()}`;
+      document.getElementById('exportPdfBtn').href = `/api/data/monte-carlo/pdf?${buildQuery().toString()}`;
+    }
+
+    function renderChart(result) {
+      const ctx = document.getElementById('fanChart');
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0EA894';
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#8A93A0';
+
+      const markers = [{ age: result.retireAge, label: `Retire (${result.retireAge})`, dashed: false }];
+      if (result.ssStartAge !== null && result.ssStartAge !== result.retireAge) {
+        markers.push({ age: result.ssStartAge, label: `SS starts (${result.ssStartAge})`, dashed: true });
+      }
+      if (result.expenseAge !== null) {
+        markers.push({ age: result.expenseAge, label: `Expense (age ${result.expenseAge})`, dashed: true });
+      }
+      markers.sort((a, b) => a.age - b.age);
+
+      const markerPlugin = {
+        id: 'markerPlugin',
+        afterDraw(chart) {
+          const top = chart.scales.y.top;
+          let lastX = null, level = 0;
+          markers.forEach(m => {
+            const idx = chart.data.labels.indexOf(m.age);
+            if (idx === -1) return;
+            const x = chart.scales.x.getPixelForValue(idx);
+            const bottom = chart.scales.y.bottom;
+            if (lastX !== null && Math.abs(x - lastX) < 70) level++; else level = 0;
+            lastX = x;
+            const labelY = level === 0 ? top - 6 : top + 13 + (level - 1) * 14;
+            const c = chart.ctx;
+            c.save();
+            c.setLineDash(m.dashed ? [2, 3] : [4, 4]);
+            c.strokeStyle = muted;
+            c.globalAlpha = m.dashed ? 0.6 : 1;
+            c.lineWidth = 1.5;
+            c.beginPath();
+            c.moveTo(x, top);
+            c.lineTo(x, bottom);
+            c.stroke();
+            c.setLineDash([]);
+            c.globalAlpha = 1;
+            c.fillStyle = muted;
+            c.font = '700 10px "Source Sans 3", sans-serif';
+            c.textAlign = 'center';
+            c.fillText(m.label, x, labelY);
+            c.restore();
+          });
+        }
+      };
+
+      if (fanChart) fanChart.destroy();
+      fanChart = new Chart(ctx, {
+        type: 'line',
+        plugins: [markerPlugin],
+        data: {
+          labels: result.ages,
+          datasets: [
+            { label: '90th', data: result.bands.p90, borderWidth: 0, pointRadius: 0, fill: false },
+            { label: '10th', data: result.bands.p10, borderWidth: 0, pointRadius: 0, fill: '-1', backgroundColor: `color-mix(in srgb, ${accent} 15%, transparent)` },
+            { label: '75th', data: result.bands.p75, borderWidth: 0, pointRadius: 0, fill: false },
+            { label: '25th', data: result.bands.p25, borderWidth: 0, pointRadius: 0, fill: '-1', backgroundColor: `color-mix(in srgb, ${accent} 35%, transparent)` },
+            { label: 'Median', data: result.bands.p50, borderColor: accent, borderWidth: 2.5, pointRadius: 0, fill: false }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          layout: { padding: { top: 28 } },
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              filter: item => item.dataset.label === 'Median',
+              callbacks: { label: item => 'Median balance: ' + fmtShort(item.parsed.y) }
+            }
+          },
+          scales: {
+            x: { ticks: { color: muted, maxTicksLimit: 12, font: { size: 11 } }, grid: { display: false } },
+            y: { ticks: { color: muted, callback: v => fmtShort(v), font: { size: 11 } }, grid: { color: 'rgba(140,148,158,0.14)' } }
+          }
+        }
+      });
+    }
+
+    function renderResult(data) {
+      const { result, rateGrid, stressTest } = data;
+      const pct = result.successPct;
+      const cls = classifyPct(pct);
+      document.getElementById('statSuccess').innerText = `${pct}%`;
+      const pillEl = document.getElementById('statSuccessPill');
+      pillEl.innerText = cls.text;
+      pillEl.className = `pill ${cls.pill}`;
+
+      const longevityEl = document.getElementById('statLongevity');
+      const longevityHint = document.getElementById('statLongevityHint');
+      if (result.longevityAge === null) {
+        longevityEl.innerText = `${result.endAge}+`;
+        longevityHint.innerText = `in a bottom-10% market scenario, savings still hadn't run out by age ${result.endAge}.`;
+      } else {
+        longevityEl.innerText = `Age ${result.longevityAge}`;
+        longevityHint.innerText = 'in a bottom-10% market scenario, savings are projected to run out by this age.';
+      }
+
+      document.getElementById('statBalance').innerText = fmtShort(result.medianEndingBalance);
+      document.getElementById('statBalanceRange').innerText =
+        `10th–90th percentile range: ${fmtShort(result.p10EndingBalance)} – ${fmtShort(result.p90EndingBalance)}, at age ${result.endAge}.`;
+      document.getElementById('statWithdrawal').innerHTML =
+        `${formatCurrency(result.safeWithdrawalAmount)}<span style="font-size:16px; font-weight:600; color:var(--text-muted);">/yr</span>`;
+
+      document.getElementById('chartCaption').innerText =
+        `Dashed line marks your target retirement age (${result.retireAge}). Shaded bands show where the ${result.paths.toLocaleString('en-US')} simulated paths landed — half of all runs finished inside the darkest band.`;
+
+      const rateGridEl = document.getElementById('rateGrid');
+      rateGridEl.innerHTML = rateGrid.map(cell => {
+        const cellCls = classifyPct(cell.successPct);
+        const isActive = Math.abs(cell.withdrawalRatePct - state.withdrawalRatePct) < 0.001;
+        const color = cellCls.pill === 'pill-good' ? 'var(--positive)' : (cellCls.pill === 'pill-watch' ? 'var(--warning)' : 'var(--negative)');
+        return `<div class="rateCell${isActive ? ' active' : ''}" data-rate="${cell.withdrawalRatePct}">
+          <div class="label-caps" style="margin-bottom:6px;">${cell.withdrawalRatePct.toFixed(1)}%</div>
+          <div class="num" style="font-size:20px; font-weight:800; color:${color};">${cell.successPct}%</div>
+        </div>`;
+      }).join('');
+      rateGridEl.querySelectorAll('.rateCell').forEach(cell => {
+        cell.style.cursor = 'pointer';
+        cell.addEventListener('click', () => {
+          state.withdrawalRatePct = parseFloat(cell.dataset.rate);
+          loadProjection();
+        });
+      });
+
+      document.getElementById('statStress').innerText = `${stressTest.successPct}%`;
+
+      document.getElementById('assumpReturn').innerText = `${(ALLOCATION_LABELS[state.allocation].mean * 100).toFixed(1)}%`;
+      document.getElementById('assumpInflation').innerText = `${state.inflationPct.toFixed(1)}%`;
+      document.getElementById('assumpVol').innerText = `${(ALLOCATION_LABELS[state.allocation].vol * 100).toFixed(1)}%`;
+      document.getElementById('assumpPaths').innerText = result.paths.toLocaleString('en-US');
+
+      renderChart(result);
+      updateExportLinks();
+    }
+
+    function renderCompare(compare) {
+      const body = document.getElementById('compareBody');
+      if (!compare || !compare.rows) { body.innerHTML = ''; return; }
+      body.innerHTML = compare.rows.map(row => {
+        const noSSCurrent = row.age === state.retireAge && !state.includeSocialSecurity;
+        const ssCurrent = row.age === state.retireAge && state.includeSocialSecurity;
+        const withSSCell = row.withSS === null ? '<span style="color:var(--text-muted);">—</span>' : `${row.withSS}%`;
+        return `<tr><td>Age ${row.age}</td>
+          <td class="num${noSSCurrent ? ' current' : ''}">${row.withoutSS}%</td>
+          <td class="num${ssCurrent ? ' current' : ''}">${withSSCell}</td></tr>`;
+      }).join('');
+    }
+
+    async function loadCompare() {
+      try {
+        const res = await fetch(`/api/data/monte-carlo/compare?${buildQuery().toString()}`);
+        if (res.status === 401) { window.location.href = '/login.html'; return; }
+        const data = await res.json();
+        if (!data.error) renderCompare(data);
+      } catch (e) { /* compare table is supplementary — a failure here doesn't block the main page */ }
+    }
+
+    async function loadProjection() {
+      const mySeq = ++loadSeq;
+      document.getElementById('loadingNotice').hidden = false;
+      let res;
+      try {
+        res = await fetch(`/api/data/monte-carlo?${buildQuery().toString()}`);
+      } catch (err) {
+        showError('Could not reach the server.');
+        document.getElementById('loadingNotice').hidden = true;
+        return;
+      }
+      if (mySeq !== loadSeq) return; // a newer request has since been fired
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      const data = await res.json();
+      document.getElementById('loadingNotice').hidden = true;
+      if (data.error) { showError(data.error); return; }
+      hideError();
+
+      if (!data.hasBirthdate) {
+        hasBirthdateKnown = false;
+        document.getElementById('noBirthdateMsg').hidden = false;
+        document.getElementById('mcBody').hidden = true;
+        return;
+      }
+      hasBirthdateKnown = true;
+      document.getElementById('noBirthdateMsg').hidden = true;
+      document.getElementById('mcBody').hidden = false;
+
+      lastData = data;
+      try {
+        renderResult(data);
+      } catch (err) {
+        console.error('Monte Carlo page failed to render:', err);
+      }
+      loadCompare();
+    }
+
+    function wirePillGroup(gridId, stateKey, parse) {
+      document.getElementById(gridId).addEventListener('click', e => {
+        const btn = e.target.closest('.agePill');
+        if (!btn) return;
+        const key = Object.keys(btn.dataset)[0];
+        state[stateKey] = parse ? parse(btn.dataset[key]) : btn.dataset[key];
+        document.querySelectorAll(`#${gridId} .agePill`).forEach(p => p.classList.toggle('active', p === btn));
+        loadProjection();
+      });
+    }
+    wirePillGroup('ageGrid', 'retireAge', Number);
+    wirePillGroup('inflationGrid', 'inflationPct', Number);
+    wirePillGroup('contribGrid', 'annualContribution', Number);
+    wirePillGroup('allocGrid', 'allocation');
+    wirePillGroup('pensionGrid', 'pensionMonthly', Number);
+    wirePillGroup('expenseGrid', 'oneTimeExpense', Number);
+
+    function wireSwitch(id, stateKey, labelId, labels) {
+      document.getElementById(id).addEventListener('click', function () {
+        state[stateKey] = !state[stateKey];
+        this.classList.toggle('on', state[stateKey]);
+        this.setAttribute('aria-pressed', String(state[stateKey]));
+        if (labelId) document.getElementById(labelId).innerText = state[stateKey] ? labels[0] : labels[1];
+        loadProjection();
+      });
+    }
+    wireSwitch('ssSwitch', 'includeSocialSecurity', 'ssLabel', ['Included', 'Not included']);
+    wireSwitch('glidepathSwitch', 'glidepath', 'glidepathLabel', ['"Smile" curve', 'Flat (inflation-adjusted)']);
+    wireSwitch('survivorSwitch', 'survivor', 'survivorLabel', ['Me & spouse', 'Just me']);
+
+    function updateSsHint() {
+      const hint = document.getElementById('ssHint');
+      if (!state.includeSocialSecurity) {
+        hint.innerText = 'Modeled as never claimed — no Social Security benefit is added to this scenario.';
+      } else if (lastData && lastData.socialSecurity) {
+        const claimAge = Math.round(lastData.socialSecurity.claimAgeMonths / 12);
+        const gap = claimAge - state.retireAge;
+        hint.innerText = gap > 0
+          ? `Benefits start at your claiming age (${claimAge}) — retiring at ${state.retireAge} means a ${gap}-year gap with no Social Security income until then.`
+          : `Modeled starting the day you retire (age ${state.retireAge}), at or after your claiming age of ${claimAge}.`;
+      } else {
+        hint.innerText = 'Set a Social Security claiming choice and benefit amount in Settings to include it here.';
+      }
+    }
+    document.getElementById('ssSwitch').addEventListener('click', updateSsHint);
+    document.getElementById('ageGrid').addEventListener('click', updateSsHint);
+
+    document.getElementById('contribGrid').addEventListener('click', e => {
+      const btn = e.target.closest('.agePill');
+      if (!btn) return;
+      document.getElementById('contribHint').innerText = lastData && lastData.monthlyContribution != null
+        ? `Your actual current pace: ${formatCurrency(lastData.monthlyContribution)}/mo (${formatCurrency(lastData.monthlyContribution * 12)}/yr)`
+        : '';
+    });
+    document.getElementById('allocGrid').addEventListener('click', e => {
+      const btn = e.target.closest('.agePill');
+      if (!btn) return;
+      const key = btn.dataset.alloc;
+      const mix = ALLOCATION_LABELS[key];
+      document.getElementById('allocHint').innerText = `${mix.label}: ${(mix.mean * 100).toFixed(1)}% expected nominal return, ${(mix.vol * 100).toFixed(1)}% volatility.`;
+    });
+    document.getElementById('glidepathSwitch').addEventListener('click', () => {
+      document.getElementById('glidepathHint').innerText = state.glidepath
+        ? 'Higher spending in the active early retirement years, tapering off later — not a flat inflation-adjusted amount every year.'
+        : 'Models the same inflation-adjusted amount every year of retirement, with no step-down later in life.';
+    });
+    document.getElementById('expenseGrid').addEventListener('click', e => {
+      const btn = e.target.closest('.agePill');
+      if (!btn) return;
+      document.getElementById('expenseHint').innerText = state.oneTimeExpense > 0
+        ? `A major home repair, medical event, or similar — modeled as a one-time ${fmtShort(state.oneTimeExpense)} draw about 10 years into retirement.`
+        : 'A major home repair, medical event, or similar — modeled as a lump sum.';
+    });
+
+    (async function init() {
+      let configRes;
+      try {
+        configRes = await fetch('/api/config');
+      } catch (err) {
+        showError('Could not reach the server. Check your connection and reload.');
+        return;
+      }
+      if (configRes.status === 401) { window.location.href = '/login.html'; return; }
+      const config = await configRes.json();
+      if (!config.actualUrl || !config.actualPasswordSet || !config.syncId) {
+        document.getElementById('notConfiguredMsg').hidden = false;
+        return;
+      }
+
+      document.getElementById('allocHint').innerText = `${ALLOCATION_LABELS.moderate.label}: ${(ALLOCATION_LABELS.moderate.mean * 100).toFixed(1)}% expected nominal return, ${(ALLOCATION_LABELS.moderate.vol * 100).toFixed(1)}% volatility.`;
+      document.getElementById('glidepathHint').innerText = 'Higher spending in the active early retirement years, tapering off later — not a flat inflation-adjusted amount every year.';
+      document.getElementById('expenseHint').innerText = 'A major home repair, medical event, or similar — modeled as a lump sum.';
+
+      await loadProjection();
+      if (lastData) {
+        updateSsHint();
+        document.getElementById('contribHint').innerText = lastData.monthlyContribution != null
+          ? `Your actual current pace: ${formatCurrency(lastData.monthlyContribution)}/mo (${formatCurrency(lastData.monthlyContribution * 12)}/yr)`
+          : '';
+      }
+    })();
+  </script>
+</body>
+</html>
