@@ -8,6 +8,9 @@ const { applySchedule } = require('./scheduler');
 const auth = require('./auth');
 const actualService = require('./actualService');
 const { sendWebhookReport } = require('./webhookReport');
+const { buildZip } = require('./zipWriter');
+const { buildMonteCarloPdf } = require('./monteCarloReport');
+const { ALLOCATIONS } = require('./monteCarlo');
 
 const router = express.Router();
 const { requireAdmin } = auth;
@@ -463,6 +466,149 @@ router.get('/api/data/retirement-model', async (req, res) => {
   } catch (err) {
     logger.error('Retirement model request failed: ' + err.message);
     res.status(500).json({ error: 'Failed to compute the retirement model.' });
+  }
+});
+
+const MONTE_CARLO_ALLOCATIONS = new Set(['conservative', 'moderate', 'aggressive']);
+
+// Shared by the JSON, .zip, and .pdf Monte Carlo endpoints so all three
+// read the exact same scenario out of the same query string.
+function parseMonteCarloParams(req, config) {
+  const retireAge = parseFloat(req.query.retireAge);
+  const allocation = MONTE_CARLO_ALLOCATIONS.has(req.query.allocation) ? req.query.allocation : 'moderate';
+  const inflationPct = req.query.inflationPct !== undefined ? Math.min(Math.max(parseFloat(req.query.inflationPct), 0), 15) : 3.0;
+  const withdrawalRatePct = req.query.withdrawalRatePct !== undefined ? Math.min(Math.max(parseFloat(req.query.withdrawalRatePct), 1), 20) : 3.8;
+  const includeSocialSecurity = req.query.includeSocialSecurity === 'true';
+  const annualContribution = req.query.annualContribution !== undefined && req.query.annualContribution !== ''
+    ? Math.max(0, parseFloat(req.query.annualContribution))
+    : null;
+  const glidepath = req.query.glidepath === 'true';
+  const pensionMonthly = req.query.pensionMonthly !== undefined ? Math.max(0, parseFloat(req.query.pensionMonthly) || 0) : 0;
+  const oneTimeExpense = req.query.oneTimeExpense !== undefined ? Math.max(0, parseFloat(req.query.oneTimeExpense) || 0) : 0;
+  const survivor = req.query.survivor === 'true';
+  // 10,000 paths is the headline number shown on the page; capped here so a
+  // crafted request can't force an arbitrarily expensive simulation.
+  const paths = req.query.paths !== undefined ? Math.min(Math.max(parseInt(req.query.paths, 10) || 2000, 200), 10000) : 2000;
+
+  return {
+    retireAge: Number.isFinite(retireAge) ? retireAge : 55,
+    allocation, inflationPct, withdrawalRatePct, includeSocialSecurity,
+    annualContribution: Number.isFinite(annualContribution) ? annualContribution : null,
+    glidepath, pensionMonthly, oneTimeExpense, survivor, paths,
+    fireAnnualExpenses: config.fireAnnualExpenses || 0,
+    fireWithdrawalRatePct: config.fireWithdrawalRatePct ?? 4,
+    birthdate: config.fireBirthdate || null,
+    ssClaimingChoice: config.ssClaimingChoice || null,
+    ssAge62MonthlyBenefit: config.ssAge62MonthlyBenefit,
+    ssFraAgeYears: config.ssFraAgeYears, ssFraAgeMonths: config.ssFraAgeMonths,
+    ssFraMonthlyBenefit: config.ssFraMonthlyBenefit,
+    ssAge70MonthlyBenefit: config.ssAge70MonthlyBenefit
+  };
+}
+
+router.get('/api/data/monte-carlo', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const projection = await actualService.getMonteCarloProjection(parseMonteCarloParams(req, config));
+    res.json(projection);
+  } catch (err) {
+    logger.error('Monte Carlo projection request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to run the Monte Carlo simulation.' });
+  }
+});
+
+router.get('/api/data/monte-carlo/compare', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const params = parseMonteCarloParams(req, config);
+    const compare = await actualService.getMonteCarloCompare({ ...params, paths: Math.min(params.paths, 1500) });
+    res.json(compare);
+  } catch (err) {
+    logger.error('Monte Carlo compare request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to compute the comparison table.' });
+  }
+});
+
+router.get('/api/data/monte-carlo/export', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const params = parseMonteCarloParams(req, config);
+    const projection = await actualService.getMonteCarloProjection(params);
+    if (!projection.hasBirthdate) {
+      res.status(400).json({ error: 'Set your birthdate in Settings before exporting a Monte Carlo report.' });
+      return;
+    }
+    const { result } = projection;
+
+    const assumptions = {
+      generatedAt: new Date().toISOString(),
+      retireAge: result.retireAge, endAge: result.endAge,
+      allocation: params.allocation, inflationPct: params.inflationPct, withdrawalRatePct: params.withdrawalRatePct,
+      includeSocialSecurity: params.includeSocialSecurity, socialSecurity: projection.socialSecurity,
+      ssStartAge: result.ssStartAge,
+      annualContribution: params.annualContribution != null ? params.annualContribution : Math.max(0, (projection.monthlyContribution || 0) * 12),
+      glidepath: params.glidepath, pensionMonthly: params.pensionMonthly,
+      oneTimeExpense: params.oneTimeExpense, expenseAge: result.expenseAge,
+      survivor: params.survivor, paths: result.paths,
+      netWorth: projection.netWorth, currentAge: projection.currentAge,
+      successPct: result.successPct, longevityAge: result.longevityAge,
+      medianBalanceAtRetirement: result.medianBalanceAtRetirement,
+      medianEndingBalance: result.medianEndingBalance,
+      safeWithdrawalAmount: result.safeWithdrawalAmount
+    };
+
+    const csvRows = [['Age', 'P10', 'P25', 'P50', 'P75', 'P90']];
+    for (let i = 0; i < result.ages.length; i++) {
+      csvRows.push([
+        result.ages[i],
+        Math.round(result.bands.p10[i]), Math.round(result.bands.p25[i]), Math.round(result.bands.p50[i]),
+        Math.round(result.bands.p75[i]), Math.round(result.bands.p90[i])
+      ]);
+    }
+    const percentilesCsv = csvRows.map(row => row.map(csvEscape).join(',')).join('\n');
+
+    const zip = buildZip([
+      { name: 'assumptions.json', data: JSON.stringify(assumptions, null, 2) },
+      { name: 'monte-carlo-percentiles.csv', data: percentilesCsv }
+    ]);
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="Retirement-Analysis-${new Date().toISOString().slice(0, 10)}.zip"`);
+    res.send(zip);
+  } catch (err) {
+    logger.error('Monte Carlo export failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to build the export.' });
+  }
+});
+
+router.get('/api/data/monte-carlo/pdf', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const params = parseMonteCarloParams(req, config);
+    const projection = await actualService.getMonteCarloProjection(params);
+    if (!projection.hasBirthdate) {
+      res.status(400).json({ error: 'Set your birthdate in Settings before generating a Monte Carlo report.' });
+      return;
+    }
+    const mix = ALLOCATIONS[params.allocation] || ALLOCATIONS.moderate;
+    const pdf = await buildMonteCarloPdf({
+      result: projection.result,
+      scenario: { allocationMean: mix.mean, allocationVol: mix.vol, inflationPct: params.inflationPct, withdrawalRatePct: params.withdrawalRatePct }
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Retirement-Analysis-${new Date().toISOString().slice(0, 10)}.pdf"`);
+    res.send(pdf);
+  } catch (err) {
+    logger.error('Monte Carlo PDF generation failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to generate the PDF report.' });
   }
 });
 

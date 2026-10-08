@@ -10,6 +10,7 @@ const {
 const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations, computeNetWorthBreakdown } = require('./financialHealth');
 const { buildCategoryDeltas } = require('./trends');
 const { ageInMonths, resolveSocialSecurityClaim, computeFireTargetAtAge, monthsToReachFireTarget } = require('./socialSecurity');
+const { simulateRetirement } = require('./monteCarlo');
 
 const DATA_DIR = '/data';
 
@@ -719,6 +720,105 @@ async function getRetirementModel({
   };
 }
 
+// The Monte Carlo page's data: a real per-path simulation (src/monteCarlo.js)
+// seeded with the same real inputs (net worth, age, Social Security, current
+// savings pace) as getFireProgress/getRetirementModel above, plus the
+// scenario knobs the page exposes. Unlike those two (which goal-seek a
+// single required contribution), this runs the actual random-walk
+// simulation and returns full percentile bands by age.
+async function getMonteCarloProjection({
+  retireAge, allocation = 'moderate', inflationPct = 3.0, withdrawalRatePct = 3.8,
+  includeSocialSecurity = false, annualContribution = null,
+  glidepath = false, pensionMonthly = 0, oneTimeExpense = 0, survivor = false, paths = 2000,
+  fireAnnualExpenses, fireWithdrawalRatePct = 4,
+  birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
+} = {}) {
+  const { netWorth, currentAgeMonths, socialSecurity, monthlyContribution } = await computeFireInputs({
+    fireAnnualExpenses, fireWithdrawalRatePct, birthdate, ssClaimingChoice,
+    ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
+  });
+
+  if (currentAgeMonths === null) {
+    return { hasBirthdate: false, netWorth, result: null };
+  }
+  const currentAge = Math.floor(currentAgeMonths / 12);
+  const resolvedRetireAge = retireAge > currentAge ? retireAge : currentAge + 1;
+  // A configured annual contribution scenario overrides the real current
+  // pace; a negative actual pace (spending more than earned) floors at 0
+  // rather than draining the simulation from year one.
+  const resolvedContribution = annualContribution != null ? annualContribution : Math.max(0, monthlyContribution * 12);
+
+  const sharedOpts = {
+    startBalance: netWorth, currentAge, retireAge: resolvedRetireAge, annualContribution: resolvedContribution,
+    allocation, inflationPct, includeSocialSecurity, socialSecurity, glidepath, pensionMonthly, oneTimeExpense, survivor
+  };
+
+  const result = simulateRetirement({ ...sharedOpts, withdrawalRatePct, paths });
+
+  // "Probability of Success by Withdrawal Rate" and the sequence-of-returns
+  // stress test both re-run the same simulation against the same real
+  // inputs computeFireInputs just paid for — computed here, in the same
+  // request, at a reduced path count, rather than making the page fire
+  // extra round trips (each of which would re-pay that real-data cost) for
+  // what's ultimately just a couple more what-if angles on one scenario.
+  const gridPaths = Math.min(paths, 1000);
+  const RATE_GRID = [3.0, 3.8, 4.0, 4.5];
+  const rateGrid = RATE_GRID.map(rate => ({
+    withdrawalRatePct: rate,
+    successPct: rate === withdrawalRatePct
+      ? result.successPct
+      : simulateRetirement({ ...sharedOpts, withdrawalRatePct: rate, paths: gridPaths }).successPct
+  }));
+  const stressTest = simulateRetirement({ ...sharedOpts, withdrawalRatePct, paths: gridPaths, stressFirstYears: 5 });
+
+  return {
+    hasBirthdate: true,
+    netWorth,
+    currentAge,
+    monthlyContribution,
+    socialSecurity: socialSecurity ? { claimAgeMonths: socialSecurity.claimAgeMonths, annualBenefit: socialSecurity.annualBenefit } : null,
+    result,
+    rateGrid,
+    stressTest: { successPct: stressTest.successPct }
+  };
+}
+
+const MONTE_CARLO_COMPARE_AGES = [55, 60, 63, 65, 70]; // Social Security's own key milestone dates (see socialSecurity.js)
+
+// The Monte Carlo page's "Compare Scenarios" table: success probability at
+// each milestone retirement age, with and without Social Security, holding
+// every other scenario knob at its current setting. Calls computeFireInputs
+// ONCE (it's the expensive part — several real Actual Budget API round
+// trips) and re-runs the cheap, pure-JS simulateRetirement 10 times against
+// that same snapshot, instead of re-fetching real data for every cell.
+async function getMonteCarloCompare({
+  allocation = 'moderate', inflationPct = 3.0, withdrawalRatePct = 3.8,
+  annualContribution = null, glidepath = false, pensionMonthly = 0, oneTimeExpense = 0, survivor = false,
+  paths = 1000,
+  fireAnnualExpenses, fireWithdrawalRatePct = 4,
+  birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
+} = {}) {
+  const { netWorth, currentAgeMonths, socialSecurity, monthlyContribution } = await computeFireInputs({
+    fireAnnualExpenses, fireWithdrawalRatePct, birthdate, ssClaimingChoice,
+    ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
+  });
+  if (currentAgeMonths === null) return { hasBirthdate: false, rows: [] };
+
+  const currentAge = Math.floor(currentAgeMonths / 12);
+  const resolvedContribution = annualContribution != null ? annualContribution : Math.max(0, monthlyContribution * 12);
+
+  const rows = MONTE_CARLO_COMPARE_AGES.filter(age => age > currentAge).map(age => {
+    const runFor = includeSocialSecurity => simulateRetirement({
+      startBalance: netWorth, currentAge, retireAge: age, annualContribution: resolvedContribution,
+      allocation, inflationPct, withdrawalRatePct, includeSocialSecurity, socialSecurity,
+      glidepath, pensionMonthly, oneTimeExpense, survivor, paths
+    }).successPct;
+    return { age, withoutSS: runFor(false), withSS: socialSecurity ? runFor(true) : null };
+  });
+
+  return { hasBirthdate: true, rows };
+}
+
 // A Spotify-Wrapped-style year-in-review, inspired by actualbudget/wrapped
 // (a standalone tool that requires exporting and uploading your budget
 // file) — built as a live view against the already-synced data instead,
@@ -1282,7 +1382,7 @@ module.exports = {
   countTransactions, getNetWorth, getSpendByCategory, getUncategorizedTransactions, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getRecentIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getBudgetCalibration, getFinancialHealthData, getFinancialHealthHistory,
-  getMetricTransactions, getFireProgress, getRetirementModel, getWrappedData, getMonthlySavingsHistory, getTrendsData, getNetWorthHistory,
+  getMetricTransactions, getFireProgress, getRetirementModel, getMonteCarloProjection, getMonteCarloCompare, getWrappedData, getMonthlySavingsHistory, getTrendsData, getNetWorthHistory,
   testConnection,
   runBankSync, getBankSyncStatuses, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
