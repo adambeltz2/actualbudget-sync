@@ -8,9 +8,11 @@ const { applySchedule } = require('./scheduler');
 const auth = require('./auth');
 const actualService = require('./actualService');
 const { sendWebhookReport } = require('./webhookReport');
+const { sendSummaryReport } = require('./summaryJob');
 const { buildZip } = require('./zipWriter');
 const { buildMonteCarloPdf } = require('./monteCarloReport');
 const { ALLOCATIONS } = require('./monteCarlo');
+const { getContributionLimits } = require('./contributionLimits');
 
 const router = express.Router();
 const { requireAdmin } = auth;
@@ -101,6 +103,24 @@ router.post('/api/config/import', requireAdmin, (req, res) => {
   applySchedule();
   logger.info('Configuration restored from an imported backup.');
   res.json({ success: true });
+});
+
+router.post('/api/config/test-summary-email', requireAdmin, async (req, res) => {
+  const current = getConfig();
+  if (!current.actualUrl || !current.actualPassword || !current.syncId) {
+    return res.status(400).json({ error: 'Actual Budget is not configured yet.' });
+  }
+  if (!current.emailUser || !current.smtpHost) {
+    return res.status(400).json({ error: 'SMTP settings are required to send a test email.' });
+  }
+  try {
+    await sendSummaryReport({ force: true });
+    logger.info('Monthly Budget Summary test email sent.');
+    res.json({ success: true });
+  } catch (err) {
+    logger.warn('Monthly Budget Summary test email failed: ' + err.message);
+    res.json({ success: false, error: err.message });
+  }
 });
 
 router.post('/api/config/test-webhook', requireAdmin, async (req, res) => {
@@ -479,9 +499,21 @@ function parseMonteCarloParams(req, config) {
   const inflationPct = req.query.inflationPct !== undefined ? Math.min(Math.max(parseFloat(req.query.inflationPct), 0), 15) : 3.0;
   const withdrawalRatePct = req.query.withdrawalRatePct !== undefined ? Math.min(Math.max(parseFloat(req.query.withdrawalRatePct), 1), 20) : 3.8;
   const includeSocialSecurity = req.query.includeSocialSecurity === 'true';
-  const annualContribution = req.query.annualContribution !== undefined && req.query.annualContribution !== ''
-    ? Math.max(0, parseFloat(req.query.annualContribution))
-    : null;
+  // Three separate contribution fields (401k/employer plan, IRA, taxable/
+  // other) rather than one lump sum — each has its own IRS limit, and the
+  // breakdown is worth keeping for the export/PDF even though the
+  // simulation itself still pools them into one combined annual flow.
+  // Omitting all three (first load) keeps the "use my real current savings
+  // pace" default; providing any of them switches to an explicit scenario,
+  // treating the other, unset fields as 0 rather than falling back to the
+  // real pace for just that slice.
+  const contribFieldsProvided = ['contribution401k', 'contributionIra', 'contributionOther'].some(
+    k => req.query[k] !== undefined && req.query[k] !== ''
+  );
+  const contribution401k = Math.max(0, parseFloat(req.query.contribution401k) || 0);
+  const contributionIra = Math.max(0, parseFloat(req.query.contributionIra) || 0);
+  const contributionOther = Math.max(0, parseFloat(req.query.contributionOther) || 0);
+  const annualContribution = contribFieldsProvided ? (contribution401k + contributionIra + contributionOther) : null;
   const glidepath = req.query.glidepath === 'true';
   const pensionMonthly = req.query.pensionMonthly !== undefined ? Math.max(0, parseFloat(req.query.pensionMonthly) || 0) : 0;
   const oneTimeExpense = req.query.oneTimeExpense !== undefined ? Math.max(0, parseFloat(req.query.oneTimeExpense) || 0) : 0;
@@ -494,6 +526,7 @@ function parseMonteCarloParams(req, config) {
     retireAge: Number.isFinite(retireAge) ? retireAge : 55,
     allocation, inflationPct, withdrawalRatePct, includeSocialSecurity,
     annualContribution: Number.isFinite(annualContribution) ? annualContribution : null,
+    contribution401k, contributionIra, contributionOther,
     glidepath, pensionMonthly, oneTimeExpense, survivor, paths,
     fireAnnualExpenses: config.fireAnnualExpenses || 0,
     fireWithdrawalRatePct: config.fireWithdrawalRatePct ?? 4,
@@ -511,7 +544,14 @@ router.get('/api/data/monte-carlo', async (req, res) => {
   if (!config) return;
   try {
     await actualService.ensureReady(config);
-    const projection = await actualService.getMonteCarloProjection(parseMonteCarloParams(req, config));
+    const params = parseMonteCarloParams(req, config);
+    const projection = await actualService.getMonteCarloProjection(params);
+    if (projection.hasBirthdate) {
+      projection.contributionLimits = getContributionLimits(projection.currentAge);
+      projection.contributionBreakdown = {
+        contribution401k: params.contribution401k, contributionIra: params.contributionIra, contributionOther: params.contributionOther
+      };
+    }
     res.json(projection);
   } catch (err) {
     logger.error('Monte Carlo projection request failed: ' + err.message);
@@ -553,6 +593,8 @@ router.get('/api/data/monte-carlo/export', async (req, res) => {
       includeSocialSecurity: params.includeSocialSecurity, socialSecurity: projection.socialSecurity,
       ssStartAge: result.ssStartAge,
       annualContribution: params.annualContribution != null ? params.annualContribution : Math.max(0, (projection.monthlyContribution || 0) * 12),
+      contribution401k: params.contribution401k, contributionIra: params.contributionIra, contributionOther: params.contributionOther,
+      contributionLimits: getContributionLimits(projection.currentAge),
       glidepath: params.glidepath, pensionMonthly: params.pensionMonthly,
       oneTimeExpense: params.oneTimeExpense, expenseAge: result.expenseAge,
       survivor: params.survivor, paths: result.paths,

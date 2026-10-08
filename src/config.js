@@ -15,6 +15,11 @@ function defaultConfig() {
     actualUrl: '', actualPassword: '', syncId: '',
     cronSchedules: ['0 6,12 * * *'], enableEmail: false, emailOnRestart: false,
     smtpHost: '', smtpPort: '465', emailUser: '', emailPass: '', emailTo: '',
+    // Reuses the same SMTP credentials/recipients as the daily sync email
+    // above — just a separate schedule and separate content (budget-to-date,
+    // no transaction detail). Defaults to mid-month (the 15th) since this is
+    // a progress check, not an end-of-month recap.
+    enableSummaryEmail: false, summaryEmailDayOfMonth: 15, summaryEmailHour: 8,
     publicUrl: '',
     dashboardPasswordHash: '', sessionSecret: crypto.randomBytes(32).toString('hex'),
     viewerPasswordHash: '',

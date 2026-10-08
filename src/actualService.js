@@ -525,6 +525,25 @@ async function getMetricTransactions({ metric, month, range, startDate, endDate 
 // getRetirementModel (the fuller Retirement Modeling page) so both start
 // from the same net worth/income-spend/age/Social Security snapshot instead
 // of duplicating this fetch-and-derive logic.
+// Trailing N full calendar months (not including the current, still-in-
+// progress one) of income/spend, averaged — the "typical pace" baseline
+// used both for FIRE's auto-expenses fallback and the Monthly Summary
+// email's "typical pace at day X" comparison. Months with no data at all
+// (income and spend both 0 — a brand-new install, or a gap) are excluded
+// from the average rather than dragging it toward zero.
+async function getTrailingAverageIncomeSpend({ months = 12 } = {}) {
+  const now = new Date();
+  const recentMonths = Array.from({ length: months }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (i + 1), 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const monthlyFigures = await Promise.all(recentMonths.map(m => getIncomeVsSpend({ month: m })));
+  const validMonths = monthlyFigures.filter(m => m.income > 0 || m.spend > 0);
+  const avgMonthlyIncome = validMonths.length > 0 ? validMonths.reduce((sum, m) => sum + m.income, 0) / validMonths.length : 0;
+  const avgMonthlySpend = validMonths.length > 0 ? validMonths.reduce((sum, m) => sum + m.spend, 0) / validMonths.length : 0;
+  return { avgMonthlyIncome, avgMonthlySpend };
+}
+
 async function computeFireInputs({
   fireAnnualExpenses, fireWithdrawalRatePct = 4,
   birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
@@ -533,15 +552,7 @@ async function computeFireInputs({
   const balances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
   const netWorth = balances.reduce((sum, b) => sum + b.balance, 0);
 
-  const now = new Date();
-  const recentMonths = Array.from({ length: 12 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (i + 1), 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  });
-  const monthlyFigures = await Promise.all(recentMonths.map(m => getIncomeVsSpend({ month: m })));
-  const validMonths = monthlyFigures.filter(m => m.income > 0 || m.spend > 0);
-  const avgMonthlyIncome = validMonths.length > 0 ? validMonths.reduce((sum, m) => sum + m.income, 0) / validMonths.length : 0;
-  const avgMonthlySpend = validMonths.length > 0 ? validMonths.reduce((sum, m) => sum + m.spend, 0) / validMonths.length : 0;
+  const { avgMonthlyIncome, avgMonthlySpend } = await getTrailingAverageIncomeSpend({ months: 12 });
 
   const autoAnnualExpenses = avgMonthlySpend * 12;
   const annualExpenses = fireAnnualExpenses > 0 ? fireAnnualExpenses : autoAnnualExpenses;
@@ -1073,6 +1084,28 @@ async function getBudgetVsActual({ month, startDate, endDate } = {}) {
   return categories.sort((a, b) => b.spent - a.spent);
 }
 
+// The Monthly Budget Summary email's data: current-month budget-to-date
+// (same summarizeBudgetCategory shape the daily report's Spend vs Budget
+// section already uses), real net worth, this month's actual net savings
+// so far, and a trailing-average "typical pace" baseline to compare it
+// against — no bank sync, no transaction fetch, deliberately lighter than
+// syncAndReport.
+async function getBudgetSummaryData() {
+  const [accounts, budgetVsActual, { avgMonthlyIncome, avgMonthlySpend }] = await Promise.all([
+    getAccounts(),
+    getBudgetVsActual(),
+    getTrailingAverageIncomeSpend({ months: 12 })
+  ]);
+  const balances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
+  const totalBalance = balances.reduce((sum, b) => sum + b.balance, 0);
+
+  const thisMonth = await getIncomeVsSpend({ month: currentMonthStr() });
+  const netSavingsThisMonth = thisMonth.income - thisMonth.spend;
+  const typicalMonthlyNet = avgMonthlyIncome - avgMonthlySpend;
+
+  return { totalBalance, budgetVsActual, netSavingsThisMonth, typicalMonthlyNet };
+}
+
 // Per-category monthly spend for the last `months` calendar months (oldest
 // first), used to detect trends like "groceries are creeping up". One query
 // per month (rather than a single multi-key groupBy, which the query builder
@@ -1382,7 +1415,7 @@ module.exports = {
   countTransactions, getNetWorth, getSpendByCategory, getUncategorizedTransactions, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getRecentIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getBudgetCalibration, getFinancialHealthData, getFinancialHealthHistory,
-  getMetricTransactions, getFireProgress, getRetirementModel, getMonteCarloProjection, getMonteCarloCompare, getWrappedData, getMonthlySavingsHistory, getTrendsData, getNetWorthHistory,
+  getMetricTransactions, getFireProgress, getRetirementModel, getMonteCarloProjection, getMonteCarloCompare, getBudgetSummaryData, getWrappedData, getMonthlySavingsHistory, getTrendsData, getNetWorthHistory,
   testConnection,
   runBankSync, getBankSyncStatuses, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).

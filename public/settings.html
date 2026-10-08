@@ -286,6 +286,36 @@
         </div>
       </div>
 
+      <!-- Monthly Budget Summary Section -->
+      <div class="card" style="padding:22px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:10px;">
+          <div>
+            <div class="num" style="font-size:16px; font-weight:700;">Monthly Budget Summary</div>
+            <p class="field-hint" style="margin-top:2px;">A budget-to-date progress check — no sync, no transaction detail. Uses the same email settings above.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="enableSummaryEmail">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div id="summaryEmailSettingsDiv" class="grid-2" style="opacity:0.5; pointer-events:none; transition:opacity 0.2s;">
+          <div>
+            <label class="field-label">Day of Month</label>
+            <input type="number" id="summaryEmailDayOfMonth" min="1" max="28" placeholder="15">
+            <p class="field-hint">Capped at 28 so it falls in every month, including February.</p>
+          </div>
+          <div>
+            <label class="field-label">Hour</label>
+            <select id="summaryEmailHour" style="width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-family:inherit; font-size:14px;"></select>
+          </div>
+          <div style="grid-column:1/-1; display:flex; align-items:center; gap:10px;">
+            <button type="button" id="testSummaryEmailBtn" class="btn btn-ghost" style="padding:7px 14px; font-size:13px;">Send Test Email</button>
+            <p id="testSummaryEmailResult" hidden style="font-size:13px; padding:9px 12px; border-radius:8px; margin:0;"></p>
+          </div>
+        </div>
+      </div>
+
       <!-- Webhook Section -->
       <div class="card" style="padding:22px;">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:10px;">
@@ -406,6 +436,57 @@
       emailSettingsDiv.style.pointerEvents = isEnabled ? 'auto' : 'none';
     }
     emailToggle.addEventListener('change', (e) => updateToggleUI(e.target.checked));
+
+    // --- Monthly Budget Summary toggle switch ---
+    const summaryEmailToggle = document.getElementById('enableSummaryEmail');
+    const summaryEmailSettingsDiv = document.getElementById('summaryEmailSettingsDiv');
+    function updateSummaryEmailToggleUI(isEnabled) {
+      summaryEmailSettingsDiv.style.opacity = isEnabled ? '1' : '0.5';
+      summaryEmailSettingsDiv.style.pointerEvents = isEnabled ? 'auto' : 'none';
+    }
+    summaryEmailToggle.addEventListener('change', (e) => updateSummaryEmailToggleUI(e.target.checked));
+
+    (function populateSummaryEmailHourSelect() {
+      const select = document.getElementById('summaryEmailHour');
+      for (let h = 0; h < 24; h++) {
+        const opt = document.createElement('option');
+        opt.value = h;
+        const period = h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`;
+        opt.innerText = period;
+        select.appendChild(opt);
+      }
+    })();
+
+    document.getElementById('testSummaryEmailBtn').addEventListener('click', async function() {
+      const resultEl = document.getElementById('testSummaryEmailResult');
+      const btn = this;
+      btn.disabled = true;
+      btn.innerText = 'Sending…';
+      resultEl.hidden = true;
+
+      try {
+        const res = await fetch('/api/config/test-summary-email', { method: 'POST' });
+        const data = await res.json();
+        resultEl.hidden = false;
+        if (data.success) {
+          resultEl.style.background = 'color-mix(in srgb, var(--positive) 12%, var(--card-bg))';
+          resultEl.style.color = 'var(--positive)';
+          resultEl.innerText = '✓ Test email sent — check your inbox.';
+        } else {
+          resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
+          resultEl.style.color = 'var(--negative)';
+          resultEl.innerText = `✕ ${data.error || 'Failed to send test email.'}`;
+        }
+      } catch (err) {
+        resultEl.hidden = false;
+        resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
+        resultEl.style.color = 'var(--negative)';
+        resultEl.innerText = '✕ Could not reach the server.';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Send Test Email';
+      }
+    });
 
     // --- Webhook toggle switch ---
     const webhookToggle = document.getElementById('enableWebhook');
@@ -639,6 +720,12 @@
         ? 'App password is saved. Leave blank to keep it, or type a new one to change it.'
         : 'If using Gmail, use a 16-digit App Password.';
       document.getElementById('emailTo').value = config.emailTo || '';
+
+      const isSummaryEmailEnabled = config.enableSummaryEmail || false;
+      summaryEmailToggle.checked = isSummaryEmailEnabled;
+      updateSummaryEmailToggleUI(isSummaryEmailEnabled);
+      document.getElementById('summaryEmailDayOfMonth').value = config.summaryEmailDayOfMonth ?? 15;
+      document.getElementById('summaryEmailHour').value = config.summaryEmailHour ?? 8;
 
       const isWebhookEnabled = config.webhookEnabled || false;
       webhookToggle.checked = isWebhookEnabled;
@@ -903,6 +990,9 @@
         emailUser: document.getElementById('emailUser').value,
         emailPass: document.getElementById('emailPass').value,
         emailTo: document.getElementById('emailTo').value,
+        enableSummaryEmail: summaryEmailToggle.checked,
+        summaryEmailDayOfMonth: parseInt(document.getElementById('summaryEmailDayOfMonth').value, 10) || 15,
+        summaryEmailHour: parseInt(document.getElementById('summaryEmailHour').value, 10) || 8,
         webhookEnabled: webhookToggle.checked,
         webhookPlatform: document.getElementById('webhookPlatform').value,
         webhookUrl: document.getElementById('webhookUrl').value,

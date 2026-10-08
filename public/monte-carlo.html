@@ -79,6 +79,14 @@
       font-family: 'Sora', sans-serif; font-weight: 700; font-size: 13.5px; padding: 9px 15px; border-radius: 10px; cursor: pointer;
     }
     .agePill.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
+    .contribRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 2px; }
+    .contribRow label { font-size: 12.5px; color: var(--text-secondary); font-weight: 600; }
+    .contribRow input[type="number"] {
+      width: 110px; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--card-bg); color: var(--text); font-family: 'Sora', sans-serif; font-weight: 700; font-size: 13.5px; text-align: right;
+    }
+    .contribRow input[type="number"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .field-hint.warn { color: var(--negative); font-weight: 600; }
     .ssToggleRow { display: flex; align-items: center; gap: 12px; }
     .switch { position: relative; width: 44px; height: 25px; flex-shrink: 0; border: none; border-radius: 999px; background: var(--border); cursor: pointer; padding: 0; }
     .switch.on { background: var(--accent); }
@@ -161,15 +169,23 @@
       <div class="card">
         <div class="label-caps" style="margin-bottom:14px;">Advanced Assumptions</div>
         <div class="scenarioRow">
-          <div class="scenarioGroup">
-            <div class="groupLabel">Annual contribution (until retirement)</div>
-            <div class="ageGrid" id="contribGrid">
-              <button class="agePill" data-contrib="0">$0</button>
-              <button class="agePill" data-contrib="10000">$10K</button>
-              <button class="agePill active" data-contrib="20000">$20K</button>
-              <button class="agePill" data-contrib="30000">$30K</button>
+          <div class="scenarioGroup" style="flex:1.4; min-width:280px;">
+            <div class="groupLabel">Annual contributions (until retirement)</div>
+            <div class="contribRow">
+              <label for="contrib401kInput">401(k) / employer plan</label>
+              <input type="number" id="contrib401kInput" min="0" step="500" value="20000">
             </div>
-            <p class="field-hint" style="margin-top:8px;" id="contribHint"></p>
+            <p class="field-hint" id="contrib401kHint" style="margin:2px 0 10px;"></p>
+            <div class="contribRow">
+              <label for="contribIraInput">IRA</label>
+              <input type="number" id="contribIraInput" min="0" step="250" value="0">
+            </div>
+            <p class="field-hint" id="contribIraHint" style="margin:2px 0 10px;"></p>
+            <div class="contribRow">
+              <label for="contribOtherInput">Taxable / other</label>
+              <input type="number" id="contribOtherInput" min="0" step="500" value="0">
+            </div>
+            <p class="field-hint" id="contribTotalHint" style="margin-top:6px;"></p>
           </div>
           <div class="scenarioGroup">
             <div class="groupLabel">Investment mix</div>
@@ -354,7 +370,8 @@
     // --- Scenario state ---
     const state = {
       retireAge: 55, inflationPct: 3.0, includeSocialSecurity: true,
-      annualContribution: 20000, allocation: 'moderate', glidepath: true,
+      contribution401k: 20000, contributionIra: 0, contributionOther: 0,
+      allocation: 'moderate', glidepath: true,
       pensionMonthly: 0, oneTimeExpense: 0, survivor: false,
       withdrawalRatePct: 3.8
     };
@@ -376,7 +393,9 @@
         inflationPct: String(state.inflationPct),
         withdrawalRatePct: String(state.withdrawalRatePct),
         includeSocialSecurity: String(state.includeSocialSecurity),
-        annualContribution: String(state.annualContribution),
+        contribution401k: String(state.contribution401k),
+        contributionIra: String(state.contributionIra),
+        contributionOther: String(state.contributionOther),
         glidepath: String(state.glidepath),
         pensionMonthly: String(state.pensionMonthly),
         oneTimeExpense: String(state.oneTimeExpense),
@@ -582,6 +601,7 @@
       lastData = data;
       try {
         renderResult(data);
+        updateContribHints();
       } catch (err) {
         console.error('Monte Carlo page failed to render:', err);
       }
@@ -600,7 +620,6 @@
     }
     wirePillGroup('ageGrid', 'retireAge', Number);
     wirePillGroup('inflationGrid', 'inflationPct', Number);
-    wirePillGroup('contribGrid', 'annualContribution', Number);
     wirePillGroup('allocGrid', 'allocation');
     wirePillGroup('pensionGrid', 'pensionMonthly', Number);
     wirePillGroup('expenseGrid', 'oneTimeExpense', Number);
@@ -635,12 +654,50 @@
     document.getElementById('ssSwitch').addEventListener('click', updateSsHint);
     document.getElementById('ageGrid').addEventListener('click', updateSsHint);
 
-    document.getElementById('contribGrid').addEventListener('click', e => {
-      const btn = e.target.closest('.agePill');
-      if (!btn) return;
-      document.getElementById('contribHint').innerText = lastData && lastData.monthlyContribution != null
-        ? `Your actual current pace: ${formatCurrency(lastData.monthlyContribution)}/mo (${formatCurrency(lastData.monthlyContribution * 12)}/yr)`
-        : '';
+    // Limits come from the server (src/contributionLimits.js), computed
+    // against the real age from synced data — not duplicated here, so a
+    // future IRS limit bump only needs to change in one place.
+    function updateContribHints() {
+      const limits = lastData && lastData.contributionLimits;
+      const v401k = parseFloat(document.getElementById('contrib401kInput').value) || 0;
+      const vIra = parseFloat(document.getElementById('contribIraInput').value) || 0;
+      const vOther = parseFloat(document.getElementById('contribOtherInput').value) || 0;
+
+      const hint401k = document.getElementById('contrib401kHint');
+      const hintIra = document.getElementById('contribIraHint');
+      const hintTotal = document.getElementById('contribTotalHint');
+
+      if (limits) {
+        const over401k = v401k > limits.limit401k;
+        hint401k.innerText = over401k
+          ? `Exceeds the ${limits.year} limit of ${formatCurrency(limits.limit401k)}/yr for your age by ${formatCurrency(v401k - limits.limit401k)}.`
+          : `${limits.year} limit for your age: ${formatCurrency(limits.limit401k)}/yr.`;
+        hint401k.className = `field-hint${over401k ? ' warn' : ''}`;
+
+        const overIra = vIra > limits.limitIra;
+        hintIra.innerText = overIra
+          ? `Exceeds the ${limits.year} limit of ${formatCurrency(limits.limitIra)}/yr for your age by ${formatCurrency(vIra - limits.limitIra)}.`
+          : `${limits.year} limit for your age: ${formatCurrency(limits.limitIra)}/yr.`;
+        hintIra.className = `field-hint${overIra ? ' warn' : ''}`;
+      } else {
+        hint401k.innerText = '';
+        hintIra.innerText = '';
+      }
+
+      const total = v401k + vIra + vOther;
+      hintTotal.innerText = lastData && lastData.monthlyContribution != null
+        ? `Total: ${formatCurrency(total)}/yr. Your actual current pace: ${formatCurrency(lastData.monthlyContribution)}/mo (${formatCurrency(lastData.monthlyContribution * 12)}/yr).`
+        : `Total: ${formatCurrency(total)}/yr.`;
+    }
+    ['contrib401kInput', 'contribIraInput', 'contribOtherInput'].forEach(id => {
+      document.getElementById(id).addEventListener('change', () => {
+        state.contribution401k = parseFloat(document.getElementById('contrib401kInput').value) || 0;
+        state.contributionIra = parseFloat(document.getElementById('contribIraInput').value) || 0;
+        state.contributionOther = parseFloat(document.getElementById('contribOtherInput').value) || 0;
+        updateContribHints();
+        loadProjection();
+      });
+      document.getElementById(id).addEventListener('input', updateContribHints);
     });
     document.getElementById('allocGrid').addEventListener('click', e => {
       const btn = e.target.closest('.agePill');
@@ -684,9 +741,7 @@
       await loadProjection();
       if (lastData) {
         updateSsHint();
-        document.getElementById('contribHint').innerText = lastData.monthlyContribution != null
-          ? `Your actual current pace: ${formatCurrency(lastData.monthlyContribution)}/mo (${formatCurrency(lastData.monthlyContribution * 12)}/yr)`
-          : '';
+        updateContribHints();
       }
     })();
   </script>
