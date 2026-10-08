@@ -15,6 +15,11 @@ function defaultConfig() {
     actualUrl: '', actualPassword: '', syncId: '',
     cronSchedules: ['0 6,12 * * *'], enableEmail: false, emailOnRestart: false,
     smtpHost: '', smtpPort: '465', emailUser: '', emailPass: '', emailTo: '',
+    // Reuses the same SMTP credentials/recipients as the daily sync email
+    // above — just a separate schedule and separate content (budget-to-date,
+    // no transaction detail). Defaults to mid-month (the 15th) since this is
+    // a progress check, not an end-of-month recap.
+    enableSummaryEmail: false, summaryEmailDayOfMonth: 15, summaryEmailHour: 8,
     publicUrl: '',
     dashboardPasswordHash: '', sessionSecret: crypto.randomBytes(32).toString('hex'),
     viewerPasswordHash: '',
@@ -23,6 +28,13 @@ function defaultConfig() {
     insightsLookback: '6',
     emergencyFundAccountIds: [], investmentAccountIds: [], liabilityAccountIds: [], financialHealthTargetMonths: 6, financialHealthTargetSavingsPct: 20,
     fireAnnualExpenses: null, fireWithdrawalRatePct: 4,
+    // Conscious Spending Plan (Fixed Costs/Investments/Savings/Guilt-Free,
+    // from I Will Teach You to Be Rich): categoryClassification maps each
+    // budget category id to one of those four buckets, same
+    // one-time-setup pattern as Account Classification's id arrays above.
+    // takeHomePayOverride defaults to null, meaning "use the actual month's
+    // real income" — same auto-unless-overridden convention as fireAnnualExpenses.
+    categoryClassification: {}, takeHomePayOverride: null,
     fireBirthdate: '', fireTargetRetirementAge: null, ssClaimingChoice: '', ssAge62MonthlyBenefit: null,
     ssFraAgeYears: 67, ssFraAgeMonths: 0, ssFraMonthlyBenefit: null, ssAge70MonthlyBenefit: null,
     emailSections: { balances: true, transactions: true, budgetVsActual: true },

@@ -4,6 +4,7 @@ const { groupBudgetCategoriesByParent } = require('./actualService');
 
 const ACCENT = '#0EA894';
 const CORAL = '#C4573F';
+const AMBER = '#C98A2E';
 const MUTED = '#8A93A0';
 const DOT_PALETTE = ['#0EA894', '#4C8DAE', '#8B7FD1', '#E8A33D', '#9C7A54'];
 
@@ -32,10 +33,29 @@ function renderAccountRow(acc, balance, dotColor) {
   </table>`;
 }
 
+// A category is "running ahead of pace" when it's used meaningfully more of
+// its budget than the month itself has elapsed, "well under pace" when it's
+// used meaningfully less, and "on pace" in between — a deliberately rough
+// 15-point band, not a precise forecast. Only meaningful for categories
+// that are naturally spread across the month; a bill paid in full on day 1
+// will always read as "ahead of pace" here even though that's expected, so
+// this is informational, not a verdict — the Monthly Summary email that
+// uses it says as much.
+function paceTag(pctUsed, pctMonthElapsed) {
+  const diff = pctUsed - pctMonthElapsed;
+  if (diff > 15) return { text: '⚠ running ahead of pace', color: CORAL };
+  if (diff < -15) return { text: '✓ well under pace', color: ACCENT };
+  return { text: 'on pace', color: MUTED };
+}
+
 // `nested` draws a category slightly smaller/thinner, used for a category
 // rendered under its parent group's own total row (renderBudgetGroup below)
-// so the group total visually reads as the parent at a glance.
-function renderBudgetRow(cat, { nested = false } = {}) {
+// so the group total visually reads as the parent at a glance. `pctMonthElapsed`
+// is only passed by the Monthly Summary email (never the daily sync report):
+// when set, it draws a tick mark on the bar at that point and a pace tag
+// underneath — omitted entirely otherwise, so the daily report's output is
+// byte-for-byte unchanged.
+function renderBudgetRow(cat, { nested = false, pctMonthElapsed = null } = {}) {
   const pct = Math.min(cat.pctUsed, 100);
   const barColor = cat.overBudget ? CORAL : ACCENT;
   const status = cat.overBudget
@@ -55,6 +75,8 @@ function renderBudgetRow(cat, { nested = false } = {}) {
   const nameSize = nested ? 12 : 13;
   const nameWeight = nested ? 400 : 600;
   const statusSize = nested ? 11 : 12;
+  const tick = pctMonthElapsed == null ? '' : `<div style="position:absolute; left:${pctMonthElapsed}%; top:-2px; bottom:-2px; width:2px; background:#1E2A32; opacity:0.45;"></div>`;
+  const tag = pctMonthElapsed == null ? null : paceTag(cat.pctUsed, pctMonthElapsed);
   return `<div style="margin-bottom:12px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:5px;">
       <tr>
@@ -68,25 +90,34 @@ function renderBudgetRow(cat, { nested = false } = {}) {
           <div style="position:absolute; left:0; top:0; bottom:0; width:${pct}%; background:${barColor}; border-radius:4px;">
             ${labelFitsInBar ? `<div style="font-size:9px; font-weight:700; color:white; line-height:${barHeight}px; text-align:right; padding-right:6px; white-space:nowrap;">${pctLabel}</div>` : ''}
           </div>
+          ${tick}
         </td>
         ${labelFitsInBar ? '' : `<td style="vertical-align:middle; white-space:nowrap; padding-left:6px;"><span style="font-size:9px; font-weight:700; color:${barColor};">${pctLabel}</span></td>`}
       </tr>
     </table>
+    ${tag ? `<div style="text-align:right; margin-top:3px;"><span style="font-size:${nested ? 10 : 10.5}px; font-weight:700; color:${tag.color};">${tag.text}</span></div>` : ''}
   </div>`;
 }
 
+// The real app's group-level total (budgeted/spent/pctUsed/remaining/
+// overBudget summed across the group's own categories) is precomputed by
+// groupBudgetCategoriesByParent before this is called — group objects here
+// already carry those fields, same as a single category does.
 // One category group: its own total row (renderBudgetRow at normal size),
 // then each of its categories nested underneath — unless it's the only
 // category in the group, in which case the group total and that category
-// would be identical, so just the one row is drawn.
-function renderBudgetGroup(group) {
+// would be identical, so just the one row is drawn. The group-total row
+// never gets a pace tag/tick even when pctMonthElapsed is set — mixing
+// lumpy bills and variable spend into one total makes a single pace
+// judgment for the group misleading.
+function renderBudgetGroup(group, pctMonthElapsed = null) {
   if (group.categories.length === 1) {
-    return renderBudgetRow(group.categories[0]);
+    return renderBudgetRow(group.categories[0], { pctMonthElapsed });
   }
   return `<div style="margin-bottom:16px;">
     ${renderBudgetRow({ ...group, name: group.groupName })}
     <div style="margin-left:4px; padding-left:12px; border-left:2px solid #F0EFEB;">
-      ${group.categories.map(cat => renderBudgetRow(cat, { nested: true })).join('')}
+      ${group.categories.map(cat => renderBudgetRow(cat, { nested: true, pctMonthElapsed })).join('')}
     </div>
   </div>`;
 }
@@ -427,4 +458,10 @@ async function sendReport(config, { subject, html }) {
   await transporter.sendMail({ from: config.emailUser, to: parseRecipients(config.emailTo), subject, html });
 }
 
-module.exports = { buildReportHtml, sendReport, parseRecipients };
+module.exports = {
+  buildReportHtml, sendReport, parseRecipients,
+  // Exported so the Monthly Summary email (src/summaryReport.js) can reuse
+  // the exact same visual components instead of duplicating them.
+  renderBudgetRow, renderBudgetGroup, computeBudgetTotalRow, formatCurrency,
+  ACCENT, CORAL, AMBER, MUTED
+};

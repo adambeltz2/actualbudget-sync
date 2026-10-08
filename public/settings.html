@@ -118,6 +118,7 @@
         <a href="/networth.html" class="btn btn-ghost">💰 Net Worth</a>
         <a href="/retirement.html" class="btn btn-ghost">🎯 Retirement Modeling</a>
         <a href="/monte-carlo.html" class="btn btn-ghost">🎲 Monte Carlo</a>
+        <a href="/conscious-spending.html" class="btn btn-ghost">🧭 Conscious Spending</a>
         <button id="triggerSyncBtn" class="btn btn-primary">Trigger Manual Sync</button>
         <button id="logoutBtn" class="btn btn-ghost">Logout</button>
       </div>
@@ -175,6 +176,20 @@
         <p class="field-hint" style="margin-top:0; margin-bottom:14px;">Actual doesn't distinguish checking/savings/investment/liability accounts — it only knows names and balances. Classify each account once here; it drives the Financial Health Check widget, Net Worth Breakdown, Financial Insights projections, and the Liability Accounts section of sync emails. Usually a one-time setup — revisit only when you add or close an account.</p>
         <div id="accountClassificationList" style="display:flex; flex-direction:column;">
           <p class="field-hint" style="margin:0;">Configure Actual Budget above and save to see your accounts here.</p>
+        </div>
+      </div>
+
+      <!-- Conscious Spending Plan -->
+      <div class="card" style="padding:22px;">
+        <div class="num" style="font-size:16px; font-weight:700; margin-bottom:4px;">Conscious Spending Plan</div>
+        <p class="field-hint" style="margin-top:0; margin-bottom:14px;">The four-bucket framework from <em>I Will Teach You to Be Rich</em> — Fixed Costs, Investments, Savings, and Guilt-Free Spending, each a target share of take-home pay. Classify each category once below; it drives the 🧭 Conscious Spending page. A category can belong to only one bucket. Usually a one-time setup — revisit when you add a new category.</p>
+        <div style="margin-bottom:16px; max-width:320px;">
+          <label class="field-label">Take-Home Pay Override <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+          <input type="number" id="takeHomePayOverride" placeholder="auto (that month's real income)">
+          <p class="field-hint">Leave blank to use each month's actual income automatically — same as Financial Independence's Annual Expenses field above.</p>
+        </div>
+        <div id="categoryClassificationList" style="display:flex; flex-direction:column;">
+          <p class="field-hint" style="margin:0;">Configure Actual Budget above and save to see your categories here.</p>
         </div>
       </div>
 
@@ -283,6 +298,36 @@
             </label>
           </div>
           <p class="field-hint" style="grid-column:1/-1; margin-top:-8px;">Normally an email only goes out when something changed. Enable this to also get one on the startup sync every time the container restarts, even if nothing new was found.</p>
+        </div>
+      </div>
+
+      <!-- Monthly Budget Summary Section -->
+      <div class="card" style="padding:22px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:10px;">
+          <div>
+            <div class="num" style="font-size:16px; font-weight:700;">Monthly Budget Summary</div>
+            <p class="field-hint" style="margin-top:2px;">A budget-to-date progress check — no sync, no transaction detail. Uses the same email settings above.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="enableSummaryEmail">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div id="summaryEmailSettingsDiv" class="grid-2" style="opacity:0.5; pointer-events:none; transition:opacity 0.2s;">
+          <div>
+            <label class="field-label">Day of Month</label>
+            <input type="number" id="summaryEmailDayOfMonth" min="1" max="28" placeholder="15">
+            <p class="field-hint">Capped at 28 so it falls in every month, including February.</p>
+          </div>
+          <div>
+            <label class="field-label">Hour</label>
+            <select id="summaryEmailHour" style="width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-family:inherit; font-size:14px;"></select>
+          </div>
+          <div style="grid-column:1/-1; display:flex; align-items:center; gap:10px;">
+            <button type="button" id="testSummaryEmailBtn" class="btn btn-ghost" style="padding:7px 14px; font-size:13px;">Send Test Email</button>
+            <p id="testSummaryEmailResult" hidden style="font-size:13px; padding:9px 12px; border-radius:8px; margin:0;"></p>
+          </div>
         </div>
       </div>
 
@@ -406,6 +451,57 @@
       emailSettingsDiv.style.pointerEvents = isEnabled ? 'auto' : 'none';
     }
     emailToggle.addEventListener('change', (e) => updateToggleUI(e.target.checked));
+
+    // --- Monthly Budget Summary toggle switch ---
+    const summaryEmailToggle = document.getElementById('enableSummaryEmail');
+    const summaryEmailSettingsDiv = document.getElementById('summaryEmailSettingsDiv');
+    function updateSummaryEmailToggleUI(isEnabled) {
+      summaryEmailSettingsDiv.style.opacity = isEnabled ? '1' : '0.5';
+      summaryEmailSettingsDiv.style.pointerEvents = isEnabled ? 'auto' : 'none';
+    }
+    summaryEmailToggle.addEventListener('change', (e) => updateSummaryEmailToggleUI(e.target.checked));
+
+    (function populateSummaryEmailHourSelect() {
+      const select = document.getElementById('summaryEmailHour');
+      for (let h = 0; h < 24; h++) {
+        const opt = document.createElement('option');
+        opt.value = h;
+        const period = h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`;
+        opt.innerText = period;
+        select.appendChild(opt);
+      }
+    })();
+
+    document.getElementById('testSummaryEmailBtn').addEventListener('click', async function() {
+      const resultEl = document.getElementById('testSummaryEmailResult');
+      const btn = this;
+      btn.disabled = true;
+      btn.innerText = 'Sending…';
+      resultEl.hidden = true;
+
+      try {
+        const res = await fetch('/api/config/test-summary-email', { method: 'POST' });
+        const data = await res.json();
+        resultEl.hidden = false;
+        if (data.success) {
+          resultEl.style.background = 'color-mix(in srgb, var(--positive) 12%, var(--card-bg))';
+          resultEl.style.color = 'var(--positive)';
+          resultEl.innerText = '✓ Test email sent — check your inbox.';
+        } else {
+          resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
+          resultEl.style.color = 'var(--negative)';
+          resultEl.innerText = `✕ ${data.error || 'Failed to send test email.'}`;
+        }
+      } catch (err) {
+        resultEl.hidden = false;
+        resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
+        resultEl.style.color = 'var(--negative)';
+        resultEl.innerText = '✕ Could not reach the server.';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Send Test Email';
+      }
+    });
 
     // --- Webhook toggle switch ---
     const webhookToggle = document.getElementById('enableWebhook');
@@ -554,6 +650,48 @@
     let investmentAccountIds = [];
     let liabilityAccountIds = [];
 
+    // --- Category Classification (Conscious Spending Plan) ---
+    let categoryClassification = {}; // { [categoryId]: 'fixed'|'investments'|'savings'|'guiltfree' }
+    const CSP_BUCKET_OPTIONS = [
+      ['', 'Unclassified'], ['fixed', 'Fixed Costs'], ['investments', 'Investments'],
+      ['savings', 'Savings'], ['guiltfree', 'Guilt-Free Spending']
+    ];
+
+    async function loadCategoryClassificationList() {
+      let groups;
+      try {
+        const res = await fetch('/api/data/category-groups');
+        groups = await res.json();
+        if (groups.error) return;
+      } catch (err) {
+        return;
+      }
+
+      const container = document.getElementById('categoryClassificationList');
+      const visibleGroups = groups.filter(g => !g.is_income && !g.hidden && (g.categories || []).some(c => !c.hidden));
+      container.innerHTML = visibleGroups.map(group => `
+        <div style="margin-bottom:14px;">
+          <div class="field-hint" style="font-weight:700; color:var(--text-secondary); margin-bottom:4px;">${group.name}</div>
+          ${group.categories.filter(c => !c.hidden).map(c => {
+            const current = categoryClassification[c.id] || '';
+            const options = CSP_BUCKET_OPTIONS.map(([value, label]) => `<option value="${value}" ${current === value ? 'selected' : ''}>${label}</option>`).join('');
+            return `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 0; border-bottom:1px solid var(--border);">
+              <span title="${c.name}" style="font-size:13px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0;">${c.name}</span>
+              <select class="categoryClassSelect" data-category-id="${c.id}" style="padding:5px 8px; font-size:12.5px; border-radius:6px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); flex-shrink:0;">${options}</select>
+            </div>`;
+          }).join('')}
+        </div>`).join('') || `<p class="field-hint" style="margin:0;">No categories yet.</p>`;
+
+      document.querySelectorAll('.categoryClassSelect').forEach(sel => {
+        sel.addEventListener('change', (e) => {
+          const id = e.target.dataset.categoryId;
+          const value = e.target.value;
+          if (value) categoryClassification[id] = value;
+          else delete categoryClassification[id];
+        });
+      });
+    }
+
     async function loadAccountClassificationList() {
       let accounts;
       try {
@@ -640,6 +778,12 @@
         : 'If using Gmail, use a 16-digit App Password.';
       document.getElementById('emailTo').value = config.emailTo || '';
 
+      const isSummaryEmailEnabled = config.enableSummaryEmail || false;
+      summaryEmailToggle.checked = isSummaryEmailEnabled;
+      updateSummaryEmailToggleUI(isSummaryEmailEnabled);
+      document.getElementById('summaryEmailDayOfMonth').value = config.summaryEmailDayOfMonth ?? 15;
+      document.getElementById('summaryEmailHour').value = config.summaryEmailHour ?? 8;
+
       const isWebhookEnabled = config.webhookEnabled || false;
       webhookToggle.checked = isWebhookEnabled;
       updateWebhookToggleUI(isWebhookEnabled);
@@ -659,6 +803,9 @@
       investmentAccountIds = config.investmentAccountIds || [];
       liabilityAccountIds = config.liabilityAccountIds || [];
 
+      categoryClassification = config.categoryClassification || {};
+      document.getElementById('takeHomePayOverride').value = config.takeHomePayOverride ?? '';
+
       document.getElementById('fireBirthdate').value = config.fireBirthdate || '';
       document.getElementById('ssClaimingChoice').value = config.ssClaimingChoice || '';
       document.getElementById('ssAge62MonthlyBenefit').value = config.ssAge62MonthlyBenefit ?? '';
@@ -674,7 +821,7 @@
       document.getElementById('emailOnRestart').checked = config.emailOnRestart || false;
 
       const isConfigured = !!(config.actualUrl && config.actualPasswordSet && config.syncId);
-      if (isConfigured) loadAccountClassificationList();
+      if (isConfigured) { loadAccountClassificationList(); loadCategoryClassificationList(); }
     }
 
     // --- Sync Trigger ---
@@ -903,12 +1050,17 @@
         emailUser: document.getElementById('emailUser').value,
         emailPass: document.getElementById('emailPass').value,
         emailTo: document.getElementById('emailTo').value,
+        enableSummaryEmail: summaryEmailToggle.checked,
+        summaryEmailDayOfMonth: parseInt(document.getElementById('summaryEmailDayOfMonth').value, 10) || 15,
+        summaryEmailHour: parseInt(document.getElementById('summaryEmailHour').value, 10) || 8,
         webhookEnabled: webhookToggle.checked,
         webhookPlatform: document.getElementById('webhookPlatform').value,
         webhookUrl: document.getElementById('webhookUrl').value,
         emergencyFundAccountIds: emergencyFundAccountIds,
         investmentAccountIds: investmentAccountIds,
         liabilityAccountIds: liabilityAccountIds,
+        categoryClassification: categoryClassification,
+        takeHomePayOverride: parseFloat(document.getElementById('takeHomePayOverride').value) || null,
         fireBirthdate: document.getElementById('fireBirthdate').value,
         ssClaimingChoice: document.getElementById('ssClaimingChoice').value,
         ssAge62MonthlyBenefit: parseFloat(document.getElementById('ssAge62MonthlyBenefit').value) || null,
