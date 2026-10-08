@@ -654,6 +654,38 @@ router.get('/api/data/monte-carlo/pdf', async (req, res) => {
   }
 });
 
+router.get('/api/data/conscious-spending', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const month = req.query.month || undefined;
+    const data = await actualService.getConsciousSpendingMonth({
+      month, categoryClassification: config.categoryClassification || {}, takeHomePayOverride: config.takeHomePayOverride
+    });
+    res.json(data);
+  } catch (err) {
+    logger.error('Conscious Spending month request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to compute the Conscious Spending Plan.' });
+  }
+});
+
+router.get('/api/data/conscious-spending/year', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const year = parseInt(req.query.year, 10) || new Date().getFullYear();
+    const data = await actualService.getConsciousSpendingYear({
+      year, categoryClassification: config.categoryClassification || {}, takeHomePayOverride: config.takeHomePayOverride
+    });
+    res.json(data);
+  } catch (err) {
+    logger.error('Conscious Spending year request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to compute the yearly Conscious Spending view.' });
+  }
+});
+
 router.get('/api/data/wrapped', async (req, res) => {
   const config = requireActualConfigured(req, res);
   if (!config) return;

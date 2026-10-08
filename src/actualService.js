@@ -11,6 +11,7 @@ const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOveral
 const { buildCategoryDeltas } = require('./trends');
 const { ageInMonths, resolveSocialSecurityClaim, computeFireTargetAtAge, monthsToReachFireTarget } = require('./socialSecurity');
 const { simulateRetirement } = require('./monteCarlo');
+const { computeMonthBuckets, computeYearSummary } = require('./consciousSpending');
 
 const DATA_DIR = '/data';
 
@@ -1106,6 +1107,43 @@ async function getBudgetSummaryData() {
   return { totalBalance, budgetVsActual, netSavingsThisMonth, typicalMonthlyNet };
 }
 
+// Resolves a month's take-home pay: the configured override when set,
+// otherwise that month's real income (same "auto, unless overridden"
+// convention fireAnnualExpenses already uses).
+async function resolveTakeHomePay({ month, takeHomePayOverride }) {
+  if (takeHomePayOverride > 0) return takeHomePayOverride;
+  const { income } = await getIncomeVsSpend({ month });
+  return income;
+}
+
+// The Conscious Spending Plan page's "This Month" data: one month's budget
+// classified into the four buckets (src/consciousSpending.js), against
+// that month's take-home pay.
+async function getConsciousSpendingMonth({ month, categoryClassification = {}, takeHomePayOverride = null } = {}) {
+  const targetMonth = month || currentMonthStr();
+  const [budgetVsActual, takeHomePay] = await Promise.all([
+    getBudgetVsActual({ month: targetMonth }),
+    resolveTakeHomePay({ month: targetMonth, takeHomePayOverride })
+  ]);
+  return { month: targetMonth, ...computeMonthBuckets(budgetVsActual, categoryClassification, takeHomePay) };
+}
+
+// The Year View: every calendar month in `year` that actually has budget
+// data (skips months before Actual was set up and any not yet reached),
+// each run through the same computeMonthBuckets, plus a year average per
+// bucket (src/consciousSpending.js's computeYearSummary).
+async function getConsciousSpendingYear({ year, categoryClassification = {}, takeHomePayOverride = null } = {}) {
+  const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
+  const perMonth = await Promise.all(months.map(async m => {
+    const budgetVsActual = await getBudgetVsActual({ month: m });
+    if (budgetVsActual.length === 0) return null; // no budget data for this month
+    const takeHomePay = await resolveTakeHomePay({ month: m, takeHomePayOverride });
+    return { month: m, ...computeMonthBuckets(budgetVsActual, categoryClassification, takeHomePay) };
+  }));
+  const monthResults = perMonth.filter(Boolean);
+  return { year, months: monthResults, yearSummary: computeYearSummary(monthResults) };
+}
+
 // Per-category monthly spend for the last `months` calendar months (oldest
 // first), used to detect trends like "groceries are creeping up". One query
 // per month (rather than a single multi-key groupBy, which the query builder
@@ -1415,7 +1453,8 @@ module.exports = {
   countTransactions, getNetWorth, getSpendByCategory, getUncategorizedTransactions, getBalanceTrend,
   getBudgetMonths, getIncomeVsSpend, getRecentIncomeVsSpend, getIncomeVsSpendYTD, getBudgetVsActual,
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getBudgetCalibration, getFinancialHealthData, getFinancialHealthHistory,
-  getMetricTransactions, getFireProgress, getRetirementModel, getMonteCarloProjection, getMonteCarloCompare, getBudgetSummaryData, getWrappedData, getMonthlySavingsHistory, getTrendsData, getNetWorthHistory,
+  getMetricTransactions, getFireProgress, getRetirementModel, getMonteCarloProjection, getMonteCarloCompare, getBudgetSummaryData,
+  getConsciousSpendingMonth, getConsciousSpendingYear, getWrappedData, getMonthlySavingsHistory, getTrendsData, getNetWorthHistory,
   testConnection,
   runBankSync, getBankSyncStatuses, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).

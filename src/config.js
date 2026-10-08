@@ -28,6 +28,13 @@ function defaultConfig() {
     insightsLookback: '6',
     emergencyFundAccountIds: [], investmentAccountIds: [], liabilityAccountIds: [], financialHealthTargetMonths: 6, financialHealthTargetSavingsPct: 20,
     fireAnnualExpenses: null, fireWithdrawalRatePct: 4,
+    // Conscious Spending Plan (Fixed Costs/Investments/Savings/Guilt-Free,
+    // from I Will Teach You to Be Rich): categoryClassification maps each
+    // budget category id to one of those four buckets, same
+    // one-time-setup pattern as Account Classification's id arrays above.
+    // takeHomePayOverride defaults to null, meaning "use the actual month's
+    // real income" — same auto-unless-overridden convention as fireAnnualExpenses.
+    categoryClassification: {}, takeHomePayOverride: null,
     fireBirthdate: '', fireTargetRetirementAge: null, ssClaimingChoice: '', ssAge62MonthlyBenefit: null,
     ssFraAgeYears: 67, ssFraAgeMonths: 0, ssFraMonthlyBenefit: null, ssAge70MonthlyBenefit: null,
     emailSections: { balances: true, transactions: true, budgetVsActual: true },

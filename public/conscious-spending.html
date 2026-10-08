@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conscious Spending Plan — Actual Budget Smart Sync</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap">
+  <script src="/vendor/chart.umd.js"></script>
+  <style>
+    :root {
+      --bg: #F1F0EC; --card-bg: #FFFFFF; --border: #F0EFEB;
+      --text: #1E2A32; --text-secondary: #33404A; --text-muted: #8A93A0;
+      --accent: #0EA894; --accent-dark: #0C8E7D; --accent-soft: #E4F5F2;
+      --positive: #1C8C74; --positive-soft: #E4F5F2;
+      --negative: #C4573F; --negative-soft: #FBECE8;
+      --warning: #C98A2E; --warning-soft: #FBF1E2;
+      --shadow: 0 1px 2px rgba(30,42,50,0.04), 0 8px 24px rgba(30,42,50,0.06);
+    }
+    html.dark {
+      --bg: #171D21; --card-bg: #1F262B; --border: #2C363D;
+      --text: #EDEFF0; --text-secondary: #C7CDD1; --text-muted: #7C8890;
+      --accent: #14BFA8; --accent-dark: #0EA894; --accent-soft: #16302C;
+      --positive: #2FBF9B; --positive-soft: #16302C;
+      --negative: #E0806A; --negative-soft: #34211E;
+      --warning: #E0A94D; --warning-soft: #332817;
+      --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px rgba(0,0,0,0.3);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 40px 24px 64px;
+      background: var(--bg); color: var(--text);
+      font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
+    }
+    .shell { max-width: 1080px; margin: 0 auto; }
+    .num { font-family: 'Sora', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+    a { color: var(--accent); }
+    .card { background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow); padding: 24px 26px; margin-bottom: 20px; min-width: 0; }
+    .label-caps { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+    .field-hint { font-size: 12.5px; color: var(--text-muted); line-height: 1.55; margin: 0; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer; padding: 9px 14px; border-radius: 10px; font-weight: 600; font-size: 13.5px; font-family: inherit; text-decoration: none; }
+    .btn-ghost { background: var(--card-bg); color: var(--text-secondary); box-shadow: var(--shadow); }
+    select.btn-ghost { appearance: none; -webkit-appearance: none; }
+    .pill { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; display: inline-block; }
+    .pill-good { color: var(--positive); background: var(--positive-soft); }
+    .pill-watch { color: var(--warning); background: var(--warning-soft); }
+    .pill-neutral { color: var(--text-muted); background: var(--border); }
+    .error-banner {
+      background: color-mix(in srgb, var(--negative) 12%, var(--card-bg));
+      border: 1px solid color-mix(in srgb, var(--negative) 35%, var(--card-bg));
+      color: var(--negative); font-size: 14px; padding: 12px 14px; border-radius: 10px; margin-bottom: 24px;
+    }
+    .notice-banner {
+      background: color-mix(in srgb, var(--accent) 10%, var(--card-bg));
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--card-bg));
+      color: var(--accent-dark); font-size: 14px; padding: 14px 16px; border-radius: 10px; margin-bottom: 24px;
+    }
+
+    .navRow { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; flex-wrap: wrap; gap: 14px; }
+    .navLinks { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .summaryBar { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+    .summaryBar .divider { width: 1px; height: 38px; background: var(--border); }
+    @media (max-width: 560px) { .summaryBar .divider { display: none; } }
+
+    .bucketGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; margin-bottom: 20px; }
+    @media (max-width: 820px) { .bucketGrid { grid-template-columns: 1fr; } }
+
+    .bucketCard { background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow); padding: 22px 24px; min-width: 0; }
+    .bucketHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
+    .bucketTarget { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+
+    .trackWrap { margin-bottom: 6px; }
+    .track { position: relative; height: 10px; background: var(--border); border-radius: 6px; margin-bottom: 6px; }
+    .track .zone { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 6px; }
+    .track .marker { position: absolute; top: -4px; width: 3px; height: 18px; border-radius: 2px; background: var(--text-muted); }
+    .track .marker.good { background: var(--positive); }
+    .track .marker.watch { background: var(--warning); }
+    .trackScale { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); }
+
+    .catList { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .catRow { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; font-size: 13px; }
+    .catRow .name { color: var(--text-secondary); }
+    .catRow .amt { color: var(--text); font-weight: 700; }
+
+    table.compare { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    table.compare th { text-align: left; padding: 10px 0; color: var(--text-muted); font-weight: 700; font-size: 11.5px; border-bottom: 1px solid var(--border); }
+    table.compare th:last-child, table.compare td:last-child { text-align: right; }
+    table.compare td { padding: 11px 0; border-bottom: 1px solid var(--border); }
+    table.compare tr:last-child td { border-bottom: none; }
+
+    .tabRow { display: flex; gap: 6px; background: var(--card-bg); padding: 4px; border-radius: 12px; box-shadow: var(--shadow); width: fit-content; }
+    .tabBtn { border: none; background: transparent; font-family: inherit; font-size: 13px; font-weight: 700; color: var(--text-muted); padding: 8px 16px; border-radius: 9px; cursor: pointer; }
+    .tabBtn[aria-selected="true"] { background: var(--accent); color: #fff; }
+
+    .yearGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; margin-bottom: 20px; }
+    @media (max-width: 820px) { .yearGrid { grid-template-columns: 1fr; } }
+    .yearCard { background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow); padding: 22px 24px; min-width: 0; }
+    .monthTable { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .monthTable th { text-align: center; padding: 9px 6px; color: var(--text-muted); font-weight: 700; font-size: 10.5px; letter-spacing: 0.03em; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .monthTable th:first-child, .monthTable td:first-child { text-align: left; }
+    .monthTable td { padding: 9px 6px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .monthTable tr:last-child td { border-bottom: none; }
+    .monthTable tr.avgRow td { font-weight: 800; border-top: 2px solid var(--border); border-bottom: none; padding-top: 11px; }
+    .cellFlag { font-size: 9px; vertical-align: super; margin-left: 1px; }
+    .cellFlag.watch { color: var(--warning); }
+    .monthTableScroll { overflow-x: auto; }
+
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="navRow">
+      <div>
+        <div class="num" style="font-size:22px; font-weight:800;">🧭 Conscious Spending Plan</div>
+        <p style="font-size:13.5px; color:var(--text-muted); margin:2px 0 0; max-width:60ch;">Where your spend lands against the four-bucket framework from <em>I Will Teach You to Be Rich</em> — Fixed Costs, Investments, Savings, and Guilt-Free Spending.</p>
+      </div>
+      <div class="navLinks">
+        <button id="themeToggleBtn" title="Toggle dark mode" class="btn btn-ghost">🌙</button>
+        <a href="/" class="btn btn-ghost">Dashboard</a>
+        <a href="/explorer.html" class="btn btn-ghost">Data Explorer</a>
+        <a href="/retirement.html" class="btn btn-ghost">🎯 Retirement Modeling</a>
+        <a href="/monte-carlo.html" class="btn btn-ghost">🎲 Monte Carlo</a>
+        <a href="/trends.html" class="btn btn-ghost">📈 Trends</a>
+        <a href="/networth.html" class="btn btn-ghost">💰 Net Worth</a>
+        <a href="/settings.html" class="btn btn-ghost">⚙ Settings</a>
+        <button id="logoutBtn" class="btn btn-ghost">Logout</button>
+      </div>
+    </div>
+
+    <div id="errorBanner" class="error-banner" hidden></div>
+    <div id="notConfiguredMsg" class="notice-banner" hidden>
+      Actual Budget isn't configured yet. Set it up on the <a href="/settings.html" style="font-weight:700;">Settings</a> page first.
+    </div>
+
+    <div id="cspBody" hidden>
+      <div class="navRow" style="margin-bottom:20px;">
+        <div class="tabRow" role="tablist">
+          <button class="tabBtn" role="tab" data-tab="month" aria-selected="true">This Month</button>
+          <button class="tabBtn" role="tab" data-tab="year" aria-selected="false">Year View</button>
+        </div>
+        <div class="navLinks" id="periodPickerWrap">
+          <select class="btn-ghost" id="monthPicker"></select>
+        </div>
+      </div>
+
+      <section id="panel-month">
+        <div class="card">
+          <div class="summaryBar">
+            <div>
+              <div class="label-caps" style="margin-bottom:6px;">Take-Home Pay</div>
+              <div class="num" style="font-size:28px; font-weight:800;" id="takeHomePay">—</div>
+            </div>
+            <div class="divider"></div>
+            <div>
+              <div class="label-caps" style="margin-bottom:6px;">Classified</div>
+              <div class="num" style="font-size:28px; font-weight:800;" id="classifiedAmt">—</div>
+            </div>
+            <div class="divider"></div>
+            <div>
+              <div class="label-caps" style="margin-bottom:6px; color:var(--warning);">Not Yet Classified</div>
+              <div class="num" style="font-size:28px; font-weight:800; color:var(--warning);" id="unclassifiedAmt">—</div>
+            </div>
+          </div>
+          <p class="field-hint" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">Take-home pay is set in Settings (auto from that month's real income unless overridden). Every spending category is tagged to one of the four buckets below under Category Classification — same pattern as Account Classification already uses for Emergency Fund, Investment, and Liability accounts. A category can belong to only one bucket.</p>
+        </div>
+
+        <div class="bucketGrid" id="bucketGrid"></div>
+
+        <div class="card" id="unclassifiedCard" hidden>
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:4px;">
+            <div class="label-caps" style="color:var(--warning);">⚠ Not Yet Classified</div>
+            <a href="/settings.html" class="btn btn-ghost" style="font-size:12.5px; padding:7px 12px;">Classify in Settings</a>
+          </div>
+          <p class="field-hint" style="margin-bottom:14px;">These categories had spend this month but aren't tagged to a bucket yet — the totals above don't include them.</p>
+          <table class="compare">
+            <thead><tr><th>Category</th><th>Spent</th></tr></thead>
+            <tbody id="unclassifiedBody"></tbody>
+          </table>
+        </div>
+
+        <div class="card" style="margin-bottom:0;">
+          <div class="label-caps" style="margin-bottom:10px;">How the Targets Work</div>
+          <p class="field-hint">Percentages are of <strong>take-home pay</strong> (what actually lands in your accounts), not gross income — the same basis the book uses throughout. Fixed Costs running high isn't a one-month problem to fix; it usually means a structural cost (rent, a car payment) that only changes with a bigger decision. Guilt-Free running low isn't automatically good — it can mean spending is landing in uncategorized spots instead of getting classified, which is worth a look before reading too much into any single month.</p>
+        </div>
+      </section>
+
+      <section id="panel-year" hidden>
+        <div class="card">
+          <div class="label-caps" style="margin-bottom:6px;">Year Average</div>
+          <p class="field-hint" id="yearRangeHint">—</p>
+        </div>
+
+        <div class="yearGrid" id="yearGrid"></div>
+
+        <div class="card" style="margin-bottom:0;">
+          <div class="label-caps" style="margin-bottom:4px;">Month by Month</div>
+          <p class="field-hint" style="margin-bottom:14px;">Every month this year, side by side. <span class="cellFlag watch">●</span> marks a month outside that bucket's target range.</p>
+          <div class="monthTableScroll">
+            <table class="monthTable" id="monthTable"></table>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer style="display:flex; align-items:center; justify-content:center; gap:14px; font-size:12px; color:var(--text-muted); margin-top:28px; padding-top:20px; border-top:1px solid var(--border);">
+      <span>Actual Budget Smart Sync <span id="appVersion"></span></span>
+      <a href="https://github.com/adambeltz2/actualbudget-sync" target="_blank" rel="noopener" style="color:var(--text-muted);">GitHub</a>
+      <a href="https://www.buymeacoffee.com/adambeltz" target="_blank" rel="noopener" style="color:var(--text-muted);">☕ Buy Me a Coffee</a>
+    </footer>
+  </div>
+
+  <script>
+    fetch('/api/version').then(r => r.json()).then(({ version, commit }) => {
+      document.getElementById('appVersion').innerText = version ? `v${version}${commit ? ` (${commit})` : ''}` : '';
+    }).catch(() => {});
+
+    function applyTheme(isDark) {
+      document.documentElement.classList.toggle('dark', isDark);
+      document.getElementById('themeToggleBtn').innerText = isDark ? '☀️' : '🌙';
+    }
+    try {
+      const stored = localStorage.getItem('theme');
+      applyTheme(stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
+    } catch (e) { /* localStorage may be unavailable */ }
+    document.getElementById('themeToggleBtn').addEventListener('click', () => {
+      const isDark = !document.documentElement.classList.contains('dark');
+      applyTheme(isDark);
+      try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch (e) { /* ignore */ }
+      if (yearDataCache) renderYearCharts(yearDataCache);
+    });
+
+    const errorBanner = document.getElementById('errorBanner');
+    function showError(message) { errorBanner.innerText = message; errorBanner.hidden = false; }
+    function hideError() { errorBanner.hidden = true; }
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    });
+
+    function formatCurrency(amount) {
+      const text = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+      return amount < 0 ? `-$${text}` : `$${text}`;
+    }
+
+    const BUCKET_ORDER = ['fixed', 'investments', 'savings', 'guiltfree'];
+    const BUCKET_DESC = {
+      fixed: "Rent, insurance, debt minimums, subscriptions — the costs that don't move month to month.",
+      investments: 'Retirement and brokerage contributions — building wealth, not just holding it.',
+      savings: "Short- and medium-term goals — emergency fund, a house down payment, next year's big purchase.",
+      guiltfree: 'Dining out, travel, hobbies, shopping — guilt-free because the other three buckets are already funded.'
+    };
+
+    function pillFor(bucketKey, status, label) {
+      if (status === 'on-target' || status === 'above-target') return { cls: 'pill-good', text: label };
+      if (status === 'under-target' && bucketKey === 'guiltfree') return { cls: 'pill-neutral', text: label };
+      return { cls: 'pill-watch', text: label };
+    }
+
+    function targetLabel(bucket) {
+      return bucket.openEnded ? `${bucket.lo}%+ of take-home` : `${bucket.lo}–${bucket.hi}% of take-home`;
+    }
+
+    function renderBucketCard(key, bucket) {
+      const pill = pillFor(key, bucket.status, bucket.statusLabel);
+      const scaleMax = bucket.openEnded ? Math.max(20, Math.ceil((bucket.pct + 5) / 5) * 5) : Math.ceil((bucket.hi + 10) / 5) * 5;
+      const hiForZone = bucket.openEnded ? scaleMax : bucket.hi;
+      const zoneLeft = (bucket.lo / scaleMax) * 100;
+      const zoneWidth = ((hiForZone - bucket.lo) / scaleMax) * 100;
+      const markerLeft = Math.min(100, (bucket.pct / scaleMax) * 100);
+      const markerCls = bucket.status === 'on-target' || bucket.status === 'above-target' ? 'good' : (bucket.status === 'over-target' ? 'watch' : '');
+
+      const catRows = bucket.categories.length > 0
+        ? bucket.categories.map(c => `<div class="catRow"><span class="name">${escapeHtml(c.name)}</span><span class="amt">${formatCurrency(c.spent)}</span></div>`).join('')
+        : `<p class="field-hint" style="margin:0;">No categories classified into this bucket yet.</p>`;
+
+      return `<div class="bucketCard">
+        <div class="bucketHead">
+          <div>
+            <div class="label-caps">${bucket.label}</div>
+            <div class="num" style="font-size:30px; font-weight:800; margin-top:4px;">${bucket.pct.toFixed(1)}% <span style="font-size:15px; font-weight:600; color:var(--text-muted);">· ${formatCurrency(bucket.spent)}</span></div>
+          </div>
+          <span class="pill ${pill.cls}">${pill.text}</span>
+        </div>
+        <div class="bucketTarget">Target: ${targetLabel(bucket)}. ${BUCKET_DESC[key]}</div>
+        <div class="trackWrap">
+          <div class="track">
+            <div class="zone" style="left:${zoneLeft}%; width:${zoneWidth}%;"></div>
+            <div class="marker ${markerCls}" style="left:${markerLeft}%;"></div>
+          </div>
+          <div class="trackScale"><span>0%</span><span>${Math.round(scaleMax / 2)}%</span><span>${scaleMax}%</span></div>
+        </div>
+        <div class="catList">${catRows}</div>
+      </div>`;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function renderMonth(data) {
+      document.getElementById('takeHomePay').textContent = formatCurrency(data.takeHomePay);
+      document.getElementById('classifiedAmt').innerHTML = `${formatCurrency(data.classifiedSpent)} <span style="font-size:15px; font-weight:600; color:var(--text-muted);">· ${data.classifiedPct.toFixed(0)}%</span>`;
+      document.getElementById('unclassifiedAmt').innerHTML = `${formatCurrency(data.unclassified.spent)} <span style="font-size:15px; font-weight:600; color:var(--text-muted);">· ${data.unclassified.pct.toFixed(0)}%</span>`;
+
+      document.getElementById('bucketGrid').innerHTML = BUCKET_ORDER.map(key => renderBucketCard(key, data.buckets[key])).join('');
+
+      const unclassifiedCard = document.getElementById('unclassifiedCard');
+      if (data.unclassified.categories.length > 0) {
+        unclassifiedCard.hidden = false;
+        document.getElementById('unclassifiedBody').innerHTML = data.unclassified.categories
+          .map(c => `<tr><td>${escapeHtml(c.name)}</td><td class="num">${formatCurrency(c.spent)}</td></tr>`).join('');
+      } else {
+        unclassifiedCard.hidden = true;
+      }
+    }
+
+    async function loadMonth(month) {
+      let res;
+      try {
+        res = await fetch(`/api/data/conscious-spending?month=${encodeURIComponent(month)}`);
+      } catch (err) {
+        showError('Could not reach the server.');
+        return;
+      }
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      const data = await res.json();
+      if (data.error) { showError(data.error); return; }
+      hideError();
+      try { renderMonth(data); } catch (err) { console.error('Conscious Spending page failed to render:', err); }
+    }
+
+    // --- Year view ---
+    let yearDataCache = null;
+    let chartInstances = {};
+
+    function targetZonePlugin(lo, hiForDraw) {
+      return {
+        id: 'targetZone-' + lo + '-' + hiForDraw,
+        beforeDatasetsDraw: function (chart) {
+          const yScale = chart.scales.y, xScale = chart.scales.x;
+          const top = yScale.getPixelForValue(hiForDraw);
+          const bottom = yScale.getPixelForValue(lo);
+          const ctx = chart.ctx;
+          const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0EA894';
+          ctx.save();
+          ctx.fillStyle = 'color-mix(in srgb, ' + accent + ' 16%, transparent)';
+          ctx.fillRect(xScale.left, top, xScale.right - xScale.left, bottom - top);
+          ctx.restore();
+        }
+      };
+    }
+
+    function monthShort(m) {
+      const [y, mo] = m.split('-');
+      return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString('en-US', { month: 'short' });
+    }
+
+    function drawYearChart(canvasId, key, months, summaryBucket) {
+      const ctx = document.getElementById(canvasId);
+      if (!ctx) return;
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#8A93A0';
+      const positive = getComputedStyle(document.documentElement).getPropertyValue('--positive').trim() || '#1C8C74';
+      const warning = getComputedStyle(document.documentElement).getPropertyValue('--warning').trim() || '#C98A2E';
+      const bucket = summaryBucket;
+      const values = months.map(m => m.buckets[key].pct);
+      const maxVal = Math.max.apply(null, values.concat([bucket.lo]));
+      const scaleMax = bucket.openEnded ? Math.ceil((maxVal + 5) / 5) * 5 : Math.ceil((bucket.hi + 10) / 5) * 5;
+      const hiForDraw = bucket.openEnded ? scaleMax : bucket.hi;
+      const colors = months.map(m => {
+        const st = m.buckets[key].status;
+        return (st === 'on-target' || st === 'above-target') ? positive : warning;
+      });
+
+      if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+      chartInstances[canvasId] = new Chart(ctx, {
+        type: 'bar',
+        plugins: [targetZonePlugin(bucket.lo, hiForDraw)],
+        data: { labels: months.map(m => monthShort(m.month)), datasets: [{ data: values, backgroundColor: colors, borderRadius: 3, maxBarThickness: 26 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: item => item.parsed.y.toFixed(1) + '% of take-home' } }
+          },
+          scales: {
+            x: { ticks: { color: muted, font: { size: 10 } }, grid: { display: false } },
+            y: { min: 0, max: scaleMax, ticks: { color: muted, font: { size: 10 }, callback: v => v + '%' }, grid: { color: 'rgba(140,148,158,0.14)' } }
+          }
+        }
+      });
+    }
+
+    function buildMonthTable(months) {
+      const table = document.getElementById('monthTable');
+      const headRow = '<tr><th>Month</th>' + BUCKET_ORDER.map(k => `<th>${months[0].buckets[k].label}</th>`).join('') + '</tr>';
+      const bodyRows = months.map(m => {
+        const [y, mo] = m.month.split('-');
+        const label = new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        const cells = BUCKET_ORDER.map(k => {
+          const b = m.buckets[k];
+          const flagged = b.status === 'under-target' || b.status === 'over-target';
+          return `<td>${b.pct.toFixed(1)}%${flagged ? '<span class="cellFlag watch">●</span>' : ''}</td>`;
+        }).join('');
+        return `<tr><td>${label}</td>${cells}</tr>`;
+      }).join('');
+      const avgCells = BUCKET_ORDER.map(k => `<td>${yearDataCache.yearSummary[k].avgPct.toFixed(1)}%</td>`).join('');
+      table.innerHTML = `<thead>${headRow}</thead><tbody>${bodyRows}<tr class="avgRow"><td>Average</td>${avgCells}</tr></tbody>`;
+    }
+
+    function renderYearStats(summary) {
+      const ids = { fixed: 'Fixed', investments: 'Invest', savings: 'Savings', guiltfree: 'GuiltFree' };
+      return BUCKET_ORDER.map(key => {
+        const b = summary[key];
+        const pill = pillFor(key, b.status, b.statusLabel);
+        return `<div class="yearCard">
+          <div class="bucketHead">
+            <div>
+              <div class="label-caps">${b.label}</div>
+              <div class="num" style="font-size:24px; font-weight:800; margin-top:4px;">${b.avgPct.toFixed(1)}% <span style="font-size:13px; font-weight:600; color:var(--text-muted);">avg</span></div>
+            </div>
+            <span class="pill ${pill.cls}">${pill.text}</span>
+          </div>
+          <div class="bucketTarget" style="margin-bottom:12px;">Target: ${targetLabel(b)}.</div>
+          <div style="height:160px;"><canvas id="chart${ids[key]}"></canvas></div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderYearCharts(data) {
+      if (!data.months || data.months.length === 0) return;
+      const ids = { fixed: 'Fixed', investments: 'Invest', savings: 'Savings', guiltfree: 'GuiltFree' };
+      BUCKET_ORDER.forEach(key => drawYearChart('chart' + ids[key], key, data.months, data.yearSummary[key]));
+    }
+
+    function renderYear(data) {
+      yearDataCache = data;
+      if (!data.months || data.months.length === 0) {
+        document.getElementById('yearRangeHint').textContent = `No budget data found for ${data.year} yet.`;
+        document.getElementById('yearGrid').innerHTML = '';
+        document.getElementById('monthTable').innerHTML = '';
+        return;
+      }
+      const first = monthShort(data.months[0].month), last = monthShort(data.months[data.months.length - 1].month);
+      document.getElementById('yearRangeHint').textContent = `${first}–${last} ${data.year} · ${data.months.length} month${data.months.length === 1 ? '' : 's'} of data. Each bucket's average is weighted the same as the monthly view — a share of take-home pay.`;
+      document.getElementById('yearGrid').innerHTML = renderYearStats(data.yearSummary);
+      buildMonthTable(data.months);
+      renderYearCharts(data);
+    }
+
+    async function loadYear(year) {
+      let res;
+      try {
+        res = await fetch(`/api/data/conscious-spending/year?year=${year}`);
+      } catch (err) {
+        showError('Could not reach the server.');
+        return;
+      }
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      const data = await res.json();
+      if (data.error) { showError(data.error); return; }
+      hideError();
+      try { renderYear(data); } catch (err) { console.error('Conscious Spending year view failed to render:', err); }
+    }
+
+    // --- Pickers & tabs ---
+    function populateMonthPicker() {
+      const select = document.getElementById('monthPicker');
+      const now = new Date();
+      const options = [];
+      for (let i = 0; i < 12; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        options.push(`<option value="${value}">${label}</option>`);
+      }
+      select.innerHTML = options.join('');
+    }
+
+    function currentMonthStr() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    document.getElementById('monthPicker').addEventListener('change', e => loadMonth(e.target.value));
+
+    document.querySelectorAll('.tabRow .tabBtn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tabRow .tabBtn').forEach(b => b.setAttribute('aria-selected', 'false'));
+        btn.setAttribute('aria-selected', 'true');
+        const tab = btn.dataset.tab;
+        document.getElementById('panel-month').hidden = tab !== 'month';
+        document.getElementById('panel-year').hidden = tab !== 'year';
+
+        const wrap = document.getElementById('periodPickerWrap');
+        if (tab === 'year') {
+          const thisYear = new Date().getFullYear();
+          wrap.innerHTML = `<select class="btn-ghost" id="yearPicker">
+            <option value="${thisYear}">${thisYear} (year to date)</option>
+            <option value="${thisYear - 1}">${thisYear - 1}</option>
+            <option value="${thisYear - 2}">${thisYear - 2}</option>
+          </select>`;
+          document.getElementById('yearPicker').addEventListener('change', e => loadYear(e.target.value));
+          if (!yearDataCache) loadYear(thisYear);
+          else Object.keys(chartInstances).forEach(id => chartInstances[id].resize());
+        } else {
+          populateMonthPicker();
+          document.getElementById('monthPicker').value = currentMonthStr();
+          document.getElementById('monthPicker').addEventListener('change', e => loadMonth(e.target.value));
+        }
+      });
+    });
+
+    (async function init() {
+      let configRes;
+      try {
+        configRes = await fetch('/api/config');
+      } catch (err) {
+        showError('Could not reach the server. Check your connection and reload.');
+        return;
+      }
+      if (configRes.status === 401) { window.location.href = '/login.html'; return; }
+      const config = await configRes.json();
+      if (!config.actualUrl || !config.actualPasswordSet || !config.syncId) {
+        document.getElementById('notConfiguredMsg').hidden = false;
+        return;
+      }
+
+      document.getElementById('cspBody').hidden = false;
+      populateMonthPicker();
+      document.getElementById('monthPicker').value = currentMonthStr();
+      await loadMonth(currentMonthStr());
+    })();
+  </script>
+</body>
+</html>
