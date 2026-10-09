@@ -661,7 +661,8 @@ router.get('/api/data/conscious-spending', async (req, res) => {
     await actualService.ensureReady(config);
     const month = req.query.month || undefined;
     const data = await actualService.getConsciousSpendingMonth({
-      month, categoryClassification: config.categoryClassification || {}, takeHomePayOverride: config.takeHomePayOverride
+      month, categoryClassification: config.categoryClassification || {}, takeHomePayOverride: config.takeHomePayOverride,
+      monthly401kContribution: config.monthly401kContribution || 0
     });
     res.json(data);
   } catch (err) {
@@ -677,7 +678,8 @@ router.get('/api/data/conscious-spending/year', async (req, res) => {
     await actualService.ensureReady(config);
     const year = parseInt(req.query.year, 10) || new Date().getFullYear();
     const data = await actualService.getConsciousSpendingYear({
-      year, categoryClassification: config.categoryClassification || {}, takeHomePayOverride: config.takeHomePayOverride
+      year, categoryClassification: config.categoryClassification || {}, takeHomePayOverride: config.takeHomePayOverride,
+      monthly401kContribution: config.monthly401kContribution || 0
     });
     res.json(data);
   } catch (err) {

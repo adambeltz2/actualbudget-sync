@@ -34,7 +34,11 @@ function defaultConfig() {
     // one-time-setup pattern as Account Classification's id arrays above.
     // takeHomePayOverride defaults to null, meaning "use the actual month's
     // real income" — same auto-unless-overridden convention as fireAnnualExpenses.
-    categoryClassification: {}, takeHomePayOverride: null,
+    // monthly401kContribution covers payroll-deducted contributions (401(k)/
+    // employer plan) that never post as a tracked transaction at all — set
+    // directly on the Conscious Spending page itself, not here in Settings,
+    // since it only affects that one page's math.
+    categoryClassification: {}, takeHomePayOverride: null, monthly401kContribution: null,
     fireBirthdate: '', fireTargetRetirementAge: null, ssClaimingChoice: '', ssAge62MonthlyBenefit: null,
     ssFraAgeYears: 67, ssFraAgeMonths: 0, ssFraMonthlyBenefit: null, ssAge70MonthlyBenefit: null,
     emailSections: { balances: true, transactions: true, budgetVsActual: true },
