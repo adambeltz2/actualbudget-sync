@@ -1118,27 +1118,36 @@ async function resolveTakeHomePay({ month, takeHomePayOverride }) {
 
 // The Conscious Spending Plan page's "This Month" data: one month's budget
 // classified into the four buckets (src/consciousSpending.js), against
-// that month's take-home pay.
-async function getConsciousSpendingMonth({ month, categoryClassification = {}, takeHomePayOverride = null } = {}) {
+// that month's take-home pay. monthly401kContribution (dollars/month) covers
+// payroll-deducted contributions Actual never sees as a transaction — it's
+// added on top of the tracked take-home-pay figure (which is itself net of
+// that same withholding) and folded into the Investments bucket.
+async function getConsciousSpendingMonth({ month, categoryClassification = {}, takeHomePayOverride = null, monthly401kContribution = 0 } = {}) {
   const targetMonth = month || currentMonthStr();
-  const [budgetVsActual, takeHomePay] = await Promise.all([
+  const [budgetVsActual, baseTakeHomePay] = await Promise.all([
     getBudgetVsActual({ month: targetMonth }),
     resolveTakeHomePay({ month: targetMonth, takeHomePayOverride })
   ]);
-  return { month: targetMonth, ...computeMonthBuckets(budgetVsActual, categoryClassification, takeHomePay) };
+  const takeHomePay = baseTakeHomePay + (monthly401kContribution || 0);
+  return { month: targetMonth, ...computeMonthBuckets(budgetVsActual, categoryClassification, takeHomePay, monthly401kContribution) };
 }
 
 // The Year View: every calendar month in `year` that actually has budget
 // data (skips months before Actual was set up and any not yet reached),
 // each run through the same computeMonthBuckets, plus a year average per
-// bucket (src/consciousSpending.js's computeYearSummary).
-async function getConsciousSpendingYear({ year, categoryClassification = {}, takeHomePayOverride = null } = {}) {
+// bucket (src/consciousSpending.js's computeYearSummary). The same flat
+// monthly401kContribution applies to every month — no attempt to detect
+// when the year's IRS contribution limit was hit and payroll deductions
+// stopped, which would overstate Investments for whichever months that's
+// true; deliberately simpler than tracking that, see backlog.md.
+async function getConsciousSpendingYear({ year, categoryClassification = {}, takeHomePayOverride = null, monthly401kContribution = 0 } = {}) {
   const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
   const perMonth = await Promise.all(months.map(async m => {
     const budgetVsActual = await getBudgetVsActual({ month: m });
     if (budgetVsActual.length === 0) return null; // no budget data for this month
-    const takeHomePay = await resolveTakeHomePay({ month: m, takeHomePayOverride });
-    return { month: m, ...computeMonthBuckets(budgetVsActual, categoryClassification, takeHomePay) };
+    const baseTakeHomePay = await resolveTakeHomePay({ month: m, takeHomePayOverride });
+    const takeHomePay = baseTakeHomePay + (monthly401kContribution || 0);
+    return { month: m, ...computeMonthBuckets(budgetVsActual, categoryClassification, takeHomePay, monthly401kContribution) };
   }));
   const monthResults = perMonth.filter(Boolean);
   return { year, months: monthResults, yearSummary: computeYearSummary(monthResults) };

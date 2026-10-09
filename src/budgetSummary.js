@@ -33,4 +33,14 @@ function computeCategoriesToWatch(budgetVsActual, pctMonthElapsed, { limit = 3, 
     .slice(0, limit);
 }
 
-module.exports = { computeMonthProgress, computeCategoriesToWatch };
+// The trailing 7-day label for the Weekly Summary email's header ("Oct 14 –
+// Oct 20") — the week ending on `now`, not a Mon-Sun calendar week, so it
+// always matches whatever day the email actually goes out on.
+function weekRangeLabel(now = new Date()) {
+  const start = new Date(now);
+  start.setDate(start.getDate() - 6);
+  const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${fmt(start)} – ${fmt(now)}`;
+}
+
+module.exports = { computeMonthProgress, computeCategoriesToWatch, weekRangeLabel };

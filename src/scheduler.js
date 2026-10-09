@@ -2,10 +2,11 @@ const cron = require('node-cron');
 const { logger } = require('./logger');
 const { getConfig } = require('./config');
 const { syncAndReport } = require('./syncJob');
-const { sendSummaryReport } = require('./summaryJob');
+const { sendSummaryReport, sendWeeklySummaryReport } = require('./summaryJob');
 
 let currentCronJobs = [];
 let currentSummaryCronJob = null;
+let currentWeeklySummaryCronJob = null;
 
 // Multiple entries let the schedule picker express "these days, at these
 // times" as one job per time slot (all sharing the same days-of-week
@@ -45,6 +46,20 @@ function applySchedule() {
       sendSummaryReport().catch(() => {});
     }, { scheduled: true, timezone: process.env.TIMEZONE || 'America/New_York' });
     logger.info(`Scheduled Monthly Budget Summary email: [${summarySchedule}]`);
+  }
+
+  if (currentWeeklySummaryCronJob) {
+    currentWeeklySummaryCronJob.stop();
+    currentWeeklySummaryCronJob = null;
+  }
+  if (config.enableWeeklySummaryEmail) {
+    const dayOfWeek = Math.min(Math.max(parseInt(config.weeklySummaryEmailDayOfWeek, 10) || 1, 0), 6);
+    const hour = Math.min(Math.max(parseInt(config.weeklySummaryEmailHour, 10) || 8, 0), 23);
+    const weeklySummarySchedule = `0 ${hour} * * ${dayOfWeek}`;
+    currentWeeklySummaryCronJob = cron.schedule(weeklySummarySchedule, () => {
+      sendWeeklySummaryReport().catch(() => {});
+    }, { scheduled: true, timezone: process.env.TIMEZONE || 'America/New_York' });
+    logger.info(`Scheduled Weekly Budget Summary email: [${weeklySummarySchedule}]`);
   }
 }
 

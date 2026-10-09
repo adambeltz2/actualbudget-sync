@@ -12,18 +12,24 @@ const { getConfig } = require('./config');
 // `force` bypasses the enableEmail gate — used by the Settings page's "Send
 // Test Email" button, which should work even before the feature (or email
 // generally) has been turned on, same as the webhook test button does.
-async function sendSummaryReport({ force = false } = {}) {
+// frequency ('monthly' | 'weekly') only changes the label/subject via
+// buildSummaryReportHtml — it's the same month-to-date snapshot, scheduled
+// independently (see scheduler.js, which runs the weekly and monthly cron
+// jobs as separate, independently-toggleable schedules, not a replacement
+// of one by the other).
+async function sendSummaryEmail({ force = false, frequency = 'monthly' } = {}) {
+  const label = frequency === 'weekly' ? 'Weekly' : 'Monthly';
   const config = getConfig();
   if (!config.actualUrl || !config.actualPassword || !config.syncId) {
-    logger.error('Missing Actual Budget configuration. Skipping Monthly Summary email.');
+    logger.error(`Missing Actual Budget configuration. Skipping ${label} Summary email.`);
     return;
   }
   if (!force && !config.enableEmail) {
-    logger.info('Email is disabled. Skipping Monthly Summary email.');
+    logger.info(`Email is disabled. Skipping ${label} Summary email.`);
     return;
   }
 
-  logger.info('Compiling Monthly Budget Summary email...');
+  logger.info(`Compiling ${label} Budget Summary email...`);
   try {
     await actualService.ensureReady(config);
     const { totalBalance, budgetVsActual, netSavingsThisMonth, typicalMonthlyNet } = await actualService.getBudgetSummaryData();
@@ -31,14 +37,17 @@ async function sendSummaryReport({ force = false } = {}) {
     const typicalPaceNetSavings = typicalMonthlyNet * (pctMonthElapsed / 100);
 
     const { subject, html } = buildSummaryReportHtml({
-      totalBalance, budgetVsActual, netSavingsThisMonth, typicalPaceNetSavings, publicUrl: config.publicUrl
+      totalBalance, budgetVsActual, netSavingsThisMonth, typicalPaceNetSavings, publicUrl: config.publicUrl, frequency
     });
     await sendReport(config, { subject, html });
-    logger.info('Monthly Budget Summary email successfully dispatched.');
+    logger.info(`${label} Budget Summary email successfully dispatched.`);
   } catch (err) {
-    logger.error('Monthly Budget Summary email failed: ' + err.message);
+    logger.error(`${label} Budget Summary email failed: ` + err.message);
     throw err;
   }
 }
 
-module.exports = { sendSummaryReport };
+function sendSummaryReport(opts) { return sendSummaryEmail({ ...opts, frequency: 'monthly' }); }
+function sendWeeklySummaryReport(opts) { return sendSummaryEmail({ ...opts, frequency: 'weekly' }); }
+
+module.exports = { sendSummaryReport, sendWeeklySummaryReport };
