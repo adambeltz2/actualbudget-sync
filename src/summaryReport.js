@@ -3,31 +3,42 @@ const { groupBudgetCategoriesByParent } = require('./actualService');
 const {
   renderBudgetGroup, computeBudgetTotalRow, renderBudgetRow, formatCurrency, ACCENT, AMBER, MUTED
 } = require('./emailReport');
-const { computeMonthProgress, computeCategoriesToWatch } = require('./budgetSummary');
+const { computeMonthProgress, computeCategoriesToWatch, weekRangeLabel } = require('./budgetSummary');
 
 // A no-sync, no-transaction-detail companion to the daily sync report:
 // where the month's budget stands so far, not what changed since last
 // sync. Deliberately reuses buildReportHtml's exact visual components
 // (header bar, card shell, budget bars) via emailReport.js's exports —
 // same template, different content, so it reads as the same product.
+//
+// frequency ('monthly' | 'weekly') only changes the subject/header framing
+// (and adds the trailing-7-day range to the intro line) — it's the same
+// month-to-date snapshot either way, just delivered on a different
+// schedule (see scheduler.js/summaryJob.js). There's no separate "weekly
+// budget" concept; a lumpy bill paid in full will read as "ahead of pace"
+// every week it's active, same known tradeoff as the monthly cadence.
 function buildSummaryReportHtml({
   totalBalance = 0, budgetVsActual = [], netSavingsThisMonth = 0, typicalPaceNetSavings = 0,
-  publicUrl = '', now = new Date()
+  publicUrl = '', now = new Date(), frequency = 'monthly'
 }) {
   const { dayOfMonth, daysInMonth, pctMonthElapsed, monthLabel } = computeMonthProgress(now);
   const totalBudgeted = budgetVsActual.reduce((sum, cat) => sum + cat.budgeted, 0);
   const totalSpent = budgetVsActual.reduce((sum, cat) => sum + cat.spent, 0);
   const totalPctUsed = totalBudgeted > 0 ? Math.round((totalSpent / totalBudgeted) * 100) : 0;
   const watchList = computeCategoriesToWatch(budgetVsActual, pctMonthElapsed);
+  const isWeekly = frequency === 'weekly';
+  const weekLabel = isWeekly ? weekRangeLabel(now) : null;
 
-  const subject = `Actual Budget Monthly Summary: ${monthLabel}`;
+  const subject = isWeekly
+    ? `Actual Budget Weekly Summary: ${weekLabel}`
+    : `Actual Budget Monthly Summary: ${monthLabel}`;
 
   let html = `<div style="font-family: 'Source Sans 3', system-ui, sans-serif; background:#EDECE8; padding:24px 12px;">
   <div style="max-width:520px; margin:0 auto; background:#FFFFFF; border-radius:14px; overflow:hidden;">
 
     <div style="background:${ACCENT}; padding:20px 26px;">
       <div style="color:#FFFFFF; font-weight:700; font-size:16px; font-family:'Sora',sans-serif;">Actual Budget Smart Sync</div>
-      <div style="color:rgba(255,255,255,0.85); font-size:12.5px; margin-top:3px;">Monthly Summary · ${_.escape(monthLabel)}</div>
+      <div style="color:rgba(255,255,255,0.85); font-size:12.5px; margin-top:3px;">${isWeekly ? `Weekly Summary · ${_.escape(weekLabel)}` : `Monthly Summary · ${_.escape(monthLabel)}`}</div>
     </div>
 
     <div style="padding:26px;">
@@ -35,9 +46,12 @@ function buildSummaryReportHtml({
       <div style="font-family:'Sora',sans-serif; font-size:32px; font-weight:800; color:#1E2A32; margin-top:4px; margin-bottom:22px;">${formatCurrency(totalBalance)}</div>`;
 
   if (totalBudgeted > 0) {
+    const introLine = isWeekly
+      ? `<strong>Week of ${_.escape(weekLabel)}</strong> — day ${dayOfMonth} of ${daysInMonth} (${pctMonthElapsed}% through ${_.escape(monthLabel)}). You've spent <strong>${formatCurrency(totalSpent)}</strong> of your <strong>${formatCurrency(totalBudgeted)}</strong> total monthly budget (${totalPctUsed}%).`
+      : `<strong>Day ${dayOfMonth} of ${daysInMonth}</strong> (${pctMonthElapsed}% through ${_.escape(monthLabel)}) — you've spent <strong>${formatCurrency(totalSpent)}</strong> of your <strong>${formatCurrency(totalBudgeted)}</strong> total budget (${totalPctUsed}%).`;
     html += `<div style="background:#F6F9F8; border:1px solid ${ACCENT}33; border-radius:10px; padding:14px 16px; margin-bottom:24px;">
         <div style="font-size:13px; color:#33404A; line-height:1.5;">
-          <strong>Day ${dayOfMonth} of ${daysInMonth}</strong> (${pctMonthElapsed}% through ${_.escape(monthLabel)}) — you've spent <strong>${formatCurrency(totalSpent)}</strong> of your <strong>${formatCurrency(totalBudgeted)}</strong> total budget (${totalPctUsed}%).
+          ${introLine}
         </div>
       </div>`;
   }

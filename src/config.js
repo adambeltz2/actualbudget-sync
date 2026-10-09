@@ -20,6 +20,11 @@ function defaultConfig() {
     // no transaction detail). Defaults to mid-month (the 15th) since this is
     // a progress check, not an end-of-month recap.
     enableSummaryEmail: false, summaryEmailDayOfMonth: 15, summaryEmailHour: 8,
+    // Weekly Summary is the same month-to-date snapshot as the Monthly one
+    // above (same buildSummaryReportHtml, just a 'weekly' frequency) — an
+    // independent schedule you can run alongside the monthly email, not a
+    // replacement for it. weeklySummaryEmailDayOfWeek: 0=Sunday..6=Saturday.
+    enableWeeklySummaryEmail: false, weeklySummaryEmailDayOfWeek: 1, weeklySummaryEmailHour: 8,
     publicUrl: '',
     dashboardPasswordHash: '', sessionSecret: crypto.randomBytes(32).toString('hex'),
     viewerPasswordHash: '',

@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { computeMonthProgress, computeCategoriesToWatch } = require('../src/budgetSummary');
+const { computeMonthProgress, computeCategoriesToWatch, weekRangeLabel } = require('../src/budgetSummary');
 
 describe('computeMonthProgress', () => {
   test('computes day/days/pct for a 31-day month', () => {
@@ -68,5 +68,19 @@ describe('computeCategoriesToWatch', () => {
     const watch = computeCategoriesToWatch(budgetVsActual, 50, { minAheadBy: 0 });
     const diningOut = watch.find(c => c.name === 'Dining Out');
     assert.equal(diningOut.projectedTotal, 840); // $420 spent at 50% through -> $840 by month end
+  });
+});
+
+describe('weekRangeLabel', () => {
+  test('spans the trailing 7 days ending on the given date, not a Mon-Sun calendar week', () => {
+    assert.equal(weekRangeLabel(new Date(2026, 9, 18)), 'Oct 12 – Oct 18'); // Oct 18, 2026
+  });
+
+  test('crosses a month boundary correctly', () => {
+    assert.equal(weekRangeLabel(new Date(2026, 9, 3)), 'Sep 27 – Oct 3');
+  });
+
+  test('crosses a year boundary correctly', () => {
+    assert.equal(weekRangeLabel(new Date(2027, 0, 2)), 'Dec 27 – Jan 2');
   });
 });
