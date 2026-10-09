@@ -505,6 +505,7 @@
           if (!yearDataCache) loadYear(thisYear);
           else Object.keys(chartInstances).forEach(id => chartInstances[id].resize());
         } else {
+          wrap.innerHTML = '<select class="btn-ghost" id="monthPicker"></select>';
           populateMonthPicker();
           document.getElementById('monthPicker').value = currentMonthStr();
           document.getElementById('monthPicker').addEventListener('change', e => loadMonth(e.target.value));
