@@ -326,7 +326,13 @@ async function getSpendByCategory({ month, startDate, endDate } = {}) {
 // Transfers and the automatic starting-balance entry never carry a
 // category by design (neither is something to "categorize"), and
 // off-budget accounts aren't tracked against a budget at all, so all three
-// are excluded rather than counted as needing attention.
+// are excluded rather than counted as needing attention. A split
+// transaction's parent/summary row is the same: its own category is always
+// null by design (the amount is divided across is_child rows that each
+// carry their own real category), so it's excluded the same way a
+// transfer is — otherwise every fully-categorized split would falsely
+// count as uncategorized forever, which is exactly what Actual's own count
+// does not do.
 async function getUncategorizedTransactions() {
   const accounts = await getAccounts();
   const onBudgetAccountIds = accounts.filter(a => !a.offbudget).map(a => a.id);
@@ -336,6 +342,7 @@ async function getUncategorizedTransactions() {
     .filter({ category: null })
     .filter({ transfer_id: null })
     .filter({ starting_balance_flag: { $ne: true } })
+    .filter({ is_parent: { $ne: true } })
     .select('*')
     .orderBy(SORT_ORDERS.date_desc);
   const { data } = await api.runQuery(query);
