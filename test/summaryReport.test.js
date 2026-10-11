@@ -73,4 +73,39 @@ describe('buildSummaryReportHtml', () => {
     const { html } = buildSummaryReportHtml({ now: new Date(2026, 9, 18), budgetVsActual: malicious });
     assert.doesNotMatch(html, /<script>alert/);
   });
+
+  describe('frequency: weekly', () => {
+    test('subject names the trailing 7-day range, not the month', () => {
+      const { subject } = buildSummaryReportHtml({ now: new Date(2026, 9, 18), budgetVsActual, frequency: 'weekly' });
+      assert.equal(subject, 'Actual Budget Weekly Summary: Oct 12 – Oct 18');
+    });
+
+    test('header subtitle says Weekly Summary with the week range', () => {
+      const { html } = buildSummaryReportHtml({ now: new Date(2026, 9, 18), budgetVsActual, frequency: 'weekly' });
+      assert.match(html, /Weekly Summary · Oct 12 – Oct 18/);
+      assert.doesNotMatch(html, /Monthly Summary/);
+    });
+
+    test('intro line includes both the week range and the month-elapsed context', () => {
+      const { html } = buildSummaryReportHtml({ now: new Date(2026, 9, 18), budgetVsActual, frequency: 'weekly' });
+      assert.match(html, /Week of Oct 12 – Oct 18/);
+      assert.match(html, /day 18 of 31/);
+      assert.match(html, /58% through October 2026/);
+    });
+
+    test('is otherwise identical content to the monthly version — same watch list, same budget bars', () => {
+      const weekly = buildSummaryReportHtml({ now: new Date(2026, 9, 18), budgetVsActual, frequency: 'weekly' });
+      const monthly = buildSummaryReportHtml({ now: new Date(2026, 9, 18), budgetVsActual, frequency: 'monthly' });
+      assert.match(weekly.html, /Dining Out/);
+      assert.match(weekly.html, /Budget Progress by Category/);
+      // Same category bars/pace tags underneath — only the header/intro framing differs.
+      assert.equal(weekly.html.includes('Groceries'), monthly.html.includes('Groceries'));
+    });
+
+    test('defaults to monthly when frequency is omitted, matching prior behavior exactly', () => {
+      const omitted = buildSummaryReportHtml({ now: new Date(2026, 9, 18), budgetVsActual });
+      const explicitMonthly = buildSummaryReportHtml({ now: new Date(2026, 9, 18), budgetVsActual, frequency: 'monthly' });
+      assert.deepEqual(omitted, explicitMonthly);
+    });
+  });
 });

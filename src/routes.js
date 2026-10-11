@@ -8,7 +8,7 @@ const { applySchedule } = require('./scheduler');
 const auth = require('./auth');
 const actualService = require('./actualService');
 const { sendWebhookReport } = require('./webhookReport');
-const { sendSummaryReport } = require('./summaryJob');
+const { sendSummaryReport, sendWeeklySummaryReport } = require('./summaryJob');
 const { buildZip } = require('./zipWriter');
 const { buildMonteCarloPdf } = require('./monteCarloReport');
 const { ALLOCATIONS } = require('./monteCarlo');
@@ -119,6 +119,24 @@ router.post('/api/config/test-summary-email', requireAdmin, async (req, res) => 
     res.json({ success: true });
   } catch (err) {
     logger.warn('Monthly Budget Summary test email failed: ' + err.message);
+    res.json({ success: false, error: err.message });
+  }
+});
+
+router.post('/api/config/test-weekly-summary-email', requireAdmin, async (req, res) => {
+  const current = getConfig();
+  if (!current.actualUrl || !current.actualPassword || !current.syncId) {
+    return res.status(400).json({ error: 'Actual Budget is not configured yet.' });
+  }
+  if (!current.emailUser || !current.smtpHost) {
+    return res.status(400).json({ error: 'SMTP settings are required to send a test email.' });
+  }
+  try {
+    await sendWeeklySummaryReport({ force: true });
+    logger.info('Weekly Budget Summary test email sent.');
+    res.json({ success: true });
+  } catch (err) {
+    logger.warn('Weekly Budget Summary test email failed: ' + err.message);
     res.json({ success: false, error: err.message });
   }
 });
@@ -661,7 +679,8 @@ router.get('/api/data/conscious-spending', async (req, res) => {
     await actualService.ensureReady(config);
     const month = req.query.month || undefined;
     const data = await actualService.getConsciousSpendingMonth({
-      month, categoryClassification: config.categoryClassification || {}, takeHomePayOverride: config.takeHomePayOverride
+      month, categoryClassification: config.categoryClassification || {}, takeHomePayOverride: config.takeHomePayOverride,
+      monthly401kContribution: config.monthly401kContribution || 0
     });
     res.json(data);
   } catch (err) {
@@ -677,7 +696,8 @@ router.get('/api/data/conscious-spending/year', async (req, res) => {
     await actualService.ensureReady(config);
     const year = parseInt(req.query.year, 10) || new Date().getFullYear();
     const data = await actualService.getConsciousSpendingYear({
-      year, categoryClassification: config.categoryClassification || {}, takeHomePayOverride: config.takeHomePayOverride
+      year, categoryClassification: config.categoryClassification || {}, takeHomePayOverride: config.takeHomePayOverride,
+      monthly401kContribution: config.monthly401kContribution || 0
     });
     res.json(data);
   } catch (err) {

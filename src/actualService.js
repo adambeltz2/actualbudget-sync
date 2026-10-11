@@ -326,7 +326,13 @@ async function getSpendByCategory({ month, startDate, endDate } = {}) {
 // Transfers and the automatic starting-balance entry never carry a
 // category by design (neither is something to "categorize"), and
 // off-budget accounts aren't tracked against a budget at all, so all three
-// are excluded rather than counted as needing attention.
+// are excluded rather than counted as needing attention. A split
+// transaction's parent/summary row is the same: its own category is always
+// null by design (the amount is divided across is_child rows that each
+// carry their own real category), so it's excluded the same way a
+// transfer is — otherwise every fully-categorized split would falsely
+// count as uncategorized forever, which is exactly what Actual's own count
+// does not do.
 async function getUncategorizedTransactions() {
   const accounts = await getAccounts();
   const onBudgetAccountIds = accounts.filter(a => !a.offbudget).map(a => a.id);
@@ -336,6 +342,7 @@ async function getUncategorizedTransactions() {
     .filter({ category: null })
     .filter({ transfer_id: null })
     .filter({ starting_balance_flag: { $ne: true } })
+    .filter({ is_parent: { $ne: true } })
     .select('*')
     .orderBy(SORT_ORDERS.date_desc);
   const { data } = await api.runQuery(query);
@@ -1118,27 +1125,36 @@ async function resolveTakeHomePay({ month, takeHomePayOverride }) {
 
 // The Conscious Spending Plan page's "This Month" data: one month's budget
 // classified into the four buckets (src/consciousSpending.js), against
-// that month's take-home pay.
-async function getConsciousSpendingMonth({ month, categoryClassification = {}, takeHomePayOverride = null } = {}) {
+// that month's take-home pay. monthly401kContribution (dollars/month) covers
+// payroll-deducted contributions Actual never sees as a transaction — it's
+// added on top of the tracked take-home-pay figure (which is itself net of
+// that same withholding) and folded into the Investments bucket.
+async function getConsciousSpendingMonth({ month, categoryClassification = {}, takeHomePayOverride = null, monthly401kContribution = 0 } = {}) {
   const targetMonth = month || currentMonthStr();
-  const [budgetVsActual, takeHomePay] = await Promise.all([
+  const [budgetVsActual, baseTakeHomePay] = await Promise.all([
     getBudgetVsActual({ month: targetMonth }),
     resolveTakeHomePay({ month: targetMonth, takeHomePayOverride })
   ]);
-  return { month: targetMonth, ...computeMonthBuckets(budgetVsActual, categoryClassification, takeHomePay) };
+  const takeHomePay = baseTakeHomePay + (monthly401kContribution || 0);
+  return { month: targetMonth, ...computeMonthBuckets(budgetVsActual, categoryClassification, takeHomePay, monthly401kContribution) };
 }
 
 // The Year View: every calendar month in `year` that actually has budget
 // data (skips months before Actual was set up and any not yet reached),
 // each run through the same computeMonthBuckets, plus a year average per
-// bucket (src/consciousSpending.js's computeYearSummary).
-async function getConsciousSpendingYear({ year, categoryClassification = {}, takeHomePayOverride = null } = {}) {
+// bucket (src/consciousSpending.js's computeYearSummary). The same flat
+// monthly401kContribution applies to every month — no attempt to detect
+// when the year's IRS contribution limit was hit and payroll deductions
+// stopped, which would overstate Investments for whichever months that's
+// true; deliberately simpler than tracking that, see backlog.md.
+async function getConsciousSpendingYear({ year, categoryClassification = {}, takeHomePayOverride = null, monthly401kContribution = 0 } = {}) {
   const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
   const perMonth = await Promise.all(months.map(async m => {
     const budgetVsActual = await getBudgetVsActual({ month: m });
     if (budgetVsActual.length === 0) return null; // no budget data for this month
-    const takeHomePay = await resolveTakeHomePay({ month: m, takeHomePayOverride });
-    return { month: m, ...computeMonthBuckets(budgetVsActual, categoryClassification, takeHomePay) };
+    const baseTakeHomePay = await resolveTakeHomePay({ month: m, takeHomePayOverride });
+    const takeHomePay = baseTakeHomePay + (monthly401kContribution || 0);
+    return { month: m, ...computeMonthBuckets(budgetVsActual, categoryClassification, takeHomePay, monthly401kContribution) };
   }));
   const monthResults = perMonth.filter(Boolean);
   return { year, months: monthResults, yearSummary: computeYearSummary(monthResults) };

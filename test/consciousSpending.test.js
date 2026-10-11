@@ -117,6 +117,39 @@ describe('computeMonthBuckets', () => {
     const result = computeMonthBuckets(undefined, {}, 6200);
     assert.equal(result.unclassified.spent, 0);
   });
+
+  describe('untrackedInvestment (401(k)/payroll contributions Actual never sees)', () => {
+    test('is added to the Investments bucket spend and pct on top of any classified categories', () => {
+      const result = computeMonthBuckets(budgetVsActual, classification, 6200, 900);
+      assert.equal(result.buckets.investments.spent, 450 + 900);
+      assert.ok(Math.abs(result.buckets.investments.pct - ((450 + 900) / 6200 * 100)) < 1e-9);
+    });
+
+    test('appears as its own synthetic category, listed first', () => {
+      const result = computeMonthBuckets(budgetVsActual, classification, 6200, 900);
+      assert.equal(result.buckets.investments.categories[0].spent, 900);
+      assert.equal(result.buckets.investments.categories.length, 2); // synthetic entry + the classified 401(k) category
+    });
+
+    test('is folded into classifiedSpent/classifiedPct but never into unclassified', () => {
+      const result = computeMonthBuckets(budgetVsActual, classification, 6200, 900);
+      assert.equal(result.classifiedSpent, 3040 + 450 + 200 + 420 + 900);
+      assert.equal(result.unclassified.spent, 145); // Gifts only, unaffected
+    });
+
+    test('other buckets are unaffected', () => {
+      const result = computeMonthBuckets(budgetVsActual, classification, 6200, 900);
+      assert.equal(result.buckets.fixed.spent, 3040);
+      assert.equal(result.buckets.savings.spent, 200);
+      assert.equal(result.buckets.guiltfree.spent, 420);
+    });
+
+    test('defaults to 0 when omitted, matching prior behavior exactly', () => {
+      const withOmitted = computeMonthBuckets(budgetVsActual, classification, 6200);
+      const withExplicitZero = computeMonthBuckets(budgetVsActual, classification, 6200, 0);
+      assert.deepEqual(withOmitted, withExplicitZero);
+    });
+  });
 });
 
 describe('computeYearSummary', () => {

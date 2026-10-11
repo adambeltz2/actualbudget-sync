@@ -331,6 +331,43 @@
         </div>
       </div>
 
+      <!-- Weekly Budget Summary Section -->
+      <div class="card" style="padding:22px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:10px;">
+          <div>
+            <div class="num" style="font-size:16px; font-weight:700;">Weekly Budget Summary</div>
+            <p class="field-hint" style="margin-top:2px;">The same month-to-date snapshot as Monthly Budget Summary above, just delivered more often — not a separate weekly budget. An independent schedule; turn on either, both, or neither.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="enableWeeklySummaryEmail">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div id="weeklySummaryEmailSettingsDiv" class="grid-2" style="opacity:0.5; pointer-events:none; transition:opacity 0.2s;">
+          <div>
+            <label class="field-label">Day of Week</label>
+            <select id="weeklySummaryEmailDayOfWeek" style="width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-family:inherit; font-size:14px;">
+              <option value="0">Sunday</option>
+              <option value="1">Monday</option>
+              <option value="2">Tuesday</option>
+              <option value="3">Wednesday</option>
+              <option value="4">Thursday</option>
+              <option value="5">Friday</option>
+              <option value="6">Saturday</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Hour</label>
+            <select id="weeklySummaryEmailHour" style="width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-family:inherit; font-size:14px;"></select>
+          </div>
+          <div style="grid-column:1/-1; display:flex; align-items:center; gap:10px;">
+            <button type="button" id="testWeeklySummaryEmailBtn" class="btn btn-ghost" style="padding:7px 14px; font-size:13px;">Send Test Email</button>
+            <p id="testWeeklySummaryEmailResult" hidden style="font-size:13px; padding:9px 12px; border-radius:8px; margin:0;"></p>
+          </div>
+        </div>
+      </div>
+
       <!-- Webhook Section -->
       <div class="card" style="padding:22px;">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:10px;">
@@ -461,8 +498,8 @@
     }
     summaryEmailToggle.addEventListener('change', (e) => updateSummaryEmailToggleUI(e.target.checked));
 
-    (function populateSummaryEmailHourSelect() {
-      const select = document.getElementById('summaryEmailHour');
+    function populateHourSelect(selectId) {
+      const select = document.getElementById(selectId);
       for (let h = 0; h < 24; h++) {
         const opt = document.createElement('option');
         opt.value = h;
@@ -470,38 +507,52 @@
         opt.innerText = period;
         select.appendChild(opt);
       }
-    })();
+    }
+    populateHourSelect('summaryEmailHour');
+    populateHourSelect('weeklySummaryEmailHour');
 
-    document.getElementById('testSummaryEmailBtn').addEventListener('click', async function() {
-      const resultEl = document.getElementById('testSummaryEmailResult');
-      const btn = this;
-      btn.disabled = true;
-      btn.innerText = 'Sending…';
-      resultEl.hidden = true;
+    const weeklySummaryEmailToggle = document.getElementById('enableWeeklySummaryEmail');
+    const weeklySummaryEmailSettingsDiv = document.getElementById('weeklySummaryEmailSettingsDiv');
+    function updateWeeklySummaryEmailToggleUI(isEnabled) {
+      weeklySummaryEmailSettingsDiv.style.opacity = isEnabled ? '1' : '0.5';
+      weeklySummaryEmailSettingsDiv.style.pointerEvents = isEnabled ? 'auto' : 'none';
+    }
+    weeklySummaryEmailToggle.addEventListener('change', (e) => updateWeeklySummaryEmailToggleUI(e.target.checked));
 
-      try {
-        const res = await fetch('/api/config/test-summary-email', { method: 'POST' });
-        const data = await res.json();
-        resultEl.hidden = false;
-        if (data.success) {
-          resultEl.style.background = 'color-mix(in srgb, var(--positive) 12%, var(--card-bg))';
-          resultEl.style.color = 'var(--positive)';
-          resultEl.innerText = '✓ Test email sent — check your inbox.';
-        } else {
+    function wireTestEmailButton(btnId, resultId, endpoint) {
+      document.getElementById(btnId).addEventListener('click', async function() {
+        const resultEl = document.getElementById(resultId);
+        const btn = this;
+        btn.disabled = true;
+        btn.innerText = 'Sending…';
+        resultEl.hidden = true;
+
+        try {
+          const res = await fetch(endpoint, { method: 'POST' });
+          const data = await res.json();
+          resultEl.hidden = false;
+          if (data.success) {
+            resultEl.style.background = 'color-mix(in srgb, var(--positive) 12%, var(--card-bg))';
+            resultEl.style.color = 'var(--positive)';
+            resultEl.innerText = '✓ Test email sent — check your inbox.';
+          } else {
+            resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
+            resultEl.style.color = 'var(--negative)';
+            resultEl.innerText = `✕ ${data.error || 'Failed to send test email.'}`;
+          }
+        } catch (err) {
+          resultEl.hidden = false;
           resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
           resultEl.style.color = 'var(--negative)';
-          resultEl.innerText = `✕ ${data.error || 'Failed to send test email.'}`;
+          resultEl.innerText = '✕ Could not reach the server.';
+        } finally {
+          btn.disabled = false;
+          btn.innerText = 'Send Test Email';
         }
-      } catch (err) {
-        resultEl.hidden = false;
-        resultEl.style.background = 'color-mix(in srgb, var(--negative) 12%, var(--card-bg))';
-        resultEl.style.color = 'var(--negative)';
-        resultEl.innerText = '✕ Could not reach the server.';
-      } finally {
-        btn.disabled = false;
-        btn.innerText = 'Send Test Email';
-      }
-    });
+      });
+    }
+    wireTestEmailButton('testSummaryEmailBtn', 'testSummaryEmailResult', '/api/config/test-summary-email');
+    wireTestEmailButton('testWeeklySummaryEmailBtn', 'testWeeklySummaryEmailResult', '/api/config/test-weekly-summary-email');
 
     // --- Webhook toggle switch ---
     const webhookToggle = document.getElementById('enableWebhook');
@@ -784,6 +835,12 @@
       document.getElementById('summaryEmailDayOfMonth').value = config.summaryEmailDayOfMonth ?? 15;
       document.getElementById('summaryEmailHour').value = config.summaryEmailHour ?? 8;
 
+      const isWeeklySummaryEmailEnabled = config.enableWeeklySummaryEmail || false;
+      weeklySummaryEmailToggle.checked = isWeeklySummaryEmailEnabled;
+      updateWeeklySummaryEmailToggleUI(isWeeklySummaryEmailEnabled);
+      document.getElementById('weeklySummaryEmailDayOfWeek').value = config.weeklySummaryEmailDayOfWeek ?? 1;
+      document.getElementById('weeklySummaryEmailHour').value = config.weeklySummaryEmailHour ?? 8;
+
       const isWebhookEnabled = config.webhookEnabled || false;
       webhookToggle.checked = isWebhookEnabled;
       updateWebhookToggleUI(isWebhookEnabled);
@@ -1053,6 +1110,9 @@
         enableSummaryEmail: summaryEmailToggle.checked,
         summaryEmailDayOfMonth: parseInt(document.getElementById('summaryEmailDayOfMonth').value, 10) || 15,
         summaryEmailHour: parseInt(document.getElementById('summaryEmailHour').value, 10) || 8,
+        enableWeeklySummaryEmail: weeklySummaryEmailToggle.checked,
+        weeklySummaryEmailDayOfWeek: parseInt(document.getElementById('weeklySummaryEmailDayOfWeek').value, 10) || 1,
+        weeklySummaryEmailHour: parseInt(document.getElementById('weeklySummaryEmailHour').value, 10) || 8,
         webhookEnabled: webhookToggle.checked,
         webhookPlatform: document.getElementById('webhookPlatform').value,
         webhookUrl: document.getElementById('webhookUrl').value,

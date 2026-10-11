@@ -38,12 +38,23 @@ function classifyBucket(bucketKey, pct) {
   return { status: pct < b.lo ? 'under-target' : 'over-target', label: pct < b.lo ? 'Under Target' : 'Over Target' };
 }
 
+// A 401(k)/employer-plan contribution is withheld from a paycheck before it
+// ever reaches a tracked account, so Actual has no transaction to classify
+// it from — it would otherwise silently read as $0 invested. untrackedInvestment
+// (dollars/month, from the page's own input) is folded into the Investments
+// bucket as a synthetic line item, and takeHomePay is expected to already
+// include it (the caller adds it back on top of the tracked income figure,
+// since that income is itself net of the same withholding).
+var UNTRACKED_INVESTMENT_LABEL = '401(k) Contribution (via payroll, not tracked by Actual)';
+
 /**
  * @param {Array} budgetVsActual - summarizeBudgetCategory shape: {categoryId, name, groupName, budgeted, spent, remaining, pctUsed, overBudget}
  * @param {Object} categoryClassification - { [categoryId]: 'fixed'|'investments'|'savings'|'guiltfree' }
  * @param {number} takeHomePay - dollars, the denominator for every bucket's %
+ * @param {number} [untrackedInvestment] - dollars/month invested via payroll deduction, never a tracked transaction
  */
-function computeMonthBuckets(budgetVsActual, categoryClassification, takeHomePay) {
+function computeMonthBuckets(budgetVsActual, categoryClassification, takeHomePay, untrackedInvestment) {
+  untrackedInvestment = untrackedInvestment || 0;
   var grouped = { fixed: [], investments: [], savings: [], guiltfree: [] };
   var unclassified = [];
   (budgetVsActual || []).forEach(function (cat) {
@@ -55,17 +66,22 @@ function computeMonthBuckets(budgetVsActual, categoryClassification, takeHomePay
   function bucketResult(key) {
     var cats = grouped[key];
     var spent = cats.reduce(function (s, c) { return s + c.spent; }, 0);
+    var categories = cats.map(function (c) { return { name: c.name, spent: c.spent }; }).sort(function (a, b) { return b.spent - a.spent; });
+    if (key === 'investments' && untrackedInvestment > 0) {
+      spent += untrackedInvestment;
+      categories = [{ name: UNTRACKED_INVESTMENT_LABEL, spent: untrackedInvestment }].concat(categories);
+    }
     var pct = takeHomePay > 0 ? (spent / takeHomePay) * 100 : 0;
     var cls = classifyBucket(key, pct);
     return {
       label: BUCKETS[key].label, lo: BUCKETS[key].lo, hi: BUCKETS[key].hi, openEnded: BUCKETS[key].openEnded,
       spent: spent, pct: pct, status: cls.status, statusLabel: cls.label,
-      categories: cats.map(function (c) { return { name: c.name, spent: c.spent }; }).sort(function (a, b) { return b.spent - a.spent; })
+      categories: categories
     };
   }
 
   var unclassifiedSpent = unclassified.reduce(function (s, c) { return s + c.spent; }, 0);
-  var classifiedSpent = BUCKET_KEYS.reduce(function (sum, key) { return sum + grouped[key].reduce(function (s, c) { return s + c.spent; }, 0); }, 0);
+  var classifiedSpent = BUCKET_KEYS.reduce(function (sum, key) { return sum + grouped[key].reduce(function (s, c) { return s + c.spent; }, 0); }, 0) + untrackedInvestment;
 
   return {
     takeHomePay: takeHomePay,
@@ -97,4 +113,4 @@ function computeYearSummary(monthResults) {
   return summary;
 }
 
-module.exports = { BUCKETS, BUCKET_KEYS, inRange, isSafeDirection, classifyBucket, computeMonthBuckets, computeYearSummary };
+module.exports = { BUCKETS, BUCKET_KEYS, UNTRACKED_INVESTMENT_LABEL, inRange, isSafeDirection, classifyBucket, computeMonthBuckets, computeYearSummary };

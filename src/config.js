@@ -20,6 +20,11 @@ function defaultConfig() {
     // no transaction detail). Defaults to mid-month (the 15th) since this is
     // a progress check, not an end-of-month recap.
     enableSummaryEmail: false, summaryEmailDayOfMonth: 15, summaryEmailHour: 8,
+    // Weekly Summary is the same month-to-date snapshot as the Monthly one
+    // above (same buildSummaryReportHtml, just a 'weekly' frequency) — an
+    // independent schedule you can run alongside the monthly email, not a
+    // replacement for it. weeklySummaryEmailDayOfWeek: 0=Sunday..6=Saturday.
+    enableWeeklySummaryEmail: false, weeklySummaryEmailDayOfWeek: 1, weeklySummaryEmailHour: 8,
     publicUrl: '',
     dashboardPasswordHash: '', sessionSecret: crypto.randomBytes(32).toString('hex'),
     viewerPasswordHash: '',
@@ -34,7 +39,11 @@ function defaultConfig() {
     // one-time-setup pattern as Account Classification's id arrays above.
     // takeHomePayOverride defaults to null, meaning "use the actual month's
     // real income" — same auto-unless-overridden convention as fireAnnualExpenses.
-    categoryClassification: {}, takeHomePayOverride: null,
+    // monthly401kContribution covers payroll-deducted contributions (401(k)/
+    // employer plan) that never post as a tracked transaction at all — set
+    // directly on the Conscious Spending page itself, not here in Settings,
+    // since it only affects that one page's math.
+    categoryClassification: {}, takeHomePayOverride: null, monthly401kContribution: null,
     fireBirthdate: '', fireTargetRetirementAge: null, ssClaimingChoice: '', ssAge62MonthlyBenefit: null,
     ssFraAgeYears: 67, ssFraAgeMonths: 0, ssFraMonthlyBenefit: null, ssAge70MonthlyBenefit: null,
     emailSections: { balances: true, transactions: true, budgetVsActual: true },

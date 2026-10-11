@@ -37,6 +37,12 @@
     .card { background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow); padding: 24px 26px; margin-bottom: 20px; min-width: 0; }
     .label-caps { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
     .field-hint { font-size: 12.5px; color: var(--text-muted); line-height: 1.55; margin: 0; }
+    label.field-label { display: block; font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; }
+    input[type="number"] {
+      padding: 9px 11px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--card-bg); color: var(--text); font-family: inherit; font-size: 14px;
+    }
+    input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
     .btn { display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer; padding: 9px 14px; border-radius: 10px; font-weight: 600; font-size: 13.5px; font-family: inherit; text-decoration: none; }
     .btn-ghost { background: var(--card-bg); color: var(--text-secondary); box-shadow: var(--shadow); }
     select.btn-ghost { appearance: none; -webkit-appearance: none; }
@@ -163,6 +169,18 @@
             </div>
           </div>
           <p class="field-hint" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">Take-home pay is set in Settings (auto from that month's real income unless overridden). Every spending category is tagged to one of the four buckets below under Category Classification — same pattern as Account Classification already uses for Emergency Fund, Investment, and Liability accounts. A category can belong to only one bucket.</p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:14px;">
+            <div style="max-width:420px;">
+              <label class="field-label" for="contrib401kInput">401(k) Contribution <span style="font-weight:400; color:var(--text-muted);">(per month, optional)</span></label>
+              <input type="number" id="contrib401kInput" placeholder="e.g. 900" style="width:200px;">
+            </div>
+            <button id="contrib401kSaveBtn" class="btn btn-ghost">Save &amp; Recalculate</button>
+          </div>
+          <p class="field-hint" style="margin-top:12px;">A 401(k)/employer-plan contribution is withheld from your paycheck before it ever reaches a tracked account, so Actual has no transaction to show it from. Enter your monthly amount here and it's added to Take-Home Pay above and to the Investments bucket below — this page can't know when you've hit the yearly IRS limit and contributions stop, so it assumes the same amount every month.</p>
+          <p class="field-hint" id="contrib401kNote" hidden style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border); color:var(--text-secondary); font-weight:600;"></p>
         </div>
 
         <div class="bucketGrid" id="bucketGrid"></div>
@@ -303,6 +321,15 @@
       document.getElementById('takeHomePay').textContent = formatCurrency(data.takeHomePay);
       document.getElementById('classifiedAmt').innerHTML = `${formatCurrency(data.classifiedSpent)} <span style="font-size:15px; font-weight:600; color:var(--text-muted);">· ${data.classifiedPct.toFixed(0)}%</span>`;
       document.getElementById('unclassifiedAmt').innerHTML = `${formatCurrency(data.unclassified.spent)} <span style="font-size:15px; font-weight:600; color:var(--text-muted);">· ${data.unclassified.pct.toFixed(0)}%</span>`;
+
+      const contrib401k = parseFloat(document.getElementById('contrib401kInput').value) || 0;
+      const contrib401kNote = document.getElementById('contrib401kNote');
+      if (contrib401k > 0) {
+        contrib401kNote.hidden = false;
+        contrib401kNote.textContent = `Includes ${formatCurrency(contrib401k)}/month of 401(k) contributions added to Take-Home Pay and Investments above — not a tracked transaction, from the field above.`;
+      } else {
+        contrib401kNote.hidden = true;
+      }
 
       document.getElementById('bucketGrid').innerHTML = BUCKET_ORDER.map(key => renderBucketCard(key, data.buckets[key])).join('');
 
@@ -505,6 +532,7 @@
           if (!yearDataCache) loadYear(thisYear);
           else Object.keys(chartInstances).forEach(id => chartInstances[id].resize());
         } else {
+          wrap.innerHTML = '<select class="btn-ghost" id="monthPicker"></select>';
           populateMonthPicker();
           document.getElementById('monthPicker').value = currentMonthStr();
           document.getElementById('monthPicker').addEventListener('change', e => loadMonth(e.target.value));
@@ -528,10 +556,36 @@
       }
 
       document.getElementById('cspBody').hidden = false;
+      document.getElementById('contrib401kInput').value = config.monthly401kContribution ?? '';
       populateMonthPicker();
       document.getElementById('monthPicker').value = currentMonthStr();
       await loadMonth(currentMonthStr());
     })();
+
+    document.getElementById('contrib401kSaveBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('contrib401kSaveBtn');
+      const raw = document.getElementById('contrib401kInput').value;
+      const monthly401kContribution = raw === '' ? null : (parseFloat(raw) || null);
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ monthly401kContribution })
+        });
+        if (res.status === 401) { window.location.href = '/login.html'; return; }
+        if (!res.ok) throw new Error('Save failed');
+        hideError();
+        yearDataCache = null; // the flat monthly figure applies to every month — force Year View to recompute next visit
+        const activeTab = document.querySelector('.tabRow .tabBtn[aria-selected="true"]').dataset.tab;
+        if (activeTab === 'month') await loadMonth(document.getElementById('monthPicker').value);
+      } catch (err) {
+        showError('Could not save your 401(k) contribution. Try again.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save & Recalculate';
+      }
+    });
   </script>
 </body>
 </html>
