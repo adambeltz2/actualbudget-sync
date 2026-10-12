@@ -200,26 +200,62 @@
       return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
     }
 
+    // Least-squares fit against a 0-based month index, so slope is directly
+    // "average change per month" — same approach as insights.js's linearRegression,
+    // reimplemented here since this page has no access to server-side modules.
+    function trendLine(values) {
+      const n = values.length;
+      if (n < 2) return values.map(() => values[0] || 0);
+      const meanX = (n - 1) / 2;
+      const meanY = values.reduce((s, v) => s + v, 0) / n;
+      let numerator = 0, denominator = 0;
+      values.forEach((v, x) => { numerator += (x - meanX) * (v - meanY); denominator += (x - meanX) ** 2; });
+      const slope = denominator === 0 ? 0 : numerator / denominator;
+      const intercept = meanY - slope * meanX;
+      return values.map((_, x) => slope * x + intercept);
+    }
+
     let savingsChart = null;
     function renderSavingsChart(monthlySavings) {
       const ctx = document.getElementById('savingsChart');
       if (savingsChart) savingsChart.destroy();
+      const netValues = monthlySavings.map(m => m.net);
       savingsChart = new Chart(ctx, {
         type: 'bar',
         data: {
           labels: monthlySavings.map(m => monthLabel(m.month)),
-          datasets: [{
-            data: monthlySavings.map(m => m.net),
-            backgroundColor: monthlySavings.map(m => m.net >= 0 ? '#0EA894' : '#C4573F'),
-            borderRadius: 4
-          }]
+          datasets: [
+            {
+              label: 'Net Savings',
+              data: netValues,
+              backgroundColor: netValues.map(v => v >= 0 ? '#0EA894' : '#C4573F'),
+              borderRadius: 4,
+              order: 2
+            },
+            {
+              type: 'line',
+              label: 'Trend',
+              data: trendLine(netValues),
+              borderColor: '#9CA3AF',
+              borderWidth: 2,
+              borderDash: [6, 4],
+              pointRadius: 0,
+              tension: 0,
+              fill: false,
+              order: 1
+            }
+          ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
-            tooltip: { callbacks: { label: (item) => formatCurrency(item.raw) } }
+            tooltip: {
+              callbacks: {
+                label: (item) => `${item.dataset.label}: ${formatCurrency(item.raw)}`
+              }
+            }
           },
           scales: {
             y: { ticks: { callback: (v) => formatCurrency(v) } }
