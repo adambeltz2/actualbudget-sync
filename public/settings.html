@@ -362,6 +362,13 @@
             <label class="field-label">Hour</label>
             <select id="weeklySummaryEmailHour" style="width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-family:inherit; font-size:14px;"></select>
           </div>
+          <div style="grid-column:1/-1;">
+            <label class="field-label">Send To <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+            <input type="email" id="weeklySummaryEmailTo" multiple
+              title="Separate multiple addresses with commas, e.g. alice@example.com, bob@example.com"
+              placeholder="Leave blank to use Send Reports To above">
+            <p class="field-hint">A separate distribution list for just the weekly email — e.g. a wider or narrower audience than the daily sync. Leave blank to reuse the same recipients as the email settings above.</p>
+          </div>
           <div style="grid-column:1/-1; display:flex; align-items:center; gap:10px;">
             <button type="button" id="testWeeklySummaryEmailBtn" class="btn btn-ghost" style="padding:7px 14px; font-size:13px;">Send Test Email</button>
             <p id="testWeeklySummaryEmailResult" hidden style="font-size:13px; padding:9px 12px; border-radius:8px; margin:0;"></p>
@@ -841,6 +848,7 @@
       updateWeeklySummaryEmailToggleUI(isWeeklySummaryEmailEnabled);
       document.getElementById('weeklySummaryEmailDayOfWeek').value = config.weeklySummaryEmailDayOfWeek ?? 1;
       document.getElementById('weeklySummaryEmailHour').value = config.weeklySummaryEmailHour ?? 8;
+      document.getElementById('weeklySummaryEmailTo').value = config.weeklySummaryEmailTo || '';
 
       const isWebhookEnabled = config.webhookEnabled || false;
       webhookToggle.checked = isWebhookEnabled;
@@ -1114,6 +1122,7 @@
         enableWeeklySummaryEmail: weeklySummaryEmailToggle.checked,
         weeklySummaryEmailDayOfWeek: parseInt(document.getElementById('weeklySummaryEmailDayOfWeek').value, 10) || 1,
         weeklySummaryEmailHour: parseInt(document.getElementById('weeklySummaryEmailHour').value, 10) || 8,
+        weeklySummaryEmailTo: document.getElementById('weeklySummaryEmailTo').value,
         webhookEnabled: webhookToggle.checked,
         webhookPlatform: document.getElementById('webhookPlatform').value,
         webhookUrl: document.getElementById('webhookUrl').value,

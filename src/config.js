@@ -24,7 +24,10 @@ function defaultConfig() {
     // above (same buildSummaryReportHtml, just a 'weekly' frequency) — an
     // independent schedule you can run alongside the monthly email, not a
     // replacement for it. weeklySummaryEmailDayOfWeek: 0=Sunday..6=Saturday.
-    enableWeeklySummaryEmail: false, weeklySummaryEmailDayOfWeek: 1, weeklySummaryEmailHour: 8,
+    // weeklySummaryEmailTo is a separate distribution list from the shared
+    // emailTo above (e.g. a wider or narrower audience than the daily sync
+    // noise warrants) — left blank, Weekly Summary falls back to emailTo.
+    enableWeeklySummaryEmail: false, weeklySummaryEmailDayOfWeek: 1, weeklySummaryEmailHour: 8, weeklySummaryEmailTo: '',
     publicUrl: '',
     dashboardPasswordHash: '', sessionSecret: crypto.randomBytes(32).toString('hex'),
     viewerPasswordHash: '',

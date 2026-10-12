@@ -43,4 +43,17 @@ function weekRangeLabel(now = new Date()) {
   return `${fmt(start)} – ${fmt(now)}`;
 }
 
-module.exports = { computeMonthProgress, computeCategoriesToWatch, weekRangeLabel };
+// Weekly Budget Summary can go to its own distribution list, separate from
+// the daily sync + Monthly Summary's shared recipients — e.g. a weekly
+// check-in only one person wants, or a wider list than the daily noise
+// warrants. Falls back to the shared emailTo when no dedicated weekly list
+// is set, so turning Weekly on before configuring a separate list still
+// sends somewhere rather than silently going nowhere.
+function resolveSummaryRecipients({ emailTo, weeklySummaryEmailTo } = {}, frequency) {
+  if (frequency === 'weekly' && weeklySummaryEmailTo && weeklySummaryEmailTo.trim()) {
+    return weeklySummaryEmailTo;
+  }
+  return emailTo;
+}
+
+module.exports = { computeMonthProgress, computeCategoriesToWatch, weekRangeLabel, resolveSummaryRecipients };

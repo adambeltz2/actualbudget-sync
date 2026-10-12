@@ -2,7 +2,7 @@ const { logger } = require('./logger');
 const actualService = require('./actualService');
 const { sendReport } = require('./emailReport');
 const { buildSummaryReportHtml } = require('./summaryReport');
-const { computeMonthProgress } = require('./budgetSummary');
+const { computeMonthProgress, resolveSummaryRecipients } = require('./budgetSummary');
 const { getConfig } = require('./config');
 
 // No bank sync, no transaction fetch — reads whatever's already synced and
@@ -39,7 +39,8 @@ async function sendSummaryEmail({ force = false, frequency = 'monthly' } = {}) {
     const { subject, html } = buildSummaryReportHtml({
       totalBalance, budgetVsActual, netSavingsThisMonth, typicalPaceNetSavings, publicUrl: config.publicUrl, frequency
     });
-    await sendReport(config, { subject, html });
+    const to = resolveSummaryRecipients(config, frequency);
+    await sendReport(config, { subject, html, to });
     logger.info(`${label} Budget Summary email successfully dispatched.`);
   } catch (err) {
     logger.error(`${label} Budget Summary email failed: ` + err.message);

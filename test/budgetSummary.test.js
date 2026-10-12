@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { computeMonthProgress, computeCategoriesToWatch, weekRangeLabel } = require('../src/budgetSummary');
+const { computeMonthProgress, computeCategoriesToWatch, weekRangeLabel, resolveSummaryRecipients } = require('../src/budgetSummary');
 
 describe('computeMonthProgress', () => {
   test('computes day/days/pct for a 31-day month', () => {
@@ -82,5 +82,32 @@ describe('weekRangeLabel', () => {
 
   test('crosses a year boundary correctly', () => {
     assert.equal(weekRangeLabel(new Date(2027, 0, 2)), 'Dec 27 – Jan 2');
+  });
+});
+
+describe('resolveSummaryRecipients', () => {
+  test('weekly uses its own distribution list when one is set', () => {
+    const to = resolveSummaryRecipients({ emailTo: 'daily@example.com', weeklySummaryEmailTo: 'weekly@example.com' }, 'weekly');
+    assert.equal(to, 'weekly@example.com');
+  });
+
+  test('weekly falls back to the shared list when no dedicated one is set', () => {
+    const to = resolveSummaryRecipients({ emailTo: 'daily@example.com', weeklySummaryEmailTo: '' }, 'weekly');
+    assert.equal(to, 'daily@example.com');
+  });
+
+  test('weekly falls back to the shared list when the dedicated field is only whitespace', () => {
+    const to = resolveSummaryRecipients({ emailTo: 'daily@example.com', weeklySummaryEmailTo: '   ' }, 'weekly');
+    assert.equal(to, 'daily@example.com');
+  });
+
+  test('monthly always uses the shared list, even if a weekly list is set', () => {
+    const to = resolveSummaryRecipients({ emailTo: 'daily@example.com', weeklySummaryEmailTo: 'weekly@example.com' }, 'monthly');
+    assert.equal(to, 'daily@example.com');
+  });
+
+  test('handles a missing weeklySummaryEmailTo field entirely', () => {
+    const to = resolveSummaryRecipients({ emailTo: 'daily@example.com' }, 'weekly');
+    assert.equal(to, 'daily@example.com');
   });
 });
