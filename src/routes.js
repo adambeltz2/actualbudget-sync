@@ -706,6 +706,32 @@ router.get('/api/data/conscious-spending/year', async (req, res) => {
   }
 });
 
+router.get('/api/data/budget-review', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const data = await actualService.getBudgetReviewData();
+    res.json({ ...data, plannedBudget: config.plannedBudget || {} });
+  } catch (err) {
+    logger.error('Budget Review request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to compute the Budget Review.' });
+  }
+});
+
+router.get('/api/data/budget-review/trends', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const data = await actualService.getBudgetReviewTrends();
+    res.json(data);
+  } catch (err) {
+    logger.error('Budget Review trends request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to compute Budget Review trends.' });
+  }
+});
+
 router.get('/api/data/wrapped', async (req, res) => {
   const config = requireActualConfigured(req, res);
   if (!config) return;

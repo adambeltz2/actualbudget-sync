@@ -44,6 +44,11 @@ function defaultConfig() {
     // directly on the Conscious Spending page itself, not here in Settings,
     // since it only affects that one page's math.
     categoryClassification: {}, takeHomePayOverride: null, monthly401kContribution: null,
+    // Budget Review's "Planned" column — a per-category monthly figure you're
+    // trying out, set directly on that page. Purely a planning aid stored
+    // here for convenience across visits; it's never written back to Actual
+    // Budget's own category budgets.
+    plannedBudget: {},
     fireBirthdate: '', fireTargetRetirementAge: null, ssClaimingChoice: '', ssAge62MonthlyBenefit: null,
     ssFraAgeYears: 67, ssFraAgeMonths: 0, ssFraMonthlyBenefit: null, ssAge70MonthlyBenefit: null,
     emailSections: { balances: true, transactions: true, budgetVsActual: true },

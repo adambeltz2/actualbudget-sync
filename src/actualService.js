@@ -12,6 +12,9 @@ const { buildCategoryDeltas } = require('./trends');
 const { ageInMonths, resolveSocialSecurityClaim, computeFireTargetAtAge, monthsToReachFireTarget } = require('./socialSecurity');
 const { simulateRetirement } = require('./monteCarlo');
 const { computeMonthBuckets, computeYearSummary } = require('./consciousSpending');
+const {
+  computeSustainability, computeUnassignedSpend, computeCategoryGrid, computeYearOverYearTrends
+} = require('./budgetReview');
 
 const DATA_DIR = '/data';
 
@@ -1214,6 +1217,62 @@ async function getBudgetCalibration() {
   return buildBudgetCalibration(categoryTrends, budgetedByCategory);
 }
 
+// The Budget Review page's three questions in one request: are we
+// consistently spending more than we earn (computeSustainability over the
+// trailing 6 months), does every dollar have a job (computeUnassignedSpend
+// against this month's live budget), and which categories' 12-month
+// average is drifting from what's budgeted or from a year ago
+// (computeCategoryGrid). Reuses getCategorySpendTrend's own real monthly
+// spend history — the same data Financial Insights' budget calibration
+// above already fetches — rather than a second parallel query path,
+// capped to however many months of real history Actual has so a newer
+// install never silently averages over months that don't exist.
+async function getBudgetReviewData() {
+  const availableMonths = await getBudgetMonths();
+  const trailingMonths = 12;
+  const requestMonths = Math.min(trailingMonths * 2, availableMonths.length);
+
+  const [categoryTrends, currentBudget, monthlySavingsHistory] = await Promise.all([
+    getCategorySpendTrend({ months: requestMonths }),
+    getBudgetVsActual({ month: currentMonthStr() }),
+    getMonthlySavingsHistory({ months: 6 })
+  ]);
+  const budgetedByCategory = new Map(currentBudget.map(c => [c.categoryId, c.budgeted]));
+
+  return {
+    sustainability: computeSustainability(monthlySavingsHistory, { lookbackMonths: 6 }),
+    unassigned: computeUnassignedSpend(currentBudget),
+    grid: computeCategoryGrid(categoryTrends, budgetedByCategory, { trailingMonths }),
+    monthlySavingsHistory
+  };
+}
+
+// The Budget Review page's Monthly Trends tab: every category's spend in
+// the same calendar months this year vs. last year (Jan through the last
+// fully-complete month), the same apples-to-apples window the Trends
+// page's own Year to Date vs Last Year comparison already uses —
+// calendar-aligned months reveal seasonality (a category that always
+// spikes in December) that a trailing-12 average can't.
+async function getBudgetReviewTrends() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  // now.getMonth() is 0-indexed, so it's already "how many complete
+  // calendar months have passed this year" (Jan is month 0, so in October
+  // -- month 9 -- Jan-Sep, 9 months, are complete).
+  const completeMonthCount = now.getMonth();
+  const thisYearMonths = Array.from({ length: completeMonthCount }, (_, i) => `${now.getFullYear()}-${pad(i + 1)}`);
+  const lastYearMonths = thisYearMonths.map(m => `${now.getFullYear() - 1}-${m.slice(5)}`);
+
+  const availableMonths = await getBudgetMonths();
+  const requestMonths = Math.max(Math.min(24, availableMonths.length), thisYearMonths.length);
+  const categoryTrends = await getCategorySpendTrend({ months: requestMonths });
+
+  return {
+    thisYearMonths, lastYearMonths,
+    rows: computeYearOverYearTrends(categoryTrends, thisYearMonths, lastYearMonths)
+  };
+}
+
 // Rolling-window daily balance reconstruction ending today. Used internally
 // by getMonthlyBalanceHistory, which needs one continuous multi-month series
 // for the Financial Insights projection rather than a single calendar
@@ -1471,6 +1530,7 @@ module.exports = {
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getBudgetCalibration, getFinancialHealthData, getFinancialHealthHistory,
   getMetricTransactions, getFireProgress, getRetirementModel, getMonteCarloProjection, getMonteCarloCompare, getBudgetSummaryData,
   getConsciousSpendingMonth, getConsciousSpendingYear, getWrappedData, getMonthlySavingsHistory, getTrendsData, getNetWorthHistory,
+  getBudgetReviewData, getBudgetReviewTrends,
   testConnection,
   runBankSync, getBankSyncStatuses, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
