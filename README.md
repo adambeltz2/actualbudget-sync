@@ -15,6 +15,10 @@ This service is designed to run independently of your main Actual Budget server.
 
 ## Screenshots
 
+**A quick tour** — Dashboard, Budget Review, Conscious Spending Plan, and Trends:
+
+![App tour](https://raw.githubusercontent.com/adambeltz2/actualbudget-sync/main/docs/screenshots/app-tour.gif)
+
 **Dashboard** — Income vs Spend, account balances, spend by category, balance trend, budget vs actual, and financial projections, all from your own synced data.
 
 ![Dashboard screenshot](https://raw.githubusercontent.com/adambeltz2/actualbudget-sync/main/docs/screenshots/dashboard.png)

@@ -889,7 +889,7 @@
           return `<div style="margin-bottom:18px;">${renderOneBudgetRow(group.categories[0], { size: 'normal' })}</div>`;
         }
         return `<div style="margin-bottom:18px;">
-          ${renderOneBudgetRow(group, { size: 'normal' })}
+          ${renderOneBudgetRow({ ...group, name: group.groupName }, { size: 'normal' })}
           <div style="margin-top:10px; padding-left:16px; border-left:2px solid var(--border); display:flex; flex-direction:column; gap:10px;">
             ${group.categories.map(cat => renderOneBudgetRow(cat, { size: 'nested' })).join('')}
           </div>
