@@ -450,12 +450,16 @@ function parseRecipients(emailTo) {
   return [...new Set(addresses)].join(', ');
 }
 
-async function sendReport(config, { subject, html }) {
+// `to` lets a caller (the Weekly Summary job) send to a different
+// distribution list than the daily sync/Monthly Summary's shared
+// config.emailTo; omitting it keeps every existing call site's behavior
+// unchanged.
+async function sendReport(config, { subject, html, to }) {
   const transporter = nodemailer.createTransport({
     host: config.smtpHost, port: parseInt(config.smtpPort), secure: parseInt(config.smtpPort) === 465,
     auth: { user: config.emailUser, pass: config.emailPass }
   });
-  await transporter.sendMail({ from: config.emailUser, to: parseRecipients(config.emailTo), subject, html });
+  await transporter.sendMail({ from: config.emailUser, to: parseRecipients(to || config.emailTo), subject, html });
 }
 
 module.exports = {

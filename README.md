@@ -163,7 +163,7 @@ A second, optional email alongside the daily sync report — **Monthly Budget Su
 
 A note on the per-category pace tags: they compare how much of a category's budget is used against how far the month has elapsed — accurate for spending that's naturally spread across the month (groceries, dining out), but a bill paid in full on day one (rent, a subscription) will always read as "running ahead of pace" even though that's completely expected. Treat the tags as a prompt to look, not a verdict.
 
-**Weekly Budget Summary** is the same email — same Categories to Watch, same budget bars, same pace-tag caveat above — just on its own weekly schedule (pick a day of the week and an hour) instead of once a month. It's not a separate weekly budget concept; there's still only one monthly budget, this just checks in on it more often. It's an independent toggle from Monthly Budget Summary above, in its own Settings card — turn on either, both, or neither.
+**Weekly Budget Summary** is the same email — same Categories to Watch, same budget bars, same pace-tag caveat above — just on its own weekly schedule (pick a day of the week and an hour) instead of once a month. It's not a separate weekly budget concept; there's still only one monthly budget, this just checks in on it more often. It's an independent toggle from Monthly Budget Summary above, in its own Settings card — turn on either, both, or neither. It also has its own optional **Send To** list, separate from the "Send Reports To" address used by the daily sync and Monthly Summary — useful if the weekly check-in should go to a wider or narrower audience. Leave it blank to reuse the same recipients as everything else.
 
 ## Webhook Notifications
 
