@@ -75,7 +75,16 @@ function renderBudgetRow(cat, { nested = false, pctMonthElapsed = null } = {}) {
   const nameSize = nested ? 12 : 13;
   const nameWeight = nested ? 400 : 600;
   const statusSize = nested ? 11 : 12;
-  const tick = pctMonthElapsed == null ? '' : `<div style="position:absolute; left:${pctMonthElapsed}%; top:-2px; bottom:-2px; width:2px; background:#1E2A32; opacity:0.45;"></div>`;
+  // Both the fill and the tick below use an explicit pixel `height` rather
+  // than pinning `top` and `bottom` together to stretch — the same fix
+  // applied to the 12-month strip's bars after a real inbox screenshot
+  // showed Gmail's app doesn't honor a `bottom` offset on an absolutely-
+  // positioned element the way it honors `top`. Without an explicit
+  // height, an element relying on `top`/`bottom` alone to size itself
+  // would collapse to near-zero height there instead of filling its
+  // parent -- which would hit every budget bar in every email, not just
+  // one chart, so it's fixed here even without its own direct report.
+  const tick = pctMonthElapsed == null ? '' : `<div style="position:absolute; left:${pctMonthElapsed}%; top:-2px; height:${barHeight + 4}px; width:2px; background:#1E2A32; opacity:0.45;"></div>`;
   const tag = pctMonthElapsed == null ? null : paceTag(cat.pctUsed, pctMonthElapsed);
   return `<div style="margin-bottom:12px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:5px;">
@@ -87,7 +96,7 @@ function renderBudgetRow(cat, { nested = false, pctMonthElapsed = null } = {}) {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       <tr>
         <td style="position:relative; height:${barHeight}px; background:#F0EFEB; border-radius:4px;">
-          <div style="position:absolute; left:0; top:0; bottom:0; width:${pct}%; background:${barColor}; border-radius:4px;">
+          <div style="position:absolute; left:0; top:0; height:${barHeight}px; width:${pct}%; background:${barColor}; border-radius:4px;">
             ${labelFitsInBar ? `<div style="font-size:9px; font-weight:700; color:white; line-height:${barHeight}px; text-align:right; padding-right:6px; white-space:nowrap;">${pctLabel}</div>` : ''}
           </div>
           ${tick}
@@ -115,7 +124,7 @@ function renderBudgetGroup(group, pctMonthElapsed = null) {
     return renderBudgetRow(group.categories[0], { pctMonthElapsed });
   }
   return `<div style="margin-bottom:16px;">
-    ${renderBudgetRow({ ...group, name: group.groupName })}
+    ${renderBudgetRow(group)}
     <div style="margin-left:4px; padding-left:12px; border-left:2px solid #F0EFEB;">
       ${group.categories.map(cat => renderBudgetRow(cat, { nested: true, pctMonthElapsed })).join('')}
     </div>

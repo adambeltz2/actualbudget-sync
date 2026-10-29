@@ -1029,11 +1029,21 @@ function summarizeBudgetCategory(cat) {
 // Dining" figure, the same grouping Spend by Category/Trends already use
 // applied to this list. Both the dashboard widget and the sync email use
 // this so the two never disagree on how a group total is computed.
+// `name` duplicates `groupName` deliberately: every consumer that renders
+// this group as its own row (the dashboard's renderBudgetRows, the email
+// report's renderBudgetGroup) feeds it straight into the same
+// per-category row renderer those modules use for an individual category,
+// which reads `.name` -- so a group object needs that field itself rather
+// than making every consumer remember to map groupName -> name on its own.
+// The email report used to do that mapping inline and the dashboard simply
+// never did, so its group-total rows rendered with a blank label; fixed
+// here, at the one place both consumers share, instead of in either
+// consumer separately.
 function groupBudgetCategoriesByParent(categories) {
   const groups = new Map();
   for (const cat of categories) {
     const key = cat.groupName || 'Other';
-    if (!groups.has(key)) groups.set(key, { groupName: key, categories: [], budgeted: 0, spent: 0, remaining: 0 });
+    if (!groups.has(key)) groups.set(key, { name: key, groupName: key, categories: [], budgeted: 0, spent: 0, remaining: 0 });
     const group = groups.get(key);
     group.categories.push(cat);
     group.budgeted += cat.budgeted;

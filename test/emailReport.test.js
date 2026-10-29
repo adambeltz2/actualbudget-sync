@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { buildReportHtml, parseRecipients } = require('../src/emailReport');
+const { buildReportHtml, parseRecipients, renderBudgetRow } = require('../src/emailReport');
 
 const accounts = [{ id: 'acc-1', name: 'Checking' }, { id: 'acc-2', name: 'Savings' }];
 const accountBalances = { 'acc-1': 1250.50, 'acc-2': -42.00 };
@@ -417,5 +417,40 @@ describe('parseRecipients', () => {
   test('handles empty or missing input without throwing', () => {
     assert.equal(parseRecipients(''), '');
     assert.equal(parseRecipients(undefined), '');
+  });
+});
+
+describe('renderBudgetRow', () => {
+  // Regression: the bar fill and the pace-tick mark both used to rely on
+  // `top`/`bottom` together (no explicit height) to stretch to their
+  // parent's height -- the exact mechanism that collapsed the 12-month
+  // strip's bars in Gmail's app (a `bottom` offset on an absolutely-
+  // positioned element isn't honored there the way `top` is). Both now use
+  // an explicit pixel `height` instead, so they can't collapse the same way
+  // even if `bottom` is ignored.
+  test('the bar fill uses an explicit pixel height, never a bottom offset', () => {
+    const cat = { name: 'Groceries', budgeted: 500, spent: 400, remaining: 100, pctUsed: 80, overBudget: false };
+    const html = renderBudgetRow(cat);
+    assert.doesNotMatch(html, /top:0;\s*bottom:0;/);
+    assert.match(html, /top:0; height:13px; width:80%; background:#0EA894;/);
+  });
+
+  test('a nested row uses its own shorter explicit height', () => {
+    const cat = { name: 'Groceries', budgeted: 500, spent: 400, remaining: 100, pctUsed: 80, overBudget: false };
+    const html = renderBudgetRow(cat, { nested: true });
+    assert.match(html, /top:0; height:11px; width:80%; background:#0EA894;/);
+  });
+
+  test('the pace-tick mark (Monthly/Weekly Summary only) also uses an explicit height, never top/bottom together', () => {
+    const cat = { name: 'Groceries', budgeted: 500, spent: 400, remaining: 100, pctUsed: 80, overBudget: false };
+    const html = renderBudgetRow(cat, { pctMonthElapsed: 60 });
+    assert.doesNotMatch(html, /top:-2px;\s*bottom:-2px;/);
+    assert.match(html, /left:60%; top:-2px; height:17px; width:2px;/); // barHeight(13) + 4
+  });
+
+  test('no pctMonthElapsed means no tick mark at all, and the daily sync report never passes one', () => {
+    const cat = { name: 'Groceries', budgeted: 500, spent: 400, remaining: 100, pctUsed: 80, overBudget: false };
+    const html = renderBudgetRow(cat);
+    assert.doesNotMatch(html, /background:#1E2A32; opacity:0.45;/);
   });
 });
