@@ -219,21 +219,32 @@ function renderIncomeVsSpendChart(recentIncomeVsSpend) {
 // sign now; color is reserved for the bar. An earlier version drew the
 // marker as a connecting inline-SVG polyline; real-world testing (a live
 // sync email, not just a preview) showed Gmail's app strips <svg> entirely,
-// so nothing rendered at all. Dots built from plain positioned <div>s
-// inside each month's own box, like everything else in this email, are the
-// tradeoff: no connecting line between months, but guaranteed to render.
-// Bars are positioned with `top` alone for both positive and negative
-// months (never `bottom`) for the same reason: a real inbox screenshot
-// showed every bar — positive and negative alike — hanging down from the
-// box's top edge regardless of sign, because Gmail's app doesn't honor a
-// `bottom` offset on an absolutely-positioned element the way `top` is.
-// Computing an explicit `top` for the positive case too (barHalf - barPx,
-// vs. just barHalf for negative) sidesteps that entirely.
+// so nothing rendered at all.
+//
+// Neither the bars nor the dot use CSS `position` at all (no absolute, no
+// relative) -- a second real inbox screenshot, this one version-stamped to
+// confirm it was rendered by the exact commit that switched the bars from
+// `top`+`bottom` to `top`+explicit `height`, still showed every bar hanging
+// from the same top edge regardless of sign. That rules out `bottom`
+// specifically: the only thing left in common is `position: absolute`
+// itself not taking effect in Gmail's app in this nested-table context, in
+// which case every `top`/`left` offset is silently ignored and a div just
+// renders in normal flow -- exactly the "all bars start right after the
+// baseline, height varies, nothing floats above it" symptom seen twice now.
+// Rebuilt without `position` entirely: each bar is a 3-row table (upper
+// half / 1px baseline row / lower half) with the colored fill `valign`ed to
+// whichever half's outer edge it should touch -- `valign` is a table-cell
+// alignment, not a CSS position, and is about as close to universally
+// supported as HTML markup gets. The dot is a second 3-row spacer table
+// (blank space / 5px dot / blank space) pulled back up over the bar table
+// with a plain negative `margin-top` -- stacking two flow elements at the
+// same visual spot without taking either out of flow, unlike `position`.
 function renderIncomeVsSpend12MoStrip(months) {
   if (months.length === 0) return '';
   const n = months.length;
-  const barHalf = 17; // px — half of the 34px box, where the bars (and the dot's zero point) pivot
-  const dotHalf = 14; // px — slightly inside the box, same zero baseline as the bars
+  const barHalf = 17; // px — height of each half of the baseline-pivoted bar area
+  const dotHalf = 14; // px — the dot's own usable half-range, slightly inside barHalf
+  const boxHeight = barHalf * 2 + 1; // the two halves plus the 1px baseline row
 
   const maxAbsNet = Math.max(...months.map(m => Math.abs(m.net)), 0);
   let cumulative = 0;
@@ -244,18 +255,27 @@ function renderIncomeVsSpend12MoStrip(months) {
     const barPx = maxAbsNet > 0 ? Math.round((Math.abs(m.net) / maxAbsNet) * barHalf) : 0;
     const isPositive = m.net >= 0;
     const color = isPositive ? ACCENT : CORAL;
-    const barTop = isPositive ? barHalf - barPx : barHalf;
-    const barRadius = isPositive ? '2px 2px 0 0' : '0 0 2px 2px';
-    const barStyle = `top:${barTop}px; height:${barPx}px; border-radius:${barRadius};`;
+    const upperBar = isPositive ? `<div style="height:${barPx}px; background:${color}; border-radius:2px 2px 0 0;"></div>` : '';
+    const lowerBar = !isPositive ? `<div style="height:${barPx}px; background:${color}; border-radius:0 0 2px 2px;"></div>` : '';
+
     const runningTotal = cumulativeByMonth[i];
     const dotOffset = maxAbsCumulative > 0 ? (runningTotal / maxAbsCumulative) * dotHalf : 0;
-    const dotTop = barHalf - dotOffset; // px from the box's top; above barHalf = positive, below = negative
+    // How much blank space sits above the 5px dot row, clamped so the dot
+    // always lands fully inside the box even at the extreme of its range.
+    const spacerAbove = Math.max(0, Math.min(boxHeight - 5, Math.round(barHalf - dotOffset - 2.5)));
+    const spacerBelow = Math.max(0, boxHeight - 5 - spacerAbove);
+
     return `<td style="width:${(100 / n).toFixed(4)}%; padding:0 1px;">
-      <div style="position:relative; height:34px;">
-        <div style="position:absolute; left:0; right:0; top:${barHalf}px; height:1px; background:#F0EFEB;"></div>
-        <div style="position:absolute; left:2px; right:2px; ${barStyle} background:${color};"></div>
-        <div style="position:absolute; left:50%; top:${dotTop.toFixed(1)}px; width:5px; height:5px; margin-left:-3px; margin-top:-3px; border-radius:50%; background:#33404A; border:1px solid #FFFFFF;"></div>
-      </div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr><td height="${barHalf}" valign="bottom" style="height:${barHalf}px; vertical-align:bottom; line-height:0; font-size:0;">${upperBar}</td></tr>
+        <tr><td height="1" style="height:1px; line-height:1px; font-size:1px; background:#F0EFEB;">&nbsp;</td></tr>
+        <tr><td height="${barHalf}" valign="top" style="height:${barHalf}px; vertical-align:top; line-height:0; font-size:0;">${lowerBar}</td></tr>
+      </table>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:-${boxHeight}px;">
+        <tr><td height="${spacerAbove}" style="height:${spacerAbove}px; line-height:1px; font-size:1px;">&nbsp;</td></tr>
+        <tr><td height="5" style="height:5px; text-align:center; line-height:0; font-size:0;"><div style="width:5px; height:5px; margin:0 auto; border-radius:50%; background:#33404A; border:1px solid #FFFFFF;"></div></td></tr>
+        <tr><td height="${spacerBelow}" style="height:${spacerBelow}px; line-height:1px; font-size:1px;">&nbsp;</td></tr>
+      </table>
       <div style="text-align:center; font-size:8px; color:${MUTED}; margin-top:2px;">${monthInitial(m.month)}</div>
       <div style="text-align:center; font-size:6.5px; font-weight:700; color:${color}; line-height:1.3; margin-top:1px;">${compactSigned(m.net)}</div>
       <div style="text-align:center; font-size:6px; color:${MUTED}; line-height:1.3;">${compactSigned(runningTotal)}</div>
