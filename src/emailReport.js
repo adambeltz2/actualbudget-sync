@@ -196,6 +196,13 @@ function renderIncomeVsSpendChart(recentIncomeVsSpend) {
 // so nothing rendered at all. Dots built from plain positioned <div>s
 // inside each month's own box, like everything else in this email, are the
 // tradeoff: no connecting line between months, but guaranteed to render.
+// Bars are positioned with `top` alone for both positive and negative
+// months (never `bottom`) for the same reason: a real inbox screenshot
+// showed every bar — positive and negative alike — hanging down from the
+// box's top edge regardless of sign, because Gmail's app doesn't honor a
+// `bottom` offset on an absolutely-positioned element the way `top` is.
+// Computing an explicit `top` for the positive case too (barHalf - barPx,
+// vs. just barHalf for negative) sidesteps that entirely.
 function renderIncomeVsSpend12MoStrip(months) {
   if (months.length === 0) return '';
   const n = months.length;
@@ -211,9 +218,9 @@ function renderIncomeVsSpend12MoStrip(months) {
     const barPx = maxAbsNet > 0 ? Math.round((Math.abs(m.net) / maxAbsNet) * barHalf) : 0;
     const isPositive = m.net >= 0;
     const color = isPositive ? ACCENT : CORAL;
-    const barStyle = isPositive
-      ? `bottom:${barHalf}px; height:${barPx}px; border-radius:2px 2px 0 0;`
-      : `top:${barHalf}px; height:${barPx}px; border-radius:0 0 2px 2px;`;
+    const barTop = isPositive ? barHalf - barPx : barHalf;
+    const barRadius = isPositive ? '2px 2px 0 0' : '0 0 2px 2px';
+    const barStyle = `top:${barTop}px; height:${barPx}px; border-radius:${barRadius};`;
     const runningTotal = cumulativeByMonth[i];
     const dotOffset = maxAbsCumulative > 0 ? (runningTotal / maxAbsCumulative) * dotHalf : 0;
     const dotTop = barHalf - dotOffset; // px from the box's top; above barHalf = positive, below = negative

@@ -333,6 +333,21 @@ describe('buildReportHtml', () => {
     // in compact (+/-NNN, no $ or commas) form.
     assert.match(html, />\+300</); // October's own net
     assert.match(html, />-1700</); // December's rolling total
+
+    // Regression: the bars themselves must diverge from the shared zero
+    // baseline the same way the dot does -- a real inbox screenshot showed
+    // every bar hanging down from the box's top edge regardless of sign,
+    // because a `bottom` offset on an absolutely-positioned div isn't
+    // honored by Gmail's app the way `top` is. Both signs now compute an
+    // explicit `top` (positive: above the baseline, so top < 17; negative:
+    // pinned at the baseline, top === 17) instead of toggling between
+    // `top`/`bottom` by sign.
+    const barMatches = [...html.matchAll(/left:2px; right:2px; top:(-?[\d.]+)px; height:(\d+)px;[^>]*background:(#[0-9A-F]+);/g)];
+    assert.equal(barMatches.length, 12, 'expected one bar per month');
+    const positiveBarTops = barMatches.filter(m => m[3] === '#0EA894').map(m => Number(m[1]));
+    const negativeBarTops = barMatches.filter(m => m[3] === '#C4573F').map(m => Number(m[1]));
+    assert.ok(positiveBarTops.length > 0 && positiveBarTops.every(top => top < 17), 'every positive month\'s bar should sit above the zero baseline (top < 17)');
+    assert.ok(negativeBarTops.length > 0 && negativeBarTops.every(top => top === 17), 'every negative month\'s bar should be pinned at the zero baseline (top === 17), growing downward via height alone');
   });
 
   test('Spend vs Budget folds categories under their parent group with a group total', () => {
