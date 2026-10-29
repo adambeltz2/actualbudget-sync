@@ -283,7 +283,7 @@ describe('buildReportHtml', () => {
     });
     assert.doesNotMatch(withThree, /Last 3 Months/);
     assert.doesNotMatch(withThree, /running total/);
-    assert.doesNotMatch(withThree, /width:5px; height:5px;/); // no running-total dots either
+    assert.doesNotMatch(withThree, /border-radius:50%; background:#33404A;/); // no running-total dots either
 
     const recentIncomeVsSpend = [
       { month: '2025-10', income: 6000, spend: 5700, net: 300 },
@@ -311,44 +311,52 @@ describe('buildReportHtml', () => {
     assert.doesNotMatch(verticalListSection, /October/);
     // 12-month total: sums to +$2,450.00
     assert.match(html, /Total \(12 mo\): \+\$2,450\.00/);
-    // The running-total marker is a small positioned <div> dot (not an SVG
-    // line — an earlier version used inline SVG, but a real sync email
-    // showed Gmail's app strips <svg> entirely), anchored to the same
-    // zero baseline the bars pivot on (top:17px), not an independent
-    // min/max range — so it actually sits below that baseline during the
-    // Nov-Mar stretch where the cumulative total goes negative, and above
-    // it once the running total turns positive again. The dot is always
-    // the same neutral navy regardless of sign — a real sync email showed
-    // that coloring it green/red routinely contradicted its bar's own
-    // color (a positive month sitting on a still-negative cumulative total
-    // drew a green bar with a red dot right on it), so position alone now
-    // carries the sign.
-    const dotMatches = [...html.matchAll(/top:(-?[\d.]+)px; width:5px; height:5px;[^>]*background:(#[0-9A-F]+);/g)];
-    assert.equal(dotMatches.length, 12, 'expected one running-total dot per month');
-    const dotTops = dotMatches.map(m => Number(m[1]));
-    const dotColors = dotMatches.map(m => m[2]);
-    assert.ok(dotTops.some(top => top > 17), 'a dot should sit below the zero baseline when the running total is negative');
-    assert.ok(dotTops.some(top => top < 17), 'a dot should sit above the zero baseline when the running total is positive');
-    assert.ok(dotColors.every(c => c === '#33404A'), 'every dot should be the same neutral color regardless of sign');
     // Per-month micro-labels: month's own net, then rolling cumulative net,
     // in compact (+/-NNN, no $ or commas) form.
     assert.match(html, />\+300</); // October's own net
     assert.match(html, />-1700</); // December's rolling total
 
-    // Regression: the bars themselves must diverge from the shared zero
-    // baseline the same way the dot does -- a real inbox screenshot showed
-    // every bar hanging down from the box's top edge regardless of sign,
-    // because a `bottom` offset on an absolutely-positioned div isn't
-    // honored by Gmail's app the way `top` is. Both signs now compute an
-    // explicit `top` (positive: above the baseline, so top < 17; negative:
-    // pinned at the baseline, top === 17) instead of toggling between
-    // `top`/`bottom` by sign.
-    const barMatches = [...html.matchAll(/left:2px; right:2px; top:(-?[\d.]+)px; height:(\d+)px;[^>]*background:(#[0-9A-F]+);/g)];
-    assert.equal(barMatches.length, 12, 'expected one bar per month');
-    const positiveBarTops = barMatches.filter(m => m[3] === '#0EA894').map(m => Number(m[1]));
-    const negativeBarTops = barMatches.filter(m => m[3] === '#C4573F').map(m => Number(m[1]));
-    assert.ok(positiveBarTops.length > 0 && positiveBarTops.every(top => top < 17), 'every positive month\'s bar should sit above the zero baseline (top < 17)');
-    assert.ok(negativeBarTops.length > 0 && negativeBarTops.every(top => top === 17), 'every negative month\'s bar should be pinned at the zero baseline (top === 17), growing downward via height alone');
+    // Regression: neither the bars nor the dot use CSS `position` at all
+    // (no absolute, no relative) anywhere in this strip -- a second real
+    // inbox screenshot, version-stamped to confirm it was rendered by the
+    // exact commit that had already switched the bars from `top`+`bottom`
+    // to `top`+explicit `height`, still showed every bar hanging from the
+    // same top edge regardless of sign. That ruled out `bottom`
+    // specifically: `position: absolute` itself wasn't taking effect in
+    // Gmail's app in this nested-table context, so every offset was
+    // silently ignored. Rebuilt around `valign` (a table-cell alignment,
+    // not a CSS position) and a plain negative `margin-top` to overlay the
+    // dot -- neither depends on `position` working at all.
+    const stripSection = html.slice(html.indexOf('Last 12 Months'), html.indexOf('Liability Accounts'));
+    assert.doesNotMatch(stripSection, /position:/, 'the 12-month strip must not rely on CSS position at all');
+
+    // Every positive month's bar fill sits in the upper (valign="bottom")
+    // cell, colored teal; every negative month's sits in the lower
+    // (valign="top") cell, colored coral -- counted directly rather than by
+    // reading an offset, since there's no offset anymore. Fixture has 7
+    // positive months (Oct, Jan, Mar, Apr, Jun, Jul, Sep) and 5 negative
+    // (Nov, Dec, Feb, May, Aug).
+    const upperBarMatches = [...stripSection.matchAll(/height:(\d+)px; background:#0EA894; border-radius:2px 2px 0 0;/g)];
+    const lowerBarMatches = [...stripSection.matchAll(/height:(\d+)px; background:#C4573F; border-radius:0 0 2px 2px;/g)];
+    assert.equal(upperBarMatches.length, 7, 'expected one upper-half bar per positive month');
+    assert.equal(lowerBarMatches.length, 5, 'expected one lower-half bar per negative month');
+    assert.ok(upperBarMatches.some(m => Number(m[1]) > 0), 'at least one positive bar should have real height');
+    assert.ok(lowerBarMatches.some(m => Number(m[1]) > 0), 'at least one negative bar should have real height');
+    // April (+1600) is the largest-magnitude month in the fixture, so its
+    // bar should hit the full 17px half-height.
+    assert.ok(upperBarMatches.some(m => Number(m[1]) === 17), 'the largest positive month should reach the full bar height');
+
+    // The dot: one neutral-navy 5px circle per month, still built as a
+    // spacer-above/dot/spacer-below stack that always sums to the box's
+    // full height (35px) regardless of where the dot lands in it.
+    const dotCircles = [...stripSection.matchAll(/border-radius:50%; background:#33404A; border:1px solid #FFFFFF;/g)];
+    assert.equal(dotCircles.length, 12, 'expected one running-total dot per month');
+    const dotSpacers = [...stripSection.matchAll(/margin-top:-35px;">\s*<tr><td height="(\d+)"[^>]*>&nbsp;<\/td><\/tr>\s*<tr><td height="5"[\s\S]*?<\/tr>\s*<tr><td height="(\d+)"[^>]*>&nbsp;<\/td><\/tr>/g)];
+    assert.equal(dotSpacers.length, 12, 'expected one spacer-above/spacer-below pair per month');
+    assert.ok(dotSpacers.every(m => Number(m[1]) + 5 + Number(m[2]) === 35), 'each month\'s spacer-above + dot + spacer-below must sum to the full 35px box height');
+    const spacerAboves = dotSpacers.map(m => Number(m[1]));
+    assert.ok(spacerAboves.some(s => s < 15), 'a dot should sit in the upper half of the box when the running total is positive');
+    assert.ok(spacerAboves.some(s => s > 15), 'a dot should sit in the lower half of the box when the running total is negative');
   });
 
   test('Spend vs Budget folds categories under their parent group with a group total', () => {
