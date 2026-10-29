@@ -1,7 +1,7 @@
 const _ = require('lodash');
 const { groupBudgetCategoriesByParent } = require('./actualService');
 const {
-  renderBudgetGroup, computeBudgetTotalRow, renderBudgetRow, formatCurrency, ACCENT, AMBER, MUTED
+  renderBudgetGroup, computeBudgetTotalRow, renderBudgetRow, renderEmailFooter, formatCurrency, ACCENT, AMBER, MUTED
 } = require('./emailReport');
 const { computeMonthProgress, computeCategoriesToWatch, weekRangeLabel } = require('./budgetSummary');
 
@@ -95,9 +95,7 @@ function buildSummaryReportHtml({
   }
 
   html += `</div>
-    <div style="padding:14px 26px 20px; text-align:center;">
-      <div style="font-size:11.5px; color:#A7AEB6;">Actual Budget Smart Sync · sent from your self-hosted instance</div>
-    </div>
+    ${renderEmailFooter()}
   </div>
 </div>`;
 

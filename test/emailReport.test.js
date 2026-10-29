@@ -1,6 +1,7 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { buildReportHtml, parseRecipients, renderBudgetRow } = require('../src/emailReport');
+const { buildReportHtml, parseRecipients, renderBudgetRow, renderEmailFooter } = require('../src/emailReport');
+const { version } = require('../package.json');
 
 const accounts = [{ id: 'acc-1', name: 'Checking' }, { id: 'acc-2', name: 'Savings' }];
 const accountBalances = { 'acc-1': 1250.50, 'acc-2': -42.00 };
@@ -452,5 +453,32 @@ describe('renderBudgetRow', () => {
     const cat = { name: 'Groceries', budgeted: 500, spent: 400, remaining: 100, pctUsed: 80, overBudget: false };
     const html = renderBudgetRow(cat);
     assert.doesNotMatch(html, /background:#1E2A32; opacity:0.45;/);
+  });
+});
+
+describe('renderEmailFooter', () => {
+  // So a sync email can be compared directly against the dashboard footer
+  // (GET /api/version) to confirm a deployed fix actually reached this
+  // instance, rather than guessing from send time whether a report
+  // predates a deploy -- the exact ambiguity that came up confirming the
+  // 12-month strip fix.
+  const originalCommit = process.env.GIT_COMMIT;
+  function restoreEnv() {
+    if (originalCommit === undefined) delete process.env.GIT_COMMIT;
+    else process.env.GIT_COMMIT = originalCommit;
+  }
+
+  test('shows the version alone when GIT_COMMIT is unset', () => {
+    delete process.env.GIT_COMMIT;
+    const footer = renderEmailFooter();
+    restoreEnv();
+    assert.match(footer, new RegExp(`Actual Budget Smart Sync v${version} · sent from your self-hosted instance`));
+  });
+
+  test('appends a short commit hash when GIT_COMMIT is set', () => {
+    process.env.GIT_COMMIT = 'abcdef1234567890';
+    const footer = renderEmailFooter();
+    restoreEnv();
+    assert.match(footer, new RegExp(`Actual Budget Smart Sync v${version} \\(abcdef1\\) · sent from your self-hosted instance`));
   });
 });
