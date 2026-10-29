@@ -1,6 +1,7 @@
 const nodemailer = require('nodemailer');
 const _ = require('lodash');
 const { groupBudgetCategoriesByParent } = require('./actualService');
+const { version } = require('../package.json');
 
 const ACCENT = '#0EA894';
 const CORAL = '#C4573F';
@@ -11,6 +12,22 @@ const DOT_PALETTE = ['#0EA894', '#4C8DAE', '#8B7FD1', '#E8A33D', '#9C7A54'];
 function formatCurrency(amount) {
   const text = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return amount < 0 ? `-$${text}` : `$${text}`;
+}
+
+// Same `v${version}${commit ? ' (commit)' : ''}` format the dashboard
+// footer already shows (GET /api/version), so an email and a screenshot of
+// the dashboard can be compared directly -- e.g. confirming a fix that
+// shipped actually reached this instance, rather than guessing from send
+// time whether a report predates a deploy. GIT_COMMIT is baked in at image
+// build time (Dockerfile/publish.yml); package.json's version only moves on
+// a merge to main, so commit is what actually distinguishes two sends of
+// the same version.
+function renderEmailFooter() {
+  const commit = process.env.GIT_COMMIT ? process.env.GIT_COMMIT.slice(0, 7) : null;
+  const versionText = `v${version}${commit ? ` (${commit})` : ''}`;
+  return `<div style="padding:14px 26px 20px; text-align:center;">
+      <div style="font-size:11.5px; color:#A7AEB6;">Actual Budget Smart Sync ${versionText} · sent from your self-hosted instance</div>
+    </div>`;
 }
 
 // Flexbox (display:flex/align-items) isn't reliably honored by every mail
@@ -446,9 +463,7 @@ function buildReportHtml({
   }
 
   html += `</div>
-    <div style="padding:14px 26px 20px; text-align:center;">
-      <div style="font-size:11.5px; color:#A7AEB6;">Actual Budget Smart Sync · sent from your self-hosted instance</div>
-    </div>
+    ${renderEmailFooter()}
   </div>
 </div>`;
 
@@ -482,6 +497,6 @@ module.exports = {
   buildReportHtml, sendReport, parseRecipients,
   // Exported so the Monthly Summary email (src/summaryReport.js) can reuse
   // the exact same visual components instead of duplicating them.
-  renderBudgetRow, renderBudgetGroup, computeBudgetTotalRow, formatCurrency,
+  renderBudgetRow, renderBudgetGroup, computeBudgetTotalRow, renderEmailFooter, formatCurrency,
   ACCENT, CORAL, AMBER, MUTED
 };
