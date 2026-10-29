@@ -235,16 +235,25 @@ function renderIncomeVsSpendChart(recentIncomeVsSpend) {
 // half / 1px baseline row / lower half) with the colored fill `valign`ed to
 // whichever half's outer edge it should touch -- `valign` is a table-cell
 // alignment, not a CSS position, and is about as close to universally
-// supported as HTML markup gets. The dot is a second 3-row spacer table
-// (blank space / 5px dot / blank space) pulled back up over the bar table
-// with a plain negative `margin-top` -- stacking two flow elements at the
-// same visual spot without taking either out of flow, unlike `position`.
+// supported as HTML markup gets.
+//
+// The dot does NOT overlay the bar. A first attempt pulled a second spacer
+// table back up over the bar table with a negative `margin-top` -- a real
+// inbox render showed that didn't work either (the dot table rendered in
+// its own flow position below the bars instead of on top of them, visually
+// detaching the two). Overlap of any kind -- `position`, negative margins --
+// isn't reliably honored in this client. The dot now sits in its own
+// narrow column immediately to the right of the bar, same row, via a plain
+// two-cell table: no overlap needed at all, since the two never occupy the
+// same space. `valign` is the only alignment mechanism this now depends on,
+// already confirmed working (the bars themselves diverge correctly).
 function renderIncomeVsSpend12MoStrip(months) {
   if (months.length === 0) return '';
   const n = months.length;
   const barHalf = 17; // px — height of each half of the baseline-pivoted bar area
   const dotHalf = 14; // px — the dot's own usable half-range, slightly inside barHalf
   const boxHeight = barHalf * 2 + 1; // the two halves plus the 1px baseline row
+  const dotColWidth = 7; // px — just wide enough for the 5px dot plus a sliver of breathing room
 
   const maxAbsNet = Math.max(...months.map(m => Math.abs(m.net)), 0);
   let cumulative = 0;
@@ -266,16 +275,22 @@ function renderIncomeVsSpend12MoStrip(months) {
     const spacerBelow = Math.max(0, boxHeight - 5 - spacerAbove);
 
     return `<td style="width:${(100 / n).toFixed(4)}%; padding:0 1px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-        <tr><td height="${barHalf}" valign="bottom" style="height:${barHalf}px; vertical-align:bottom; line-height:0; font-size:0;">${upperBar}</td></tr>
-        <tr><td height="1" style="height:1px; line-height:1px; font-size:1px; background:#F0EFEB;">&nbsp;</td></tr>
-        <tr><td height="${barHalf}" valign="top" style="height:${barHalf}px; vertical-align:top; line-height:0; font-size:0;">${lowerBar}</td></tr>
-      </table>
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:-${boxHeight}px;">
-        <tr><td height="${spacerAbove}" style="height:${spacerAbove}px; line-height:1px; font-size:1px;">&nbsp;</td></tr>
-        <tr><td height="5" style="height:5px; text-align:center; line-height:0; font-size:0;"><div style="width:5px; height:5px; margin:0 auto; border-radius:50%; background:#33404A; border:1px solid #FFFFFF;"></div></td></tr>
-        <tr><td height="${spacerBelow}" style="height:${spacerBelow}px; line-height:1px; font-size:1px;">&nbsp;</td></tr>
-      </table>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td height="${barHalf}" valign="bottom" style="height:${barHalf}px; vertical-align:bottom; line-height:0; font-size:0;">${upperBar}</td></tr>
+            <tr><td height="1" style="height:1px; line-height:1px; font-size:1px; background:#F0EFEB;">&nbsp;</td></tr>
+            <tr><td height="${barHalf}" valign="top" style="height:${barHalf}px; vertical-align:top; line-height:0; font-size:0;">${lowerBar}</td></tr>
+          </table>
+        </td>
+        <td width="${dotColWidth}" style="width:${dotColWidth}px;">
+          <table role="presentation" width="${dotColWidth}" cellpadding="0" cellspacing="0">
+            <tr><td height="${spacerAbove}" style="height:${spacerAbove}px; line-height:1px; font-size:1px;">&nbsp;</td></tr>
+            <tr><td height="5" style="height:5px; line-height:0; font-size:0;"><div style="width:5px; height:5px; border-radius:50%; background:#33404A; border:1px solid #FFFFFF;"></div></td></tr>
+            <tr><td height="${spacerBelow}" style="height:${spacerBelow}px; line-height:1px; font-size:1px;">&nbsp;</td></tr>
+          </table>
+        </td>
+      </tr></table>
       <div style="text-align:center; font-size:8px; color:${MUTED}; margin-top:2px;">${monthInitial(m.month)}</div>
       <div style="text-align:center; font-size:6.5px; font-weight:700; color:${color}; line-height:1.3; margin-top:1px;">${compactSigned(m.net)}</div>
       <div style="text-align:center; font-size:6px; color:${MUTED}; line-height:1.3;">${compactSigned(runningTotal)}</div>
