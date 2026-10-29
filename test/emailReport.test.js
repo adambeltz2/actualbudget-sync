@@ -325,8 +325,12 @@ describe('buildReportHtml', () => {
     // specifically: `position: absolute` itself wasn't taking effect in
     // Gmail's app in this nested-table context, so every offset was
     // silently ignored. Rebuilt around `valign` (a table-cell alignment,
-    // not a CSS position) and a plain negative `margin-top` to overlay the
-    // dot -- neither depends on `position` working at all.
+    // not a CSS position). A first attempt still overlaid the dot on the
+    // bar with a negative `margin-top`, which a third real render showed
+    // *also* isn't honored here -- the dot rendered in its own flow
+    // position below the bars instead of on top of them. The dot now sits
+    // in its own column beside the bar, same row, so nothing needs to
+    // overlap at all.
     const stripSection = html.slice(html.indexOf('Last 12 Months'), html.indexOf('Liability Accounts'));
     assert.doesNotMatch(stripSection, /position:/, 'the 12-month strip must not rely on CSS position at all');
 
@@ -348,10 +352,11 @@ describe('buildReportHtml', () => {
 
     // The dot: one neutral-navy 5px circle per month, still built as a
     // spacer-above/dot/spacer-below stack that always sums to the box's
-    // full height (35px) regardless of where the dot lands in it.
+    // full height (35px) regardless of where the dot lands in it -- now in
+    // its own column table instead of an overlay.
     const dotCircles = [...stripSection.matchAll(/border-radius:50%; background:#33404A; border:1px solid #FFFFFF;/g)];
     assert.equal(dotCircles.length, 12, 'expected one running-total dot per month');
-    const dotSpacers = [...stripSection.matchAll(/margin-top:-35px;">\s*<tr><td height="(\d+)"[^>]*>&nbsp;<\/td><\/tr>\s*<tr><td height="5"[\s\S]*?<\/tr>\s*<tr><td height="(\d+)"[^>]*>&nbsp;<\/td><\/tr>/g)];
+    const dotSpacers = [...stripSection.matchAll(/<tr><td height="(\d+)" style="height:\d+px; line-height:1px; font-size:1px;">&nbsp;<\/td><\/tr>\s*<tr><td height="5"[\s\S]*?<\/tr>\s*<tr><td height="(\d+)" style="height:\d+px; line-height:1px; font-size:1px;">&nbsp;<\/td><\/tr>/g)];
     assert.equal(dotSpacers.length, 12, 'expected one spacer-above/spacer-below pair per month');
     assert.ok(dotSpacers.every(m => Number(m[1]) + 5 + Number(m[2]) === 35), 'each month\'s spacer-above + dot + spacer-below must sum to the full 35px box height');
     const spacerAboves = dotSpacers.map(m => Number(m[1]));
