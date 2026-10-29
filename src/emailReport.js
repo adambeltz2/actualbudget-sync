@@ -75,7 +75,16 @@ function renderBudgetRow(cat, { nested = false, pctMonthElapsed = null } = {}) {
   const nameSize = nested ? 12 : 13;
   const nameWeight = nested ? 400 : 600;
   const statusSize = nested ? 11 : 12;
-  const tick = pctMonthElapsed == null ? '' : `<div style="position:absolute; left:${pctMonthElapsed}%; top:-2px; bottom:-2px; width:2px; background:#1E2A32; opacity:0.45;"></div>`;
+  // Both the fill and the tick below use an explicit pixel `height` rather
+  // than pinning `top` and `bottom` together to stretch — the same fix
+  // applied to the 12-month strip's bars after a real inbox screenshot
+  // showed Gmail's app doesn't honor a `bottom` offset on an absolutely-
+  // positioned element the way it honors `top`. Without an explicit
+  // height, an element relying on `top`/`bottom` alone to size itself
+  // would collapse to near-zero height there instead of filling its
+  // parent -- which would hit every budget bar in every email, not just
+  // one chart, so it's fixed here even without its own direct report.
+  const tick = pctMonthElapsed == null ? '' : `<div style="position:absolute; left:${pctMonthElapsed}%; top:-2px; height:${barHeight + 4}px; width:2px; background:#1E2A32; opacity:0.45;"></div>`;
   const tag = pctMonthElapsed == null ? null : paceTag(cat.pctUsed, pctMonthElapsed);
   return `<div style="margin-bottom:12px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:5px;">
@@ -87,7 +96,7 @@ function renderBudgetRow(cat, { nested = false, pctMonthElapsed = null } = {}) {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       <tr>
         <td style="position:relative; height:${barHeight}px; background:#F0EFEB; border-radius:4px;">
-          <div style="position:absolute; left:0; top:0; bottom:0; width:${pct}%; background:${barColor}; border-radius:4px;">
+          <div style="position:absolute; left:0; top:0; height:${barHeight}px; width:${pct}%; background:${barColor}; border-radius:4px;">
             ${labelFitsInBar ? `<div style="font-size:9px; font-weight:700; color:white; line-height:${barHeight}px; text-align:right; padding-right:6px; white-space:nowrap;">${pctLabel}</div>` : ''}
           </div>
           ${tick}
@@ -115,7 +124,7 @@ function renderBudgetGroup(group, pctMonthElapsed = null) {
     return renderBudgetRow(group.categories[0], { pctMonthElapsed });
   }
   return `<div style="margin-bottom:16px;">
-    ${renderBudgetRow({ ...group, name: group.groupName })}
+    ${renderBudgetRow(group)}
     <div style="margin-left:4px; padding-left:12px; border-left:2px solid #F0EFEB;">
       ${group.categories.map(cat => renderBudgetRow(cat, { nested: true, pctMonthElapsed })).join('')}
     </div>
@@ -196,6 +205,13 @@ function renderIncomeVsSpendChart(recentIncomeVsSpend) {
 // so nothing rendered at all. Dots built from plain positioned <div>s
 // inside each month's own box, like everything else in this email, are the
 // tradeoff: no connecting line between months, but guaranteed to render.
+// Bars are positioned with `top` alone for both positive and negative
+// months (never `bottom`) for the same reason: a real inbox screenshot
+// showed every bar — positive and negative alike — hanging down from the
+// box's top edge regardless of sign, because Gmail's app doesn't honor a
+// `bottom` offset on an absolutely-positioned element the way `top` is.
+// Computing an explicit `top` for the positive case too (barHalf - barPx,
+// vs. just barHalf for negative) sidesteps that entirely.
 function renderIncomeVsSpend12MoStrip(months) {
   if (months.length === 0) return '';
   const n = months.length;
@@ -211,9 +227,9 @@ function renderIncomeVsSpend12MoStrip(months) {
     const barPx = maxAbsNet > 0 ? Math.round((Math.abs(m.net) / maxAbsNet) * barHalf) : 0;
     const isPositive = m.net >= 0;
     const color = isPositive ? ACCENT : CORAL;
-    const barStyle = isPositive
-      ? `bottom:${barHalf}px; height:${barPx}px; border-radius:2px 2px 0 0;`
-      : `top:${barHalf}px; height:${barPx}px; border-radius:0 0 2px 2px;`;
+    const barTop = isPositive ? barHalf - barPx : barHalf;
+    const barRadius = isPositive ? '2px 2px 0 0' : '0 0 2px 2px';
+    const barStyle = `top:${barTop}px; height:${barPx}px; border-radius:${barRadius};`;
     const runningTotal = cumulativeByMonth[i];
     const dotOffset = maxAbsCumulative > 0 ? (runningTotal / maxAbsCumulative) * dotHalf : 0;
     const dotTop = barHalf - dotOffset; // px from the box's top; above barHalf = positive, below = negative

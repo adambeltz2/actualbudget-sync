@@ -239,6 +239,22 @@ describe('groupBudgetCategoriesByParent', () => {
     const [group] = groupBudgetCategoriesByParent([uncategorized]);
     assert.equal(group.groupName, 'Other');
   });
+
+  // Regression: both the dashboard (public/index.html) and the email
+  // report (src/emailReport.js) feed a multi-category group straight into
+  // the same per-category row renderer an individual category uses, which
+  // reads `.name` -- the email used to map groupName -> name inline before
+  // doing that, and the dashboard simply never did, so its group-total
+  // rows rendered with a blank label. `name` is asserted here, at the one
+  // function both consumers share, so neither has to remember that mapping
+  // on its own again.
+  test('each group carries a `name` field identical to its `groupName`, for consumers that render it as a row', () => {
+    const groceries = cat({ groupName: 'Food & Dining', budgeted: 500, spent: 480, remaining: 20 });
+    const dining = cat({ groupName: 'Food & Dining', budgeted: 200, spent: 250, remaining: -50 });
+    const [group] = groupBudgetCategoriesByParent([groceries, dining]);
+    assert.equal(group.name, 'Food & Dining');
+    assert.equal(group.name, group.groupName);
+  });
 });
 
 describe('resolvePayeeNames', () => {

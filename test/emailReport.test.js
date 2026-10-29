@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { buildReportHtml, parseRecipients } = require('../src/emailReport');
+const { buildReportHtml, parseRecipients, renderBudgetRow } = require('../src/emailReport');
 
 const accounts = [{ id: 'acc-1', name: 'Checking' }, { id: 'acc-2', name: 'Savings' }];
 const accountBalances = { 'acc-1': 1250.50, 'acc-2': -42.00 };
@@ -333,6 +333,21 @@ describe('buildReportHtml', () => {
     // in compact (+/-NNN, no $ or commas) form.
     assert.match(html, />\+300</); // October's own net
     assert.match(html, />-1700</); // December's rolling total
+
+    // Regression: the bars themselves must diverge from the shared zero
+    // baseline the same way the dot does -- a real inbox screenshot showed
+    // every bar hanging down from the box's top edge regardless of sign,
+    // because a `bottom` offset on an absolutely-positioned div isn't
+    // honored by Gmail's app the way `top` is. Both signs now compute an
+    // explicit `top` (positive: above the baseline, so top < 17; negative:
+    // pinned at the baseline, top === 17) instead of toggling between
+    // `top`/`bottom` by sign.
+    const barMatches = [...html.matchAll(/left:2px; right:2px; top:(-?[\d.]+)px; height:(\d+)px;[^>]*background:(#[0-9A-F]+);/g)];
+    assert.equal(barMatches.length, 12, 'expected one bar per month');
+    const positiveBarTops = barMatches.filter(m => m[3] === '#0EA894').map(m => Number(m[1]));
+    const negativeBarTops = barMatches.filter(m => m[3] === '#C4573F').map(m => Number(m[1]));
+    assert.ok(positiveBarTops.length > 0 && positiveBarTops.every(top => top < 17), 'every positive month\'s bar should sit above the zero baseline (top < 17)');
+    assert.ok(negativeBarTops.length > 0 && negativeBarTops.every(top => top === 17), 'every negative month\'s bar should be pinned at the zero baseline (top === 17), growing downward via height alone');
   });
 
   test('Spend vs Budget folds categories under their parent group with a group total', () => {
@@ -402,5 +417,40 @@ describe('parseRecipients', () => {
   test('handles empty or missing input without throwing', () => {
     assert.equal(parseRecipients(''), '');
     assert.equal(parseRecipients(undefined), '');
+  });
+});
+
+describe('renderBudgetRow', () => {
+  // Regression: the bar fill and the pace-tick mark both used to rely on
+  // `top`/`bottom` together (no explicit height) to stretch to their
+  // parent's height -- the exact mechanism that collapsed the 12-month
+  // strip's bars in Gmail's app (a `bottom` offset on an absolutely-
+  // positioned element isn't honored there the way `top` is). Both now use
+  // an explicit pixel `height` instead, so they can't collapse the same way
+  // even if `bottom` is ignored.
+  test('the bar fill uses an explicit pixel height, never a bottom offset', () => {
+    const cat = { name: 'Groceries', budgeted: 500, spent: 400, remaining: 100, pctUsed: 80, overBudget: false };
+    const html = renderBudgetRow(cat);
+    assert.doesNotMatch(html, /top:0;\s*bottom:0;/);
+    assert.match(html, /top:0; height:13px; width:80%; background:#0EA894;/);
+  });
+
+  test('a nested row uses its own shorter explicit height', () => {
+    const cat = { name: 'Groceries', budgeted: 500, spent: 400, remaining: 100, pctUsed: 80, overBudget: false };
+    const html = renderBudgetRow(cat, { nested: true });
+    assert.match(html, /top:0; height:11px; width:80%; background:#0EA894;/);
+  });
+
+  test('the pace-tick mark (Monthly/Weekly Summary only) also uses an explicit height, never top/bottom together', () => {
+    const cat = { name: 'Groceries', budgeted: 500, spent: 400, remaining: 100, pctUsed: 80, overBudget: false };
+    const html = renderBudgetRow(cat, { pctMonthElapsed: 60 });
+    assert.doesNotMatch(html, /top:-2px;\s*bottom:-2px;/);
+    assert.match(html, /left:60%; top:-2px; height:17px; width:2px;/); // barHeight(13) + 4
+  });
+
+  test('no pctMonthElapsed means no tick mark at all, and the daily sync report never passes one', () => {
+    const cat = { name: 'Groceries', budgeted: 500, spent: 400, remaining: 100, pctUsed: 80, overBudget: false };
+    const html = renderBudgetRow(cat);
+    assert.doesNotMatch(html, /background:#1E2A32; opacity:0.45;/);
   });
 });
