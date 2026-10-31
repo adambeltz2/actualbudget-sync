@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budget Templates — Actual Budget Smart Sync</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap">
+  <style>
+    :root {
+      --bg: #F1F0EC; --card-bg: #FFFFFF; --border: #F0EFEB; --row-alt: #F8F7F4;
+      --text: #1E2A32; --text-secondary: #33404A; --text-muted: #8A93A0;
+      --accent: #0EA894; --accent-dark: #0C8E7D; --accent-soft: #E4F5F2;
+      --positive: #1C8C74; --positive-soft: #E4F5F2;
+      --negative: #C4573F; --negative-soft: #FBECE8;
+      --warning: #C98A2E; --warning-soft: #FBF1E2;
+      --shadow: 0 1px 2px rgba(30,42,50,0.04), 0 8px 24px rgba(30,42,50,0.06);
+      --overlay: rgba(30, 42, 50, 0.45);
+    }
+    html.dark {
+      --bg: #171D21; --card-bg: #1F262B; --border: #2C363D; --row-alt: #232B30;
+      --text: #EDEFF0; --text-secondary: #C7CDD1; --text-muted: #7C8890;
+      --accent: #14BFA8; --accent-dark: #0EA894; --accent-soft: #16302C;
+      --positive: #2FBF9B; --positive-soft: #16302C;
+      --negative: #E0806A; --negative-soft: #34211E;
+      --warning: #E0A94D; --warning-soft: #332817;
+      --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px rgba(0,0,0,0.3);
+      --overlay: rgba(0, 0, 0, 0.6);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 40px 24px 64px;
+      background: var(--bg); color: var(--text);
+      font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
+    }
+    .shell { max-width: 1120px; margin: 0 auto; }
+    .num { font-family: 'Sora', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+    a { color: var(--accent); }
+    .card { background: var(--card-bg); border-radius: 16px; box-shadow: var(--shadow); padding: 24px 26px; margin-bottom: 20px; min-width: 0; }
+    .label-caps { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+    .field-hint { font-size: 12.5px; color: var(--text-muted); line-height: 1.55; margin: 0; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer; padding: 9px 14px; border-radius: 10px; font-weight: 600; font-size: 13.5px; font-family: inherit; text-decoration: none; }
+    .btn-ghost { background: var(--card-bg); color: var(--text-secondary); box-shadow: var(--shadow); }
+    .error-banner {
+      background: color-mix(in srgb, var(--negative) 12%, var(--card-bg));
+      border: 1px solid color-mix(in srgb, var(--negative) 35%, var(--card-bg));
+      color: var(--negative); font-size: 14px; padding: 12px 14px; border-radius: 10px; margin-bottom: 24px;
+    }
+    .notice-banner {
+      background: color-mix(in srgb, var(--accent) 10%, var(--card-bg));
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--card-bg));
+      color: var(--accent-dark); font-size: 14px; padding: 14px 16px; border-radius: 10px; margin-bottom: 24px;
+    }
+    .navRow { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; flex-wrap: wrap; gap: 14px; }
+    .navLinks { display: flex; gap: 8px; flex-wrap: wrap; }
+    [hidden] { display: none !important; }
+
+    .summary-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+    .stat-tile { background: var(--card-bg); border-radius: 14px; box-shadow: var(--shadow); padding: 14px 16px; min-width: 0; }
+    .stat-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+    .stat-value { font-size: 22px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .stat-value.positive { color: var(--positive); }
+    .stat-value.warn { color: var(--warning); }
+    .stat-value.muted { color: var(--text-muted); }
+
+    .group { margin-bottom: 20px; }
+    .group-title { font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-muted); padding: 0 2px 8px; }
+    .gridCard { background: var(--card-bg); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+
+    .row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr) 92px 92px 110px 40px;
+      gap: 10px; align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .row:last-child { border-bottom: none; }
+    .row.header-row {
+      background: var(--row-alt); font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .cat-name { font-weight: 600; font-size: 13.5px; min-width: 0; }
+    .template-desc { min-width: 0; }
+    .template-type {
+      display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.03em;
+      color: var(--accent-dark); background: var(--accent-soft);
+      border-radius: 999px; padding: 2px 8px; margin-bottom: 3px;
+    }
+    .template-type.gap { color: var(--text-muted); background: var(--border); }
+    .template-type.unknown { color: var(--warning); background: var(--warning-soft); }
+    .template-rule { font-size: 12.5px; color: var(--text-secondary); line-height: 1.35; word-break: break-word; }
+    .amt { text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .amt-label { font-size: 9.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 1px; }
+    .pill { font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 4px 10px; text-align: center; white-space: nowrap; }
+    .pill.applied { color: var(--positive); background: var(--positive-soft); }
+    .pill.needs-apply { color: var(--warning); background: var(--warning-soft); }
+    .pill.gap { color: var(--text-muted); background: var(--border); }
+    .edit-btn {
+      width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--row-alt);
+      color: var(--text-secondary); font-size: 14px; cursor: pointer; justify-self: end;
+    }
+    .edit-btn:hover { background: var(--border); color: var(--text); }
+    .edit-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+    @media (max-width: 680px) {
+      .row { grid-template-columns: 1fr auto; gap: 6px 10px; }
+      .row.header-row { display: none; }
+      .amt { text-align: left; }
+      .amt-label { display: inline; margin-right: 6px; }
+      .edit-btn { grid-column: 2; grid-row: 1 / span 4; align-self: start; }
+    }
+
+    /* Builder modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: var(--overlay); display: flex; align-items: flex-start;
+      justify-content: center; padding: 24px 16px; overflow-y: auto; z-index: 30;
+    }
+    .modal-overlay[hidden] { display: none; }
+    .modal { background: var(--card-bg); border-radius: 16px; width: 100%; max-width: 480px; padding: 22px; margin: auto 0; box-shadow: var(--shadow); }
+    .modal h2 { font-size: 17px; font-weight: 800; margin: 0 0 2px; }
+    .modal .modal-sub { font-size: 12.5px; color: var(--text-muted); margin: 0 0 18px; }
+    .field-group { margin-bottom: 14px; }
+    .field-group label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px; }
+    .field-row { display: flex; gap: 8px; }
+    .field-row > * { flex: 1; min-width: 0; }
+    select, input[type="text"], input[type="number"], input[type="month"], input[type="date"] {
+      width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--row-alt); color: var(--text); font-size: 13.5px; font-family: inherit;
+    }
+    select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); margin: 6px 0; }
+    .check-row input { width: auto; }
+    .sub-fields { padding: 10px 12px; margin-top: 8px; border-left: 2px solid var(--border); background: var(--row-alt); border-radius: 0 8px 8px 0; }
+    .preview-box {
+      margin-top: 4px; padding: 11px 13px; background: var(--row-alt); border: 1px solid var(--border);
+      border-radius: 8px; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 12.5px;
+      color: var(--accent-dark); word-break: break-word; min-height: 20px;
+    }
+    .preview-caption { font-size: 11px; color: var(--text-muted); margin: 10px 0 4px; line-height: 1.5; }
+    .modal-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; }
+    .btn.primary { background: var(--accent); border: 1px solid var(--accent); color: #06231F; }
+    .btn.plain { background: var(--row-alt); border: 1px solid var(--border); color: var(--text); }
+    .btn.danger { background: transparent; border: none; color: var(--negative); padding-left: 4px; padding-right: 4px; }
+    .btn-group { display: flex; gap: 10px; }
+    .save-error { font-size: 12.5px; color: var(--negative); margin: 10px 0 0; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="navRow">
+      <div>
+        <div class="num" style="font-size:22px; font-weight:800;">📋 Budget Templates</div>
+        <p style="font-size:13.5px; color:var(--text-muted); margin:2px 0 0; max-width:62ch;">What each category's budget template says it should be this month, versus what's actually budgeted — plus a builder to create or edit a template without hand-writing the syntax.</p>
+      </div>
+      <div class="navLinks">
+        <button id="themeToggleBtn" title="Toggle dark mode" class="btn btn-ghost">🌙</button>
+        <a href="/" class="btn btn-ghost">Dashboard</a>
+        <a href="/budget-review.html" class="btn btn-ghost">📋 Budget Review</a>
+        <a href="/explorer.html" class="btn btn-ghost">Data Explorer</a>
+        <a href="/retirement.html" class="btn btn-ghost">🎯 Retirement Modeling</a>
+        <a href="/monte-carlo.html" class="btn btn-ghost">🎲 Monte Carlo</a>
+        <a href="/conscious-spending.html" class="btn btn-ghost">🧭 Conscious Spending</a>
+        <a href="/trends.html" class="btn btn-ghost">📈 Trends</a>
+        <a href="/networth.html" class="btn btn-ghost">💰 Net Worth</a>
+        <a href="/settings.html" class="btn btn-ghost">⚙ Settings</a>
+        <button id="logoutBtn" class="btn btn-ghost">Logout</button>
+      </div>
+    </div>
+
+    <div id="errorBanner" class="error-banner" hidden></div>
+    <div id="notConfiguredMsg" class="notice-banner" hidden>
+      Connect Actual Budget in <a href="/settings.html">Settings</a> to see your Budget Templates.
+    </div>
+    <div id="viewerNotice" class="notice-banner" hidden>Read-only — editing templates requires admin access.</div>
+
+    <div id="templatesBody" hidden>
+      <p class="field-hint" style="margin-bottom:16px;">Writing a template here only defines the rule in that category's note — Actual's own "Apply Template" action (not part of the API this app connects through) is still what turns it into a budgeted amount. Status shows <strong>Needs Apply</strong> until a category's current budget matches what the rule computes to. Saving always replaces that category's entire note.</p>
+
+      <div class="summary-strip">
+        <div class="stat-tile"><div class="stat-label">Categories Shown</div><div class="stat-value" id="statTotal">0</div></div>
+        <div class="stat-tile"><div class="stat-label">Applied &amp; Current</div><div class="stat-value positive" id="statApplied">0</div></div>
+        <div class="stat-tile"><div class="stat-label">Needs Apply</div><div class="stat-value warn" id="statNeeds">0</div></div>
+        <div class="stat-tile"><div class="stat-label">No Template</div><div class="stat-value muted" id="statGap">0</div></div>
+      </div>
+
+      <div id="groups"></div>
+    </div>
+
+    <footer style="display:flex; align-items:center; justify-content:center; gap:14px; font-size:12px; color:var(--text-muted); margin-top:28px; padding-top:20px; border-top:1px solid var(--border);">
+      <span>Actual Budget Smart Sync <span id="appVersion"></span></span>
+      <a href="https://github.com/adambeltz2/actualbudget-sync" target="_blank" rel="noopener" style="color:var(--text-muted);">GitHub</a>
+      <a href="https://www.buymeacoffee.com/adambeltz" target="_blank" rel="noopener" style="color:var(--text-muted);">☕ Buy Me a Coffee</a>
+    </footer>
+  </div>
+
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <h2 id="modalTitle">Edit Template</h2>
+      <p class="modal-sub" id="modalSub"></p>
+
+      <div class="field-group">
+        <label for="typeSelect">Template Type</label>
+        <select id="typeSelect">
+          <option value="none">None (remove template)</option>
+          <option value="simple">Simple — a flat monthly amount</option>
+          <option value="periodic">Periodic — repeats on a custom cadence</option>
+          <option value="by">By Date — save toward a target by a month</option>
+          <option value="spend">Spend — save, then draw down after a date</option>
+          <option value="percentage">Percentage — a % of another category or income</option>
+          <option value="schedule">Schedule — tied to a scheduled transaction</option>
+          <option value="average">Average — avg of the last N months' spend</option>
+          <option value="copy">Copy — same as N months ago</option>
+          <option value="remainder">Remainder — splits what's left in To Budget</option>
+          <option value="goal">Goal — a target balance (not a monthly budget rule)</option>
+        </select>
+      </div>
+
+      <div id="dynamicFields"></div>
+
+      <div class="field-group" id="priorityField">
+        <label for="priorityInput">Priority (optional — only matters with multiple templates)</label>
+        <input type="number" id="priorityInput" placeholder="e.g. 1">
+      </div>
+
+      <p class="preview-caption">This will be written to the category's note as:</p>
+      <div class="preview-box" id="previewBox">—</div>
+      <p class="preview-caption">Saving replaces the category's entire note with this line — any other text currently in that note will be lost.</p>
+      <p class="save-error" id="saveError" hidden></p>
+
+      <div class="modal-actions">
+        <button class="btn danger" id="deleteBtn" hidden>Remove Template</button>
+        <div class="btn-group" style="margin-left:auto;">
+          <button class="btn plain" id="cancelBtn">Cancel</button>
+          <button class="btn primary" id="saveBtn">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    fetch('/api/version').then(r => r.json()).then(({ version, commit }) => {
+      document.getElementById('appVersion').innerText = version ? `v${version}${commit ? ` (${commit})` : ''}` : '';
+    }).catch(() => {});
+
+    function applyTheme(isDark) {
+      document.documentElement.classList.toggle('dark', isDark);
+      document.getElementById('themeToggleBtn').innerText = isDark ? '☀️' : '🌙';
+    }
+    try {
+      const stored = localStorage.getItem('theme');
+      applyTheme(stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
+    } catch (e) { /* localStorage may be unavailable */ }
+    document.getElementById('themeToggleBtn').addEventListener('click', () => {
+      const isDark = !document.documentElement.classList.contains('dark');
+      applyTheme(isDark);
+      try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch (e) { /* ignore */ }
+    });
+
+    const errorBanner = document.getElementById('errorBanner');
+    function showError(message) { errorBanner.innerText = message; errorBanner.hidden = false; }
+    function hideError() { errorBanner.hidden = true; }
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    });
+
+    function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+    function fmt(n) {
+      if (n === null || n === undefined) return '—';
+      const sign = n < 0 ? '-' : '';
+      return sign + '$' + Math.round(Math.abs(n)).toLocaleString('en-US');
+    }
+
+    const TYPE_LABELS = {
+      simple: 'Simple', periodic: 'Periodic', by: 'By Date', spend: 'Spend',
+      percentage: 'Percentage', schedule: 'Schedule', average: 'Average',
+      copy: 'Copy', remainder: 'Remainder', goal: 'Goal', unknown: 'Unrecognized'
+    };
+
+    // --- Human-readable rule line for the list view (mirrors
+    // src/budgetTemplates.js's describeRule -- kept in sync by hand since
+    // this page has no bundler to share the module with). ---
+    function describeRule(type, f) {
+      switch (type) {
+        case 'simple':
+          if (f.monthly != null && f.limitAmount) return `${fmt(f.monthly)} / month, capped at ${fmt(f.limitAmount)}`;
+          if (f.monthly != null) return `${fmt(f.monthly)} / month`;
+          if (f.limitAmount) return `Up to ${fmt(f.limitAmount)} / month`;
+          return '—';
+        case 'periodic':
+          return `${fmt(f.amount)} every ${f.periodN || 1} ${f.periodUnit || 'months'} starting ${f.starting || '—'}`;
+        case 'by':
+          return `${fmt(f.amount)} by ${f.month || '—'}${f.repeatN ? ` (repeats every ${f.repeatN} ${f.repeatUnit})` : ''}`;
+        case 'spend':
+          return `${fmt(f.amount)} by ${f.month || '—'}, spend from ${f.spendFrom || '—'}`;
+        case 'percentage':
+          return `${f.percent || 0}% of ${f.previous ? 'previous ' : ''}${f.of || 'income'}`;
+        case 'schedule':
+          return `Tied to "${f.scheduleName || '—'}"${f.full ? ' (full amount)' : ''}${f.adjustment ? ` [${f.adjustment > 0 ? 'increase' : 'decrease'} ${Math.abs(f.adjustment)}${f.adjustmentType === 'percent' ? '%' : ''}]` : ''}`;
+        case 'average':
+          return `Avg of last ${f.numMonths || 3} months${f.adjustment ? ` [${f.adjustment > 0 ? 'increase' : 'decrease'} ${Math.abs(f.adjustment)}${f.adjustmentType === 'percent' ? '%' : ''}]` : ''}`;
+        case 'copy':
+          return `Same as ${f.lookBack || 1} month${(f.lookBack || 1) > 1 ? 's' : ''} ago`;
+        case 'remainder':
+          return `Remainder of To Budget${f.weight && f.weight !== 1 ? ` (weight ${f.weight})` : ''}`;
+        case 'goal':
+          return `Target balance: ${fmt(f.amount)}`;
+        case 'unknown':
+          return `Existing note has an unrecognized #template/#goal line`;
+        default:
+          return '—';
+      }
+    }
+
+    // --- Compiles a type + its fields into the exact #template/#goal
+    // syntax Actual's own grammar parses -- grammar-verified during this
+    // feature's design (see src/budgetTemplates.js's header comment). ---
+    function buildSyntax(type, f, priority) {
+      if (type === 'goal') return f.amount ? `#goal ${f.amount}` : null;
+      const prefix = '#template' + (priority ? `-${priority}` : '');
+      function limitClause(amount, period, start, hold) {
+        if (!amount) return '';
+        if (period === 'weekly') return ` up to ${amount} per week starting ${start || '2026-01-01'}${hold ? ' hold' : ''}`;
+        if (period === 'daily') return ` up to ${amount} per day${hold ? ' hold' : ''}`;
+        return ` up to ${amount}${hold ? ' hold' : ''}`;
+      }
+      switch (type) {
+        case 'simple': {
+          if (f.monthly == null && !f.limitAmount) return null;
+          if (f.monthly == null) return `${prefix}${limitClause(f.limitAmount, f.limitPeriod, f.limitStart, f.limitHold).trim().replace(/^/, ' ')}`.replace('  ', ' ');
+          return `${prefix} ${f.monthly}${limitClause(f.limitAmount, f.limitPeriod, f.limitStart, f.limitHold)}`;
+        }
+        case 'periodic': {
+          if (!f.amount || !f.starting) return null;
+          const n = f.periodN || 1;
+          const unit = f.periodUnit || 'months';
+          const periodText = unit === 'months' ? `${n} months` : (n === 1 ? unit.replace(/s$/, '') : `${n} ${unit}`);
+          return `${prefix} ${f.amount} repeat every ${periodText} starting ${f.starting}${limitClause(f.limitAmount, f.limitPeriod, f.limitStart, f.limitHold)}`;
+        }
+        case 'by': {
+          if (!f.amount || !f.month) return null;
+          const repeat = f.repeatN ? ` repeat every ${f.repeatN === 1 ? f.repeatUnit.replace(/s$/, '') : `${f.repeatN} ${f.repeatUnit}`}` : '';
+          return `${prefix} ${f.amount} by ${f.month}${repeat}`;
+        }
+        case 'spend': {
+          if (!f.amount || !f.month || !f.spendFrom) return null;
+          const repeat = f.repeatN ? ` repeat every ${f.repeatN === 1 ? f.repeatUnit.replace(/s$/, '') : `${f.repeatN} ${f.repeatUnit}`}` : '';
+          return `${prefix} ${f.amount} by ${f.month} spend from ${f.spendFrom}${repeat}`;
+        }
+        case 'percentage': {
+          if (!f.percent || !f.of) return null;
+          return `${prefix} ${f.percent}% of ${f.previous ? 'previous ' : ''}${f.of}`;
+        }
+        case 'schedule': {
+          if (!f.scheduleName) return null;
+          const mod = f.adjustment ? ` [${f.adjustment > 0 ? 'increase' : 'decrease'} ${Math.abs(f.adjustment)}${f.adjustmentType === 'percent' ? '%' : ''}]` : '';
+          return `${prefix} schedule ${f.full ? 'full ' : ''}${f.scheduleName}${mod}`;
+        }
+        case 'average': {
+          if (!f.numMonths) return null;
+          const mod = f.adjustment ? ` [${f.adjustment > 0 ? 'increase' : 'decrease'} ${Math.abs(f.adjustment)}${f.adjustmentType === 'percent' ? '%' : ''}]` : '';
+          return `${prefix} average ${f.numMonths} months${mod}`;
+        }
+        case 'copy': {
+          if (!f.lookBack) return null;
+          return `${prefix} copy from ${f.lookBack} months ago${limitClause(f.limitAmount, f.limitPeriod, f.limitStart, f.limitHold)}`;
+        }
+        case 'remainder':
+          return `${prefix} remainder${f.weight && f.weight !== 1 ? ' ' + f.weight : ''}${limitClause(f.limitAmount, f.limitPeriod, f.limitStart, f.limitHold)}`;
+        default:
+          return null;
+      }
+    }
+
+    function statusFor(row) {
+      if (!row.type || row.type === 'unknown') return { pill: 'gap', label: row.type === 'unknown' ? 'Unrecognized' : 'No Template' };
+      if (row.type === 'goal') return { pill: 'needs-apply', label: 'Goal (not a monthly rule)' };
+      if (!row.computable) return { pill: 'needs-apply', label: 'Needs Apply' };
+      if (Math.round(row.computedAmount) === Math.round(row.budgeted)) return { pill: 'applied', label: 'Applied' };
+      return { pill: 'needs-apply', label: 'Needs Apply' };
+    }
+
+    let rowsByCategory = new Map();
+    let isAdmin = true;
+
+    function groupRows(rows) {
+      const groups = new Map();
+      for (const row of rows) {
+        if (!groups.has(row.groupName)) groups.set(row.groupName, []);
+        groups.get(row.groupName).push(row);
+      }
+      return [...groups.entries()].map(([group, groupRows]) => ({ group, rows: groupRows }));
+    }
+
+    function renderAll(rows) {
+      rowsByCategory = new Map(rows.map(r => [r.categoryId, r]));
+      const container = document.getElementById('groups');
+      let total = 0, applied = 0, needs = 0, gap = 0;
+      container.innerHTML = groupRows(rows).map(g => `
+        <div class="group">
+          <div class="group-title">${escapeHtml(g.group)}</div>
+          <div class="gridCard">
+            <div class="row header-row">
+              <div>Category</div><div>Template</div>
+              <div style="text-align:right;">Computed</div><div style="text-align:right;">Budgeted</div>
+              <div style="text-align:right;">Status</div><div></div>
+            </div>
+            ${g.rows.map(row => {
+              total++;
+              const s = statusFor(row);
+              if (s.pill === 'applied') applied++; else if (s.pill === 'needs-apply') needs++; else gap++;
+              const typeClass = !row.type ? 'gap' : (row.type === 'unknown' ? 'unknown' : '');
+              return `<div class="row">
+                <div class="cat-name">${escapeHtml(row.name)}</div>
+                <div class="template-desc">
+                  ${row.type
+                    ? `<span class="template-type ${typeClass}">${escapeHtml(TYPE_LABELS[row.type] || row.type)}</span><div class="template-rule">${escapeHtml(describeRule(row.type, row.fields))}</div>`
+                    : `<span class="template-type gap">None set</span>`}
+                </div>
+                <div class="amt"><span class="amt-label">Computed</span>${row.computable ? fmt(row.computedAmount) : '—'}</div>
+                <div class="amt"><span class="amt-label">Budgeted</span>${fmt(row.budgeted)}</div>
+                <div style="text-align:right;"><span class="pill ${s.pill}">${s.label}</span></div>
+                <button class="edit-btn" data-cat="${escapeHtml(row.categoryId)}" aria-label="Edit template for ${escapeHtml(row.name)}" ${isAdmin ? '' : 'disabled'}>${row.type ? '✎' : '+'}</button>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      `).join('');
+      document.getElementById('statTotal').textContent = total;
+      document.getElementById('statApplied').textContent = applied;
+      document.getElementById('statNeeds').textContent = needs;
+      document.getElementById('statGap').textContent = gap;
+
+      container.querySelectorAll('.edit-btn').forEach(btn => {
+        if (btn.disabled) return;
+        btn.addEventListener('click', () => openModal(btn.dataset.cat));
+      });
+    }
+
+    // --- Modal / builder ---
+    const overlay = document.getElementById('modalOverlay');
+    const typeSelect = document.getElementById('typeSelect');
+    const dynamicFields = document.getElementById('dynamicFields');
+    const previewBox = document.getElementById('previewBox');
+    const priorityField = document.getElementById('priorityField');
+    const priorityInput = document.getElementById('priorityInput');
+    const deleteBtn = document.getElementById('deleteBtn');
+    const saveError = document.getElementById('saveError');
+    let editingCategoryId = null;
+
+    const FIELD_TEMPLATES = {
+      simple: () => `
+        <div class="field-group"><label>Monthly Amount ($)</label><input type="number" id="f_monthly" placeholder="e.g. 200"></div>
+        <div class="check-row"><input type="checkbox" id="f_hasLimit"><label for="f_hasLimit">Also cap this category</label></div>
+        <div class="sub-fields" id="f_limitFields" hidden>
+          <div class="field-group"><label>Cap Amount ($)</label><input type="number" id="f_limitAmount"></div>
+          <div class="field-group"><label>Cap Period</label>
+            <select id="f_limitPeriod"><option value="monthly">Per month</option><option value="weekly">Per week</option><option value="daily">Per day</option></select>
+          </div>
+        </div>`,
+      periodic: () => `
+        <div class="field-row">
+          <div class="field-group"><label>Amount ($)</label><input type="number" id="f_amount"></div>
+          <div class="field-group"><label>Every</label><input type="number" id="f_periodN" value="1" min="1"></div>
+          <div class="field-group"><label>Unit</label>
+            <select id="f_periodUnit"><option value="days">Day(s)</option><option value="weeks">Week(s)</option><option value="months" selected>Month(s)</option><option value="years">Year(s)</option></select>
+          </div>
+        </div>
+        <div class="field-group"><label>Starting</label><input type="date" id="f_starting"></div>`,
+      by: () => `
+        <div class="field-row">
+          <div class="field-group"><label>Target Amount ($)</label><input type="number" id="f_amount"></div>
+          <div class="field-group"><label>By Month</label><input type="month" id="f_month"></div>
+        </div>
+        <div class="check-row"><input type="checkbox" id="f_hasRepeat"><label for="f_hasRepeat">Repeat after reaching target</label></div>
+        <div class="sub-fields" id="f_repeatFields" hidden>
+          <div class="field-row">
+            <div class="field-group"><label>Every</label><input type="number" id="f_repeatN" value="1" min="1"></div>
+            <div class="field-group"><label>Unit</label><select id="f_repeatUnit"><option value="months">Month(s)</option><option value="years">Year(s)</option></select></div>
+          </div>
+        </div>`,
+      spend: () => `
+        <div class="field-row">
+          <div class="field-group"><label>Target Amount ($)</label><input type="number" id="f_amount"></div>
+          <div class="field-group"><label>By Month</label><input type="month" id="f_month"></div>
+        </div>
+        <div class="field-group"><label>Spend Starting</label><input type="month" id="f_spendFrom"></div>`,
+      percentage: () => `
+        <div class="field-row">
+          <div class="field-group"><label>Percent</label><input type="number" id="f_percent" placeholder="e.g. 10"></div>
+          <div class="field-group"><label>Of</label><input type="text" id="f_of" placeholder="income, or a category name"></div>
+        </div>
+        <div class="check-row"><input type="checkbox" id="f_previous"><label for="f_previous">Use last month's actual, not this month's</label></div>`,
+      schedule: () => `
+        <div class="field-group"><label>Scheduled Transaction Name</label><input type="text" id="f_scheduleName" placeholder="e.g. Rent"></div>
+        <div class="check-row"><input type="checkbox" id="f_full"><label for="f_full">Budget the full scheduled amount</label></div>
+        <div class="field-row">
+          <div class="field-group"><label>Adjustment</label><select id="f_adjustDir"><option value="">None</option><option value="increase">Increase</option><option value="decrease">Decrease</option></select></div>
+          <div class="field-group"><label>Value</label><input type="number" id="f_adjustValue"></div>
+          <div class="field-group"><label>Type</label><select id="f_adjustType"><option value="percent">%</option><option value="fixed">$</option></select></div>
+        </div>`,
+      average: () => `
+        <div class="field-group"><label>Number of Months</label><input type="number" id="f_numMonths" value="3" min="1"></div>
+        <div class="field-row">
+          <div class="field-group"><label>Adjustment</label><select id="f_adjustDir"><option value="">None</option><option value="increase">Increase</option><option value="decrease">Decrease</option></select></div>
+          <div class="field-group"><label>Value</label><input type="number" id="f_adjustValue"></div>
+          <div class="field-group"><label>Type</label><select id="f_adjustType"><option value="percent">%</option><option value="fixed">$</option></select></div>
+        </div>`,
+      copy: () => `<div class="field-group"><label>Months Ago</label><input type="number" id="f_lookBack" value="1" min="1"></div>`,
+      remainder: () => `<div class="field-group"><label>Weight (optional, default 1)</label><input type="number" id="f_weight" placeholder="1" min="1"></div>`,
+      goal: () => `<div class="field-group"><label>Target Balance ($)</label><input type="number" id="f_amount"></div>`,
+      none: () => `<p style="font-size:13px; color:var(--text-muted); margin:4px 0 0;">No template — this category's budget stays whatever you set it to manually.</p>`,
+    };
+
+    function readFields(type) {
+      const val = id => { const el = document.getElementById(id); return el ? el.value : null; };
+      const num = id => { const v = val(id); return v === '' || v === null ? null : Number(v); };
+      switch (type) {
+        case 'simple': {
+          const hasLimit = document.getElementById('f_hasLimit')?.checked;
+          return { monthly: num('f_monthly'), limitAmount: hasLimit ? num('f_limitAmount') : null, limitPeriod: val('f_limitPeriod') };
+        }
+        case 'periodic':
+          return { amount: num('f_amount'), periodN: num('f_periodN'), periodUnit: val('f_periodUnit'), starting: val('f_starting') };
+        case 'by': {
+          const hasRepeat = document.getElementById('f_hasRepeat')?.checked;
+          return { amount: num('f_amount'), month: val('f_month'), repeatN: hasRepeat ? num('f_repeatN') : null, repeatUnit: val('f_repeatUnit') };
+        }
+        case 'spend':
+          return { amount: num('f_amount'), month: val('f_month'), spendFrom: val('f_spendFrom') };
+        case 'percentage':
+          return { percent: num('f_percent'), of: val('f_of'), previous: document.getElementById('f_previous')?.checked };
+        case 'schedule': {
+          const dir = val('f_adjustDir');
+          const v = num('f_adjustValue');
+          return {
+            scheduleName: val('f_scheduleName'), full: document.getElementById('f_full')?.checked,
+            adjustment: dir && v ? (dir === 'decrease' ? -v : v) : null, adjustmentType: val('f_adjustType'),
+          };
+        }
+        case 'average': {
+          const dir = val('f_adjustDir');
+          const v = num('f_adjustValue');
+          return { numMonths: num('f_numMonths'), adjustment: dir && v ? (dir === 'decrease' ? -v : v) : null, adjustmentType: val('f_adjustType') };
+        }
+        case 'copy':
+          return { lookBack: num('f_lookBack') };
+        case 'remainder':
+          return { weight: num('f_weight') || 1 };
+        case 'goal':
+          return { amount: num('f_amount') };
+        default:
+          return {};
+      }
+    }
+
+    function fillFields(type, f) {
+      const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) { if (el.type === 'checkbox') el.checked = v; else el.value = v; } };
+      switch (type) {
+        case 'simple':
+          set('f_monthly', f.monthly);
+          if (f.limitAmount) { document.getElementById('f_hasLimit').checked = true; document.getElementById('f_limitFields').hidden = false; set('f_limitAmount', f.limitAmount); set('f_limitPeriod', f.limitPeriod || 'monthly'); }
+          break;
+        case 'periodic':
+          set('f_amount', f.amount); set('f_periodN', f.periodN); set('f_periodUnit', f.periodUnit); set('f_starting', f.starting);
+          break;
+        case 'by':
+          set('f_amount', f.amount); set('f_month', f.month);
+          if (f.repeatN) { document.getElementById('f_hasRepeat').checked = true; document.getElementById('f_repeatFields').hidden = false; set('f_repeatN', f.repeatN); set('f_repeatUnit', f.repeatUnit || 'months'); }
+          break;
+        case 'spend':
+          set('f_amount', f.amount); set('f_month', f.month); set('f_spendFrom', f.spendFrom);
+          break;
+        case 'percentage':
+          set('f_percent', f.percent); set('f_of', f.of); set('f_previous', !!f.previous);
+          break;
+        case 'schedule':
+          set('f_scheduleName', f.scheduleName); set('f_full', !!f.full);
+          if (f.adjustment) { set('f_adjustDir', f.adjustment < 0 ? 'decrease' : 'increase'); set('f_adjustValue', Math.abs(f.adjustment)); set('f_adjustType', f.adjustmentType || 'percent'); }
+          break;
+        case 'average':
+          set('f_numMonths', f.numMonths);
+          if (f.adjustment) { set('f_adjustDir', f.adjustment < 0 ? 'decrease' : 'increase'); set('f_adjustValue', Math.abs(f.adjustment)); set('f_adjustType', f.adjustmentType || 'percent'); }
+          break;
+        case 'copy':
+          set('f_lookBack', f.lookBack);
+          break;
+        case 'remainder':
+          set('f_weight', f.weight);
+          break;
+        case 'goal':
+          set('f_amount', f.amount);
+          break;
+      }
+    }
+
+    function wireConditionalFields() {
+      const hasLimit = document.getElementById('f_hasLimit');
+      if (hasLimit) hasLimit.addEventListener('change', () => { document.getElementById('f_limitFields').hidden = !hasLimit.checked; updatePreview(); });
+      const hasRepeat = document.getElementById('f_hasRepeat');
+      if (hasRepeat) hasRepeat.addEventListener('change', () => { document.getElementById('f_repeatFields').hidden = !hasRepeat.checked; updatePreview(); });
+      dynamicFields.querySelectorAll('input, select').forEach(el => el.addEventListener('input', updatePreview));
+    }
+
+    function updatePreview() {
+      const type = typeSelect.value;
+      if (type === 'none') { previewBox.textContent = '(note cleared — no template)'; return; }
+      const priority = priorityInput.value ? Number(priorityInput.value) : null;
+      const f = readFields(type);
+      const syntax = buildSyntax(type, f, type === 'goal' ? null : priority);
+      previewBox.textContent = syntax || 'Fill in the required fields above…';
+    }
+
+    function renderDynamicFields() {
+      const type = typeSelect.value;
+      dynamicFields.innerHTML = (FIELD_TEMPLATES[type] || FIELD_TEMPLATES.none)();
+      priorityField.hidden = (type === 'none' || type === 'goal');
+      wireConditionalFields();
+      updatePreview();
+    }
+
+    typeSelect.addEventListener('change', renderDynamicFields);
+    priorityInput.addEventListener('input', updatePreview);
+
+    function openModal(categoryId) {
+      const row = rowsByCategory.get(categoryId);
+      if (!row) return;
+      editingCategoryId = categoryId;
+      saveError.hidden = true;
+      document.getElementById('modalTitle').textContent = row.type ? 'Edit Template' : 'Add Template';
+      document.getElementById('modalSub').textContent = `${row.name} · ${row.groupName}`;
+      const type = row.type === 'unknown' ? 'none' : (row.type || 'none');
+      typeSelect.value = type;
+      renderDynamicFields();
+      if (type !== 'none') fillFields(type, row.fields || {});
+      priorityInput.value = row.priority || '';
+      deleteBtn.hidden = !row.type || row.type === 'unknown';
+      updatePreview();
+      overlay.hidden = false;
+    }
+
+    function closeModal() { overlay.hidden = true; editingCategoryId = null; }
+
+    document.getElementById('cancelBtn').addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+
+    async function saveTemplate(templateString) {
+      saveError.hidden = true;
+      try {
+        const res = await fetch('/api/data/budget-templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ categoryId: editingCategoryId, templateString })
+        });
+        const data = await res.json();
+        if (!res.ok) { saveError.textContent = data.error || 'Failed to save the template.'; saveError.hidden = false; return false; }
+        return true;
+      } catch (e) {
+        saveError.textContent = 'Could not reach the server.'; saveError.hidden = false; return false;
+      }
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+      if (!editingCategoryId) return;
+      const type = typeSelect.value;
+      let templateString = null;
+      if (type !== 'none') {
+        const f = readFields(type);
+        const priority = priorityInput.value ? Number(priorityInput.value) : null;
+        templateString = buildSyntax(type, f, type === 'goal' ? null : priority);
+        if (!templateString) { saveError.textContent = 'Fill in the required fields above.'; saveError.hidden = false; return; }
+      }
+      if (!(await saveTemplate(templateString))) return;
+      closeModal();
+      await loadTemplates();
+    });
+
+    deleteBtn.addEventListener('click', async () => {
+      if (!editingCategoryId) return;
+      if (!(await saveTemplate(null))) return;
+      closeModal();
+      await loadTemplates();
+    });
+
+    // --- Load ---
+    async function loadTemplates() {
+      let res;
+      try {
+        res = await fetch('/api/data/budget-templates');
+      } catch (e) { showError('Could not reach the server.'); return; }
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      const data = await res.json();
+      if (data.error) { showError(data.error); return; }
+      hideError();
+      renderAll(data.rows);
+    }
+
+    (async function init() {
+      let configRes;
+      try {
+        configRes = await fetch('/api/config');
+      } catch (e) {
+        showError('Could not reach the server. Check your connection and reload.');
+        return;
+      }
+      if (configRes.status === 401) { window.location.href = '/login.html'; return; }
+      const config = await configRes.json();
+      if (!config.actualUrl || !config.actualPasswordSet || !config.syncId) {
+        document.getElementById('notConfiguredMsg').hidden = false;
+        return;
+      }
+      isAdmin = config.role !== 'viewer';
+      document.getElementById('viewerNotice').hidden = isAdmin;
+      document.getElementById('templatesBody').hidden = false;
+      await loadTemplates();
+    })();
+  </script>
+</body>
+</html>

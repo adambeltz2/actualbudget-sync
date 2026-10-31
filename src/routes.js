@@ -732,6 +732,37 @@ router.get('/api/data/budget-review/trends', async (req, res) => {
   }
 });
 
+router.get('/api/data/budget-templates', async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  try {
+    await actualService.ensureReady(config);
+    const data = await actualService.getBudgetTemplates();
+    res.json(data);
+  } catch (err) {
+    logger.error('Budget Templates request failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to load Budget Templates.' });
+  }
+});
+
+router.post('/api/data/budget-templates', requireAdmin, async (req, res) => {
+  const config = requireActualConfigured(req, res);
+  if (!config) return;
+  const { categoryId, templateString } = req.body || {};
+  if (!categoryId) {
+    res.status(400).json({ error: 'categoryId is required.' });
+    return;
+  }
+  try {
+    await actualService.ensureReady(config);
+    await actualService.setCategoryTemplate(categoryId, templateString || null);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error('Budget Templates save failed: ' + err.message);
+    res.status(500).json({ error: 'Failed to save the template.' });
+  }
+});
+
 router.get('/api/data/wrapped', async (req, res) => {
   const config = requireActualConfigured(req, res);
   if (!config) return;
