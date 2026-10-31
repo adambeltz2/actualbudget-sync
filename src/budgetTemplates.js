@@ -235,6 +235,26 @@ function parseTemplateNote(note) {
   return null;
 }
 
+// Splices a new (or removed) directive into a category's existing note,
+// preserving every other line -- the opposite of overwriting the whole
+// note. Any existing #template/#goal line(s) are dropped (recognized or
+// not -- an 'unknown' line is still a directive line and still the one
+// being replaced) and, when newLine is given, it's appended after
+// whatever non-directive text remains. Blank edge lines left behind by
+// the removal are trimmed; a blank line the user wrote in the middle of
+// their own text is left alone.
+function replaceTemplateInNote(note, newLine) {
+  const lines = String(note || '').split('\n');
+  const kept = lines.filter(line => {
+    const trimmed = line.trim();
+    return !(trimmed.startsWith('#template') || trimmed.startsWith('#goal'));
+  });
+  while (kept.length && kept[kept.length - 1].trim() === '') kept.pop();
+  while (kept.length && kept[0].trim() === '') kept.shift();
+  if (newLine) kept.push(newLine);
+  return kept.join('\n');
+}
+
 function applyAdjustment(amount, adjustment, adjustmentType) {
   if (!adjustment) return amount;
   return adjustmentType === 'percent' ? amount * (1 + adjustment / 100) : amount + adjustment;
@@ -307,5 +327,6 @@ function computeTemplateAmount(type, fields = {}, context = {}) {
 }
 
 module.exports = {
-  TYPE_LABELS, describeRule, buildSyntax, parseTemplateNote, parseTemplateLine, computeTemplateAmount, monthsRemaining
+  TYPE_LABELS, describeRule, buildSyntax, parseTemplateNote, parseTemplateLine, replaceTemplateInNote,
+  computeTemplateAmount, monthsRemaining
 };

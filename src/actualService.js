@@ -15,7 +15,7 @@ const { computeMonthBuckets, computeYearSummary } = require('./consciousSpending
 const {
   computeSustainability, computeUnassignedSpend, computeCategoryGrid, computeYearOverYearTrends
 } = require('./budgetReview');
-const { parseTemplateNote, computeTemplateAmount } = require('./budgetTemplates');
+const { parseTemplateNote, computeTemplateAmount, replaceTemplateInNote } = require('./budgetTemplates');
 
 const DATA_DIR = '/data';
 
@@ -1338,14 +1338,17 @@ async function getBudgetTemplates() {
   return { month: currentMonth, rows };
 }
 
-// Writes a category's template definition, per this app's note-handling
-// decision: always overwrite the entire note rather than reading and
-// splicing around any other text that might already be there. A `null`
-// templateString clears the category's note entirely (removes the
-// template). Writing only defines the rule -- see the module header note
-// in budgetTemplates.js -- it does not trigger Actual's own apply step.
+// Writes a category's template definition. Reads the existing note first
+// and splices the new directive in via replaceTemplateInNote, which drops
+// any previous #template/#goal line but preserves every other line the
+// note already had -- a `null` templateString just removes the directive,
+// leaving the rest of the note untouched. Writing only defines the rule --
+// see the module header note in budgetTemplates.js -- it does not trigger
+// Actual's own apply step.
 async function setCategoryTemplate(categoryId, templateString) {
-  await api.updateNote(categoryId, templateString || '');
+  const currentNote = await api.getNote(categoryId);
+  const newNote = replaceTemplateInNote(currentNote, templateString);
+  await api.updateNote(categoryId, newNote);
 }
 
 // Rolling-window daily balance reconstruction ending today. Used internally

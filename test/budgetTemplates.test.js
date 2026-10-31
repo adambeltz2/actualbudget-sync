@@ -1,7 +1,8 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  TYPE_LABELS, describeRule, buildSyntax, parseTemplateNote, parseTemplateLine, computeTemplateAmount, monthsRemaining
+  TYPE_LABELS, describeRule, buildSyntax, parseTemplateNote, parseTemplateLine, replaceTemplateInNote,
+  computeTemplateAmount, monthsRemaining
 } = require('../src/budgetTemplates');
 
 describe('buildSyntax', () => {
@@ -209,6 +210,38 @@ describe('computeTemplateAmount', () => {
     assert.equal(computeTemplateAmount('periodic', { amount: 50 }, {}).computable, false);
     assert.equal(computeTemplateAmount('spend', { amount: 100 }, {}).computable, false);
     assert.equal(computeTemplateAmount('remainder', {}, {}).computable, false);
+  });
+});
+
+describe('replaceTemplateInNote', () => {
+  test('preserves other text while swapping the directive line', () => {
+    const result = replaceTemplateInNote('Renews every March\n#template 200', '#template 250');
+    assert.equal(result, 'Renews every March\n#template 250');
+  });
+
+  test('adds the directive to a note that has none', () => {
+    const result = replaceTemplateInNote('Renews every March', '#template 200');
+    assert.equal(result, 'Renews every March\n#template 200');
+  });
+
+  test('removes the directive while keeping other text when newLine is null', () => {
+    const result = replaceTemplateInNote('Renews every March\n#template 200', null);
+    assert.equal(result, 'Renews every March');
+  });
+
+  test('leaves an empty note empty when there is nothing to add', () => {
+    assert.equal(replaceTemplateInNote('', null), '');
+    assert.equal(replaceTemplateInNote(null, null), '');
+  });
+
+  test('starts fresh when the note had no other text', () => {
+    assert.equal(replaceTemplateInNote('#template 200', '#template 250'), '#template 250');
+    assert.equal(replaceTemplateInNote('#template 200', null), '');
+  });
+
+  test('replaces an unrecognized directive line too, not just parseable ones', () => {
+    const result = replaceTemplateInNote('keep me\n#template something weird', '#template 300');
+    assert.equal(result, 'keep me\n#template 300');
   });
 });
 

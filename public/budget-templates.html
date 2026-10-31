@@ -173,7 +173,7 @@
     <div id="viewerNotice" class="notice-banner" hidden>Read-only — editing templates requires admin access.</div>
 
     <div id="templatesBody" hidden>
-      <p class="field-hint" style="margin-bottom:16px;">Writing a template here only defines the rule in that category's note — Actual's own "Apply Template" action (not part of the API this app connects through) is still what turns it into a budgeted amount. Status shows <strong>Needs Apply</strong> until a category's current budget matches what the rule computes to. Saving always replaces that category's entire note.</p>
+      <p class="field-hint" style="margin-bottom:16px;">Writing a template here only defines the rule in that category's note — Actual's own "Apply Template" action (not part of the API this app connects through) is still what turns it into a budgeted amount. Status shows <strong>Needs Apply</strong> until a category's current budget matches what the rule computes to. Saving replaces only the category's #template/#goal line — any other text already in that note is kept.</p>
 
       <div class="summary-strip">
         <div class="stat-tile"><div class="stat-label">Categories Shown</div><div class="stat-value" id="statTotal">0</div></div>
@@ -223,7 +223,7 @@
 
       <p class="preview-caption">This will be written to the category's note as:</p>
       <div class="preview-box" id="previewBox">—</div>
-      <p class="preview-caption">Saving replaces the category's entire note with this line — any other text currently in that note will be lost.</p>
+      <p class="preview-caption">Saving replaces only this category's existing #template/#goal line with the one above — any other text in the note is kept.</p>
       <p class="save-error" id="saveError" hidden></p>
 
       <div class="modal-actions">
@@ -604,7 +604,7 @@
 
     function updatePreview() {
       const type = typeSelect.value;
-      if (type === 'none') { previewBox.textContent = '(note cleared — no template)'; return; }
+      if (type === 'none') { previewBox.textContent = '(template line removed — rest of the note is kept)'; return; }
       const priority = priorityInput.value ? Number(priorityInput.value) : null;
       const f = readFields(type);
       const syntax = buildSyntax(type, f, type === 'goal' ? null : priority);
