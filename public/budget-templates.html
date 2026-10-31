@@ -50,6 +50,12 @@
       border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--card-bg));
       color: var(--accent-dark); font-size: 14px; padding: 14px 16px; border-radius: 10px; margin-bottom: 24px;
     }
+    .warn-banner {
+      background: color-mix(in srgb, var(--warning) 12%, var(--card-bg));
+      border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--card-bg));
+      color: var(--text-secondary); font-size: 13px; line-height: 1.55; padding: 14px 16px; border-radius: 10px; margin-bottom: 20px;
+    }
+    .warn-banner strong { color: var(--warning); }
     .navRow { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; flex-wrap: wrap; gap: 14px; }
     .navLinks { display: flex; gap: 8px; flex-wrap: wrap; }
     [hidden] { display: none !important; }
@@ -173,6 +179,7 @@
     <div id="viewerNotice" class="notice-banner" hidden>Read-only — editing templates requires admin access.</div>
 
     <div id="templatesBody" hidden>
+      <div class="warn-banner">⚠ <strong>Goal Templates is an experimental Actual Budget feature</strong> (per <a href="https://actualbudget.org/docs/experimental/goal-templates" target="_blank" rel="noopener">Actual's own documentation</a>) — its syntax and behavior can change between Actual versions without notice. This app writes directly to your category notes; neither this app nor its author is responsible for any data loss that results. <strong>Back up your Actual Budget file before using this page</strong> (Actual's own Settings → Export, or your usual `./data` backup).</div>
       <p class="field-hint" style="margin-bottom:16px;">Writing a template here only defines the rule in that category's note — Actual's own "Apply Template" action (not part of the API this app connects through) is still what turns it into a budgeted amount. Status shows <strong>Needs Apply</strong> until a category's current budget matches what the rule computes to. Saving replaces only the category's #template/#goal line — any other text already in that note is kept.</p>
 
       <div class="summary-strip">
