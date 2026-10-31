@@ -15,6 +15,7 @@ const { computeMonthBuckets, computeYearSummary } = require('./consciousSpending
 const {
   computeSustainability, computeUnassignedSpend, computeCategoryGrid, computeYearOverYearTrends
 } = require('./budgetReview');
+const { parseTemplateNote, computeTemplateAmount, replaceTemplateInNote } = require('./budgetTemplates');
 
 const DATA_DIR = '/data';
 
@@ -1283,6 +1284,73 @@ async function getBudgetReviewTrends() {
   };
 }
 
+// The Budget Templates page: every non-income, non-hidden category's
+// existing #template/#goal directive (parsed from its note via
+// budgetTemplates.parseTemplateNote) alongside an estimate of what that
+// rule would compute to from data this app already has, and this month's
+// live budgeted amount for comparison. Reuses the same real monthly spend
+// history (getCategorySpendTrend) and current budget (getBudgetVsActual)
+// Financial Insights and Budget Review already fetch, plus this month's
+// income for percentage-of-income rules and a name-keyed lookup of every
+// other category's own budget/spend for percentage-of-category rules.
+async function getBudgetTemplates() {
+  const currentMonth = currentMonthStr();
+  const [categories, categoryGroups, currentBudget, categoryTrends, { income }] = await Promise.all([
+    getCategories(), getCategoryGroups(), getBudgetVsActual({ month: currentMonth }),
+    getCategorySpendTrend({ months: 12 }), getIncomeVsSpend({ month: currentMonth })
+  ]);
+
+  const groupNameByCategory = buildCategoryGroupMap(categoryGroups);
+  const budgetedByCategory = new Map(currentBudget.map(c => [c.categoryId, c]));
+  const trendByCategory = new Map(categoryTrends.map(t => [t.categoryId, t]));
+  const categoryLookup = new Map(currentBudget.map(c => [c.name.toLowerCase(), c]));
+
+  const visibleCategories = categories.filter(c => !c.is_income && !c.hidden);
+  const notes = await Promise.all(visibleCategories.map(c => api.getNote(c.id)));
+
+  const rows = visibleCategories.map((cat, i) => {
+    const note = notes[i];
+    const parsed = parseTemplateNote(note);
+    const budget = budgetedByCategory.get(cat.id);
+    const trend = trendByCategory.get(cat.id);
+    let computed = { computable: false };
+    if (parsed && parsed.type && parsed.type !== 'unknown' && parsed.type !== 'goal') {
+      computed = computeTemplateAmount(parsed.type, parsed.fields, {
+        monthlyTotals: trend ? trend.monthlyTotals : [],
+        income, currentMonth, categoryLookup
+      });
+    }
+    return {
+      categoryId: cat.id,
+      name: cat.name,
+      groupName: groupNameByCategory.get(cat.id) || 'Other',
+      note: note || '',
+      type: parsed ? parsed.type : null,
+      fields: parsed ? parsed.fields : {},
+      priority: parsed ? parsed.priority : null,
+      rawLine: parsed && parsed.type === 'unknown' ? parsed.raw : null,
+      computedAmount: computed.computable ? computed.amount : null,
+      computable: computed.computable,
+      budgeted: budget ? budget.budgeted : 0
+    };
+  });
+
+  return { month: currentMonth, rows };
+}
+
+// Writes a category's template definition. Reads the existing note first
+// and splices the new directive in via replaceTemplateInNote, which drops
+// any previous #template/#goal line but preserves every other line the
+// note already had -- a `null` templateString just removes the directive,
+// leaving the rest of the note untouched. Writing only defines the rule --
+// see the module header note in budgetTemplates.js -- it does not trigger
+// Actual's own apply step.
+async function setCategoryTemplate(categoryId, templateString) {
+  const currentNote = await api.getNote(categoryId);
+  const newNote = replaceTemplateInNote(currentNote, templateString);
+  await api.updateNote(categoryId, newNote);
+}
+
 // Rolling-window daily balance reconstruction ending today. Used internally
 // by getMonthlyBalanceHistory, which needs one continuous multi-month series
 // for the Financial Insights projection rather than a single calendar
@@ -1540,7 +1608,7 @@ module.exports = {
   getCategorySpendTrend, getMonthlyBalanceHistory, getFinancialInsights, getBudgetCalibration, getFinancialHealthData, getFinancialHealthHistory,
   getMetricTransactions, getFireProgress, getRetirementModel, getMonteCarloProjection, getMonteCarloCompare, getBudgetSummaryData,
   getConsciousSpendingMonth, getConsciousSpendingYear, getWrappedData, getMonthlySavingsHistory, getTrendsData, getNetWorthHistory,
-  getBudgetReviewData, getBudgetReviewTrends,
+  getBudgetReviewData, getBudgetReviewTrends, getBudgetTemplates, setCategoryTemplate,
   testConnection,
   runBankSync, getBankSyncStatuses, shutdown, isReady,
   // Exported for unit testing (pure functions, no @actual-app/api calls).
