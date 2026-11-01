@@ -1306,7 +1306,11 @@ async function getBudgetTemplates() {
   const categoryLookup = new Map(currentBudget.map(c => [c.name.toLowerCase(), c]));
 
   const visibleCategories = categories.filter(c => !c.is_income && !c.hidden);
-  const notes = await Promise.all(visibleCategories.map(c => api.getNote(c.id)));
+  // api.getNote resolves to a { id, note } row (or null when the category
+  // has no note yet), not the note string itself -- pull .note out here so
+  // callers below work with plain text.
+  const noteRows = await Promise.all(visibleCategories.map(c => api.getNote(c.id)));
+  const notes = noteRows.map(row => (row ? row.note : null));
 
   const rows = visibleCategories.map((cat, i) => {
     const note = notes[i];
@@ -1346,8 +1350,10 @@ async function getBudgetTemplates() {
 // see the module header note in budgetTemplates.js -- it does not trigger
 // Actual's own apply step.
 async function setCategoryTemplate(categoryId, templateString) {
-  const currentNote = await api.getNote(categoryId);
-  const newNote = replaceTemplateInNote(currentNote, templateString);
+  // api.getNote resolves to a { id, note } row (or null), not the note
+  // string itself.
+  const currentNoteRow = await api.getNote(categoryId);
+  const newNote = replaceTemplateInNote(currentNoteRow ? currentNoteRow.note : null, templateString);
   await api.updateNote(categoryId, newNote);
 }
 
