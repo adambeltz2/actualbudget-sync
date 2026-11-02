@@ -74,7 +74,7 @@
 
     .row {
       display: grid;
-      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr) 92px 92px 110px 40px;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.3fr) 84px 84px 92px 102px 38px;
       gap: 10px; align-items: center;
       padding: 12px 16px;
       border-bottom: 1px solid var(--border);
@@ -180,7 +180,7 @@
 
     <div id="templatesBody" hidden>
       <div class="warn-banner">⚠ <strong>Goal Templates is an experimental Actual Budget feature</strong> (per <a href="https://actualbudget.org/docs/experimental/goal-templates" target="_blank" rel="noopener">Actual's own documentation</a>) — its syntax and behavior can change between Actual versions without notice. This app writes directly to your category notes; neither this app nor its author is responsible for any data loss that results. <strong>Back up your Actual Budget file before using this page</strong> (Actual's own Settings → Export, or your usual `./data` backup).</div>
-      <p class="field-hint" style="margin-bottom:16px;">Writing a template here only defines the rule in that category's note — Actual's own "Apply Template" action (not part of the API this app connects through) is still what turns it into a budgeted amount. Status shows <strong>Needs Apply</strong> until a category's current budget matches what the rule computes to. Saving replaces only the category's #template/#goal line — any other text already in that note is kept. Note: if a month's available "To Budget" funds can't cover every template in full, Actual's own apply engine scales every template down proportionally rather than funding some in full and skipping others — "Computed" here shows the template's own math in isolation and won't predict that clamp.</p>
+      <p class="field-hint" style="margin-bottom:16px;"><strong>Avg Spend</strong> is each category's real trailing 12-month average spend — side by side with Computed and Budgeted, it's what tells you whether a template is still calibrated to how you actually spend or needs tweaking. Writing a template here only defines the rule in that category's note — Actual's own "Apply Template" action (not part of the API this app connects through) is still what turns it into a budgeted amount. Status shows <strong>Needs Apply</strong> until a category's current budget matches what the rule computes to. Saving replaces only the category's #template/#goal line — any other text already in that note is kept. Note: if a month's available "To Budget" funds can't cover every template in full, Actual's own apply engine scales every template down proportionally rather than funding some in full and skipping others — "Computed" here shows the template's own math in isolation and won't predict that clamp.</p>
 
       <div class="summary-strip">
         <div class="stat-tile"><div class="stat-label">Categories Shown</div><div class="stat-value" id="statTotal">0</div></div>
@@ -409,7 +409,7 @@
           <div class="gridCard">
             <div class="row header-row">
               <div>Category</div><div>Template</div>
-              <div style="text-align:right;">Computed</div><div style="text-align:right;">Budgeted</div>
+              <div style="text-align:right;">Avg Spend</div><div style="text-align:right;">Computed</div><div style="text-align:right;">Budgeted</div>
               <div style="text-align:right;">Status</div><div></div>
             </div>
             ${g.rows.map(row => {
@@ -424,6 +424,7 @@
                     ? `<span class="template-type ${typeClass}">${escapeHtml(TYPE_LABELS[row.type] || row.type)}</span><div class="template-rule">${escapeHtml(describeRule(row.type, row.fields))}</div>`
                     : `<span class="template-type gap">None set</span>`}
                 </div>
+                <div class="amt"><span class="amt-label">Avg Spend</span>${fmt(row.avgSpend)}</div>
                 <div class="amt"><span class="amt-label">Computed</span>${row.computable ? fmt(row.computedAmount) : '—'}</div>
                 <div class="amt"><span class="amt-label">Budgeted</span>${fmt(row.budgeted)}</div>
                 <div style="text-align:right;"><span class="pill ${s.pill}">${s.label}</span></div>
