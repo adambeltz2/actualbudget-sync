@@ -36,7 +36,7 @@ function installFakeApi(notesByCategory) {
   return () => lastUpdate;
 }
 
-function installFullFakeApi({ categories, notesByCategory, budgetMonth }) {
+function installFullFakeApi({ categories, notesByCategory, budgetMonth, monthlySpendCentsByCategory = {} }) {
   const fakeApi = {
     getCategories: async () => categories,
     getCategoryGroups: async () => [{ id: 'g1', name: 'Group', categories }],
@@ -50,9 +50,16 @@ function installFullFakeApi({ categories, notesByCategory, budgetMonth }) {
   const chain = {
     options: () => chain, filter: () => chain, groupBy: () => chain, select: () => chain, limit: () => chain, offset: () => chain, calculate: () => chain
   };
+  // Not date-range aware -- getCategorySpendTrend queries once per trailing
+  // month, and every call here gets the same per-category total, which is
+  // enough to verify the resulting average without reimplementing real
+  // transaction filtering.
+  const runQuery = async () => ({
+    data: Object.entries(monthlySpendCentsByCategory).map(([category, total]) => ({ category, total: -total }))
+  });
   require.cache['@actual-app/api'] = {
     id: '@actual-app/api', filename: '@actual-app/api', loaded: true,
-    exports: Object.assign(fakeApi, { q: () => chain, runQuery: async () => ({ data: [] }) })
+    exports: Object.assign(fakeApi, { q: () => chain, runQuery })
   };
 }
 
@@ -102,6 +109,24 @@ describe('getBudgetTemplates', () => {
     assert.equal(rows[0].fields.monthly, 600);
     assert.equal(rows[0].computable, true);
     assert.equal(rows[0].computedAmount, 600);
+    assert.equal(rows[0].avgSpend, 0);
+  });
+
+  test('includes the trailing 12-month average spend for comparison against the template and budget', async () => {
+    const categories = [{ id: 'cat1', name: 'Groceries', is_income: false, hidden: false }];
+    installFullFakeApi({
+      categories,
+      notesByCategory: { cat1: '#template 1000' },
+      budgetMonth: { month: '2026-11', categories: [{ id: 'cat1', name: 'Groceries', budgeted: 100000, spent: 0, balance: 0 }] },
+      monthlySpendCentsByCategory: { cat1: 125000 }
+    });
+    delete require.cache[require.resolve('../src/actualService')];
+    const actualService = require('../src/actualService');
+
+    const { rows } = await actualService.getBudgetTemplates();
+    assert.equal(rows[0].avgSpend, 1250);
+    assert.equal(rows[0].budgeted, 1000);
+    assert.equal(rows[0].computedAmount, 1000);
   });
 
   test('a category with no note comes back with no template, not an error', async () => {

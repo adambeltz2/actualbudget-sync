@@ -1287,12 +1287,15 @@ async function getBudgetReviewTrends() {
 // The Budget Templates page: every non-income, non-hidden category's
 // existing #template/#goal directive (parsed from its note via
 // budgetTemplates.parseTemplateNote) alongside an estimate of what that
-// rule would compute to from data this app already has, and this month's
-// live budgeted amount for comparison. Reuses the same real monthly spend
-// history (getCategorySpendTrend) and current budget (getBudgetVsActual)
-// Financial Insights and Budget Review already fetch, plus this month's
-// income for percentage-of-income rules and a name-keyed lookup of every
-// other category's own budget/spend for percentage-of-category rules.
+// rule would compute to from data this app already has, this month's live
+// budgeted amount, and a trailing 12-month average spend -- so a category's
+// template, budget, and real spend sit side by side, which is what tells
+// you whether a template needs tweaking rather than just whether it's
+// "Applied". Reuses the same real monthly spend history
+// (getCategorySpendTrend) and current budget (getBudgetVsActual) Financial
+// Insights and Budget Review already fetch, plus this month's income for
+// percentage-of-income rules and a name-keyed lookup of every other
+// category's own budget/spend for percentage-of-category rules.
 async function getBudgetTemplates() {
   const currentMonth = currentMonthStr();
   const [categories, categoryGroups, currentBudget, categoryTrends, { income }] = await Promise.all([
@@ -1324,6 +1327,10 @@ async function getBudgetTemplates() {
         income, currentMonth, categoryLookup
       });
     }
+    const monthlyTotals = trend ? trend.monthlyTotals : [];
+    const avgSpend = monthlyTotals.length > 0
+      ? monthlyTotals.reduce((sum, m) => sum + m.total, 0) / monthlyTotals.length
+      : 0;
     return {
       categoryId: cat.id,
       name: cat.name,
@@ -1335,7 +1342,8 @@ async function getBudgetTemplates() {
       rawLine: parsed && parsed.type === 'unknown' ? parsed.raw : null,
       computedAmount: computed.computable ? computed.amount : null,
       computable: computed.computable,
-      budgeted: budget ? budget.budgeted : 0
+      budgeted: budget ? budget.budgeted : 0,
+      avgSpend
     };
   });
 

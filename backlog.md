@@ -700,3 +700,7 @@ Reviewed Actual's real 26.11.0 release notes and source (cloned `actualbudget/ac
 - **Breaking changes called out in the release** (SimpleFIN private-network allowlist requirement, dropped standalone `.flatpak` downloads): both are server-side/desktop-app concerns that don't apply to this Docker client app.
 Bumped `@actual-app/api` to `^26.11.0` (and its `@actual-app/core` dependency along with it) and reran the full suite — 423/423 passing unchanged. Updated the README's "Validated against" line.
 Affected files: `package.json`, `package-lock.json`, `README.md`
+
+### [FEATURE] Budget Templates: Avg Spend column — DONE
+User wanted to see template vs. budget vs. actual spend side by side to judge whether a template needs tweaking, sketching exactly that three-column layout. Rather than merging Budget Templates into Budget Review (considered and declined -- it would drag the write capability and the experimental-feature/data-loss disclaimer into a page that's been read-only so far, and doubles up the "what should this be budgeted at" concept with Budget Review's own Planned column), added an **Avg Spend** column directly to the existing Budget Templates grid: `getBudgetTemplates()` now returns each row's trailing 12-month average spend (reusing the same `getCategorySpendTrend` data it already fetches for Average/Percentage computation -- no new query), rendered between the Template and Computed columns on the page.
+Affected files: `src/actualService.js`, `public/budget-templates.html`, `README.md`, `test/actualServiceTemplates.test.js`
