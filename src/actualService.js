@@ -249,6 +249,26 @@ function currentMonthStr() {
   return new Date().toISOString().slice(0, 7); // "YYYY-MM"
 }
 
+// Up to `count` calendar months immediately before `endMonth` (or ending
+// at and including it, with excludeEnd: false) that actually have budget
+// data -- order doesn't matter to callers, which only average them.
+// excludeEnd: true (the default) is for "as of right now": endMonth may
+// still be a partial, in-progress month, so it's left out. excludeEnd:
+// false is for a past, fully-elapsed month being scored on its own terms
+// (a Financial Health trend point), where including that month in its own
+// trailing window is correct, not a partial-data risk.
+function trailingAvailableMonths(endMonth, availableMonths, count, { excludeEnd = true } = {}) {
+  const [y, mo] = endMonth.split('-').map(Number);
+  const start = excludeEnd ? 1 : 0;
+  const months = [];
+  for (let i = start; i < start + count; i++) {
+    const d = new Date(y, mo - 1 - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (availableMonths.includes(key)) months.push(key);
+  }
+  return months;
+}
+
 // Calendar-month bounds for a "YYYY-MM" string, clamped to today when the
 // requested month is the current one — budgets live in monthly buckets, not
 // rolling day windows, so "This Month"/"Last Month" replace what used to be
@@ -1473,25 +1493,31 @@ async function getFinancialHealthData({ emergencyFundAccountIds = [], investment
   const investmentBalance = balances.filter(b => investmentAccountIds.includes(b.id)).reduce((sum, b) => sum + b.balance, 0);
   const netWorthBreakdown = computeNetWorthBreakdown({ netWorth, investmentBalance, debtTotal });
 
-  // Averaged over the last 3 complete calendar months (excluding the
-  // current, possibly-partial month) so checking this on the 2nd of the
-  // month doesn't make the emergency fund look artificially huge.
+  // Averaged over a rolling trailing 12 complete calendar months (capped to
+  // however many months of real budget history actually exist, for a newer
+  // install), excluding the current, possibly-partial month so checking
+  // this on the 2nd of the month doesn't make the emergency fund look
+  // artificially huge. 12 months smooths out a single lumpy month (an
+  // annual premium, a bonus) that would otherwise swing a shorter average
+  // a lot more -- the same trailing-12 convention Budget Review and
+  // Financial Insights already use.
   const now = new Date();
-  const recentMonths = [1, 2, 3].map(i => {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  });
-  const monthlyFigures = await Promise.all(recentMonths.map(m => getIncomeVsSpend({ month: m })));
-  const monthlyIncome = monthlyFigures.reduce((sum, m) => sum + m.income, 0) / monthlyFigures.length;
-  const monthlyAvgSpend = monthlyFigures.reduce((sum, m) => sum + m.spend, 0) / monthlyFigures.length;
+  const FINANCIAL_HEALTH_TRAILING_MONTHS = 12;
+  const availableMonths = await getBudgetMonths();
+  const recentMonths = trailingAvailableMonths(currentMonthStr(), availableMonths, FINANCIAL_HEALTH_TRAILING_MONTHS);
+  const monthlyFigures = recentMonths.length > 0 ? await Promise.all(recentMonths.map(m => getIncomeVsSpend({ month: m }))) : [];
+  const monthlyIncome = monthlyFigures.length > 0 ? monthlyFigures.reduce((sum, m) => sum + m.income, 0) / monthlyFigures.length : 0;
+  const monthlyAvgSpend = monthlyFigures.length > 0 ? monthlyFigures.reduce((sum, m) => sum + m.spend, 0) / monthlyFigures.length : 0;
 
-  // Same trailing 3-month window as the averages above, used to name the
+  // Same trailing 12-month window as the averages above, used to name the
   // single largest expense behind a low savings rate — and, via
   // summarizeBudgetCategory's balance-aware overBudget flag, to distinguish
   // a planned purchase funded from savings (balance stayed positive) from
   // genuine overspending (balance went negative), rather than treating
-  // every big expense the same way.
-  const rangeStart = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+  // every big expense the same way. getBudgetVsActual's own startDate/
+  // endDate branch already caps to whatever availableMonths exist, so this
+  // is safe even for an install with less than 12 months of history.
+  const rangeStart = new Date(now.getFullYear(), now.getMonth() - FINANCIAL_HEALTH_TRAILING_MONTHS, 1);
   const rangeEnd = new Date(now.getFullYear(), now.getMonth(), 0);
   const pad = n => String(n).padStart(2, '0');
   const topSpendCategories = await getBudgetVsActual({
@@ -1523,7 +1549,12 @@ async function getFinancialHealthData({ emergencyFundAccountIds = [], investment
 // Liability Accounts are tagged, "debt" accounts for this trend fall back to
 // whichever accounts have a negative balance today — an account that
 // carried debt in the past but is paid off now won't show that old debt,
-// the same approximation as above.
+// the same approximation as above. Each point's income/spend are averaged
+// over the same rolling trailing-12-month window getFinancialHealthData
+// uses for the live score (capped to whatever history exists before that
+// point) -- not just that one month's own figures -- so the sparkline's
+// last point lines up with the headline score instead of reading far more
+// volatile than it.
 async function getFinancialHealthHistory({ emergencyFundAccountIds = [], liabilityAccountIds = [], targetMonths = 6, targetSavingsPct = 20, months = 6 } = {}) {
   const accounts = await getAccounts();
   const currentBalances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
@@ -1531,22 +1562,38 @@ async function getFinancialHealthHistory({ emergencyFundAccountIds = [], liabili
     ? liabilityAccountIds
     : currentBalances.filter(b => b.balance < 0).map(b => b.id);
 
-  const [totalHistory, liquidHistory, debtHistory] = await Promise.all([
+  const FINANCIAL_HEALTH_TRAILING_MONTHS = 12;
+  const [totalHistory, liquidHistory, debtHistory, availableMonths] = await Promise.all([
     getMonthlyBalanceHistory({ months }),
     getMonthlyBalanceHistoryForAccounts(emergencyFundAccountIds, { months }),
-    getMonthlyBalanceHistoryForAccounts(debtAccountIds, { months })
+    getMonthlyBalanceHistoryForAccounts(debtAccountIds, { months }),
+    getBudgetMonths()
   ]);
   const liquidByMonth = new Map(liquidHistory.map(m => [m.month, m.balance]));
   const debtByMonth = new Map(debtHistory.map(m => [m.month, m.balance]));
+  const nowMonth = currentMonthStr();
 
   // totalHistory's month list is always populated (it doesn't depend on any
-  // tagging), so it drives which months appear in the trend.
-  const monthlyFigures = await Promise.all(totalHistory.map(m => getIncomeVsSpend({ month: m.month })));
+  // tagging), so it drives which months appear in the trend. Each trend
+  // month's own window includes that month itself (it's already fully
+  // elapsed, so there's no partial-data risk) -- except when the trend
+  // reaches the real current month, which is excluded from its own window
+  // the same way the live score excludes it, keeping the two numerically
+  // identical when they overlap.
+  const windowsByMonth = new Map(totalHistory.map(({ month }) =>
+    [month, trailingAvailableMonths(month, availableMonths, FINANCIAL_HEALTH_TRAILING_MONTHS, { excludeEnd: month === nowMonth })]
+  ));
+  const neededMonths = [...new Set([].concat(...windowsByMonth.values()))];
+  const figuresByMonth = new Map(
+    await Promise.all(neededMonths.map(async m => [m, await getIncomeVsSpend({ month: m })]))
+  );
 
-  return totalHistory.map((m, i) => {
+  return totalHistory.map(m => {
     const liquidBalance = Math.max(liquidByMonth.get(m.month) || 0, 0);
     const debtTotal = Math.max(-(debtByMonth.get(m.month) || 0), 0);
-    const { income, spend } = monthlyFigures[i];
+    const windowFigures = windowsByMonth.get(m.month).map(k => figuresByMonth.get(k));
+    const income = windowFigures.length > 0 ? windowFigures.reduce((sum, f) => sum + f.income, 0) / windowFigures.length : 0;
+    const spend = windowFigures.length > 0 ? windowFigures.reduce((sum, f) => sum + f.spend, 0) / windowFigures.length : 0;
 
     const emergencyFund = computeEmergencyFund({ liquidBalance, monthlyAvgSpend: spend, targetMonths });
     const savingsRate = computeSavingsRate({ income, spend, targetPct: targetSavingsPct });
