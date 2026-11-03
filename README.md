@@ -191,7 +191,7 @@ If you've tagged accounts as **Investment** under Account Classification, the "i
 
 ## Financial Health Check
 
-The **Financial Health Check** widget scores three fundamentals — an emergency fund (months of coverage vs. your target), a savings rate (% of income saved vs. your target), and debt load (total debt expressed as months of income, since Actual only tracks balances, not monthly payments) — into a single 0-100 score with plain-language, rule-based recommendations (never LLM-generated) for anything below target.
+The **Financial Health Check** widget scores three fundamentals — an emergency fund (months of coverage vs. your target), a savings rate (% of income saved vs. your target), and debt load (total debt expressed as months of income, since Actual only tracks balances, not monthly payments) — into a single 0-100 score with plain-language, rule-based recommendations (never LLM-generated) for anything below target. Emergency fund and savings rate are based on your average monthly income/spend over a rolling trailing 12 months (capped to however much real budget history you have, for a newer install) — the same convention Budget Review and Financial Insights use elsewhere in the app, chosen so one lumpy month (an annual premium, a bonus) doesn't swing the numbers the way a shorter average would.
 
 Which accounts count as liquid savings, investments, or liabilities is set once under **Account Classification** (above). Adjust your emergency-fund and savings-rate targets directly on the widget; the score refetches immediately. The widget's **Net Worth Breakdown** shows your liquid, investment, and debt balances as a proportional bar based on those tags.
 
