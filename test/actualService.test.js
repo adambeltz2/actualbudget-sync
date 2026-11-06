@@ -99,9 +99,9 @@ describe('buildTransactionFilters', () => {
     ]);
   });
 
-  test('builds a $like filter for payee search', () => {
+  test('builds a $like filter for payee search on the real AQL field (payee.name, not payee_name)', () => {
     const filters = buildTransactionFilters({ search: 'Amazon' });
-    assert.deepEqual(filters, [{ payee_name: { $like: '%Amazon%' } }]);
+    assert.deepEqual(filters, [{ 'payee.name': { $like: '%Amazon%' } }]);
   });
 
   test('combines all filters together, in order', () => {

@@ -184,7 +184,15 @@ function buildTransactionFilters({ accountId, categoryId, startDate, endDate, se
   if (categoryIds.length) filters.push({ category: { $oneof: categoryIds } });
   if (startDate) filters.push({ date: { $gte: startDate } });
   if (endDate) filters.push({ date: { $lte: endDate } });
-  if (search) filters.push({ payee_name: { $like: `%${search}%` } });
+  // 'payee.name' (a dot-path into the joined payees table), not the bare
+  // 'payee_name' this previously used -- confirmed against the real AQL
+  // schema (transactions.payee is an id reference to payees, with no flat
+  // payee_name field of its own) and against Actual's own desktop client,
+  // which filters its transaction search the same way
+  // (packages/desktop-client/src/queries/index.ts). The old field name
+  // matched no column, so this filter was silently a no-op -- every
+  // search returned the unfiltered result set rather than erroring.
+  if (search) filters.push({ 'payee.name': { $like: `%${search}%` } });
   return filters;
 }
 
