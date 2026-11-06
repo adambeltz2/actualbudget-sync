@@ -66,6 +66,7 @@ function installFullFakeApi({ categories, notesByCategory, budgetMonth, monthlyS
 describe('setCategoryTemplate', () => {
   test('preserves other text already in the note while swapping the directive line', async () => {
     const getLastUpdate = installFakeApi({ cat1: 'Renews every March\n#template 200' });
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 
@@ -75,6 +76,7 @@ describe('setCategoryTemplate', () => {
 
   test('removing the template (null) keeps the rest of the note intact', async () => {
     const getLastUpdate = installFakeApi({ cat1: 'Renews every March\n#template 200' });
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 
@@ -84,6 +86,7 @@ describe('setCategoryTemplate', () => {
 
   test('writing a template to a category with no existing note just adds the line', async () => {
     const getLastUpdate = installFakeApi({ cat1: null });
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 
@@ -100,6 +103,7 @@ describe('getBudgetTemplates', () => {
       notesByCategory: { cat1: '#template 600' },
       budgetMonth: { month: '2026-11', categories: [{ id: 'cat1', name: 'Restaurants & Out to Eat', budgeted: 60000, spent: 0, balance: 0 }] }
     });
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 
@@ -120,6 +124,7 @@ describe('getBudgetTemplates', () => {
       budgetMonth: { month: '2026-11', categories: [{ id: 'cat1', name: 'Groceries', budgeted: 100000, spent: 0, balance: 0 }] },
       monthlySpendCentsByCategory: { cat1: 125000 }
     });
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 
@@ -136,6 +141,7 @@ describe('getBudgetTemplates', () => {
       notesByCategory: {},
       budgetMonth: { month: '2026-11', categories: [{ id: 'cat1', name: 'Groceries', budgeted: 0, spent: 0, balance: 0 }] }
     });
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 

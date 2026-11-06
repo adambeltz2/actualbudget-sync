@@ -58,6 +58,7 @@ describe('getUncategorizedTransactions', () => {
       { id: 't1-1', account: 'a1', category: 'c1', transfer_id: null, starting_balance_flag: false, is_parent: false, is_child: true, parent_id: 't1', payee: 'p1', amount: -10000 },
       { id: 't1-2', account: 'a1', category: 'c2', transfer_id: null, starting_balance_flag: false, is_parent: false, is_child: true, parent_id: 't1', payee: 'p1', amount: -5000 }
     ]);
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 
@@ -69,6 +70,7 @@ describe('getUncategorizedTransactions', () => {
     installFakeApi([
       { id: 't2', account: 'a1', category: null, transfer_id: null, starting_balance_flag: false, is_parent: false, payee: 'p1', amount: -5000 }
     ]);
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 
@@ -82,6 +84,7 @@ describe('getUncategorizedTransactions', () => {
       { id: 't3-1', account: 'a1', category: 'c1', transfer_id: null, starting_balance_flag: false, is_parent: false, is_child: true, parent_id: 't3', payee: 'p1', amount: -10000 },
       { id: 't3-2', account: 'a1', category: null, transfer_id: null, starting_balance_flag: false, is_parent: false, is_child: true, parent_id: 't3', payee: 'p1', amount: -5000 }
     ]);
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 

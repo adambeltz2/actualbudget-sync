@@ -116,6 +116,7 @@ describe('syncAndReport', () => {
     const fakeFetch = installFakeFetch();
 
     delete require.cache[require.resolve('../src/syncJob')];
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const syncJob = require('../src/syncJob');
 
@@ -149,6 +150,7 @@ describe('syncAndReport', () => {
     const fakeFetch = installFakeFetch();
 
     delete require.cache[require.resolve('../src/syncJob')];
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const syncJob = require('../src/syncJob');
 
@@ -174,6 +176,7 @@ describe('syncAndReport', () => {
     const configState = installFakeConfig({ ...BASE_CONFIG });
 
     delete require.cache[require.resolve('../src/syncJob')];
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const syncJob = require('../src/syncJob');
 
@@ -190,6 +193,7 @@ describe('syncAndReport', () => {
     installFakeConfig({ actualUrl: '', actualPassword: '', syncId: '', enableEmail: false, webhookEnabled: false });
 
     delete require.cache[require.resolve('../src/syncJob')];
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const syncJob = require('../src/syncJob');
 
