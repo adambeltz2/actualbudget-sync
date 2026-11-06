@@ -607,11 +607,8 @@
     </div>
   </div>
 
+  <script src="/shared.js"></script>
   <script>
-    fetch('/api/version').then(r => r.json()).then(({ version, commit }) => {
-      document.getElementById('appVersion').innerText = version ? `v${version}${commit ? ` (${commit})` : ''}` : '';
-    }).catch(() => {});
-
     const ACCENT = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0EA894';
     // Canvas contexts don't resolve CSS custom properties passed as color
     // strings, so Chart.js colors need real values resolved up front (same
@@ -620,27 +617,6 @@
     const TEXT_SECONDARY = getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim() || '#33404A';
     const CATEGORY_PALETTE = ['#0EA894', '#E8A33D', '#4C8DAE', '#8B7FD1', '#C4573F', '#9C7A54'];
     const ACCOUNT_PALETTE = ['#0EA894', '#4C8DAE', '#8B7FD1', '#E8A33D', '#9C7A54'];
-
-    // --- Theme ---
-    function applyTheme(isDark) {
-      document.documentElement.classList.toggle('dark', isDark);
-      document.getElementById('themeToggleBtn').innerText = isDark ? '☀️' : '🌙';
-    }
-    try {
-      const stored = localStorage.getItem('theme');
-      const isDark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-      applyTheme(isDark);
-    } catch (e) { /* localStorage may be unavailable (private mode); default light theme is fine */ }
-    document.getElementById('themeToggleBtn').addEventListener('click', () => {
-      const isDark = !document.documentElement.classList.contains('dark');
-      applyTheme(isDark);
-      try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch (e) { /* ignore */ }
-    });
-
-    // --- Error banner ---
-    const errorBanner = document.getElementById('errorBanner');
-    function showError(message) { errorBanner.innerText = message; errorBanner.hidden = false; }
-    function hideError() { errorBanner.hidden = true; }
 
     function formatCurrency(amount) {
       const text = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1636,10 +1612,6 @@
     }
     document.getElementById('triggerSyncBtn').addEventListener('click', function() { triggerSync(this); });
 
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      window.location.href = '/login.html';
-    });
     loadConfig();
   </script>
 </body>
