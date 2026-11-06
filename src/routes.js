@@ -732,11 +732,23 @@ router.get('/api/data/budget-review/trends', async (req, res) => {
   }
 });
 
+// Unlike every other /api/data/* route, Budget Templates forces a fresh
+// refreshBudget() (a real downloadBudget() pull from the server) instead
+// of the usual ensureReady() no-op. ensureReady only (re)connects once per
+// config fingerprint and otherwise serves whatever was already in this
+// process's local cache -- fine for data that only changes through this
+// app's own sync, but Actual's own UI is an equally normal, frequently
+// used place to write a category's #template/#goal note directly, so a
+// stale cache here reads as "nothing set" for a template someone just
+// added in Actual. The POST route refreshes for the same reason before
+// its own read-modify-write splice (setCategoryTemplate) -- otherwise
+// saving from a stale cache could silently overwrite a note someone just
+// changed in Actual with the stale version this process last saw.
 router.get('/api/data/budget-templates', async (req, res) => {
   const config = requireActualConfigured(req, res);
   if (!config) return;
   try {
-    await actualService.ensureReady(config);
+    await actualService.refreshBudget(config);
     const data = await actualService.getBudgetTemplates();
     res.json(data);
   } catch (err) {
@@ -754,7 +766,7 @@ router.post('/api/data/budget-templates', requireAdmin, async (req, res) => {
     return;
   }
   try {
-    await actualService.ensureReady(config);
+    await actualService.refreshBudget(config);
     await actualService.setCategoryTemplate(categoryId, templateString || null);
     res.json({ ok: true });
   } catch (err) {
