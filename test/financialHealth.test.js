@@ -59,9 +59,21 @@ describe('computeSavingsRate', () => {
     assert.equal(result.pctOfTarget, 0);
   });
 
-  test('zero income does not divide by zero', () => {
+  test('zero income with zero spend is genuinely neutral', () => {
     const result = computeSavingsRate({ income: 0, spend: 0, targetPct: 20 });
     assert.equal(result.ratePct, 0);
+    assert.equal(result.status, 'watch');
+  });
+
+  test('zero income with real spend reads as action, not a neutral watch', () => {
+    const result = computeSavingsRate({ income: 0, spend: 2000, targetPct: 20 });
+    assert.ok(result.ratePct < 0);
+    assert.equal(result.status, 'action');
+  });
+
+  test('negative income with spend also reads as action', () => {
+    const result = computeSavingsRate({ income: -500, spend: 1000, targetPct: 20 });
+    assert.equal(result.status, 'action');
   });
 });
 
