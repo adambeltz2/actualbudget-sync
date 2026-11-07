@@ -3,7 +3,7 @@ const { q } = require('@actual-app/api');
 const { logger } = require('./logger');
 const {
   buildSpendingInsights, buildBalanceProjection, buildBudgetCalibration,
-  requiredMonthlyContribution, buildContributionSeries, projectFutureValue
+  requiredMonthlyContribution, buildContributionSeries, projectFutureValue, computeNetWorthPace
 } = require('./insights');
 const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations, computeNetWorthBreakdown } = require('./financialHealth');
 const { buildCategoryDeltas } = require('./trends');
@@ -604,11 +604,21 @@ async function getRetirementModel({
   targetRetirementAge, modeledMonthlyContribution, fireAnnualExpenses, fireWithdrawalRatePct = 4, annualReturnRatePct = 7,
   birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
 } = {}) {
-  const { netWorth, annualExpenses, autoAnnualExpenses, currentAgeMonths, socialSecurity, fireNumber, pctReached, monthlyContribution } =
-    await computeFireInputs({
+  const [
+    { netWorth, annualExpenses, autoAnnualExpenses, currentAgeMonths, socialSecurity, fireNumber, pctReached, monthlyContribution },
+    netWorthHistory
+  ] = await Promise.all([
+    computeFireInputs({
       fireAnnualExpenses, fireWithdrawalRatePct, birthdate, ssClaimingChoice,
       ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
-    });
+    }),
+    // For the Pace Check below -- the oldest point in a trailing-12-month
+    // reconstruction approximates "net worth a year ago" closely enough for
+    // a year-over-year comparison, the same approximation getFinancialHealthHistory
+    // already makes elsewhere.
+    getMonthlyBalanceHistory({ months: 12 })
+  ]);
+  const netWorthYearAgo = netWorthHistory.length > 0 ? netWorthHistory[0].balance : null;
 
   const monthsToFI = monthsToReachFireTarget({
     currentBalance: netWorth, monthlyContribution, annualReturnRate: annualReturnRatePct / 100,
@@ -667,6 +677,17 @@ async function getRetirementModel({
     currentBalance: netWorth, monthlyContribution: modeled, annualReturnRate, totalMonths: monthsToTarget
   }).map(point => ({ ...point, age: (currentAgeMonths + point.months) / 12 }));
 
+  // Independent of any contribution assumption (measured or modeled):
+  // compares how much net worth actually grew over the trailing 12 months
+  // against how much it needed to grow to stay on the requiredMonthlyContribution
+  // trajectory. Net worth already nets out contributions and market returns
+  // together, so this sidesteps the whole "can we see payroll-deducted or
+  // off-budget contributions" problem the measured monthlyContribution above
+  // can't avoid.
+  const netWorthPace = netWorthYearAgo === null ? null : computeNetWorthPace({
+    netWorthNow: netWorth, netWorthYearAgo, requiredMonthlyContribution: required, annualReturnRate
+  });
+
   return {
     ...base,
     scenario: {
@@ -675,7 +696,7 @@ async function getRetirementModel({
       gap: required - monthlyContribution, onTrackAtActualPace: required <= monthlyContribution,
       modeledMonthlyContribution: modeled, projectedBalanceAtTarget, totalContributions, interestEarned,
       reachesTargetAtModeledPace: projectedBalanceAtTarget >= targetFireNumber,
-      currentPaceProjectedBalanceAtTarget, yearlySeries
+      currentPaceProjectedBalanceAtTarget, yearlySeries, netWorthPace
     }
   };
 }

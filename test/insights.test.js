@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const {
   linearRegression, projectFutureValue, classifySpendTrend, standardDeviation,
   buildSpendingInsights, buildBalanceProjection, monthsToReachTarget, buildBudgetCalibration,
-  requiredMonthlyContribution, buildContributionSeries
+  requiredMonthlyContribution, buildContributionSeries, computeNetWorthPace
 } = require('../src/insights');
 
 describe('linearRegression', () => {
@@ -435,5 +435,84 @@ describe('monthsToReachTarget', () => {
   test('a negative or zero monthly contribution with no growth never reaches a higher target', () => {
     const months = monthsToReachTarget({ currentBalance: 10000, monthlyContribution: -50, annualReturnRate: 0, target: 200000, maxMonths: 60 });
     assert.equal(months, null);
+  });
+});
+
+describe('computeNetWorthPace', () => {
+  // 0% return isolates the comparison from compounding math (already
+  // covered by projectFutureValue's own tests) so these assertions are
+  // exact: requiredAnnualGrowth = requiredMonthlyContribution * 12.
+  test('growing exactly at the required pace reads as on track', () => {
+    const result = computeNetWorthPace({
+      netWorthNow: 110000, netWorthYearAgo: 104000, requiredMonthlyContribution: 500, annualReturnRate: 0
+    });
+    assert.equal(result.realizedGrowth, 6000);
+    assert.equal(result.requiredAnnualGrowth, 6000);
+    assert.equal(result.pctOfPace, 100);
+    assert.equal(result.status, 'good');
+  });
+
+  test('growing at half the required pace reads as watch', () => {
+    const result = computeNetWorthPace({
+      netWorthNow: 107000, netWorthYearAgo: 104000, requiredMonthlyContribution: 500, annualReturnRate: 0
+    });
+    assert.equal(result.realizedGrowth, 3000);
+    assert.equal(result.pctOfPace, 50);
+    assert.equal(result.status, 'watch');
+  });
+
+  test('growing well under the required pace reads as action', () => {
+    const result = computeNetWorthPace({
+      netWorthNow: 105000, netWorthYearAgo: 104000, requiredMonthlyContribution: 500, annualReturnRate: 0
+    });
+    assert.equal(result.realizedGrowth, 1000);
+    assert.ok(result.pctOfPace < 50);
+    assert.equal(result.status, 'action');
+  });
+
+  test('net worth that actually shrank reads as action even with a small required pace', () => {
+    const result = computeNetWorthPace({
+      netWorthNow: 95000, netWorthYearAgo: 104000, requiredMonthlyContribution: 500, annualReturnRate: 0
+    });
+    assert.equal(result.realizedGrowth, -9000);
+    assert.ok(result.pctOfPace < 0);
+    assert.equal(result.status, 'action');
+  });
+
+  test('a required contribution of null (no target set) returns a null pace rather than throwing', () => {
+    const result = computeNetWorthPace({
+      netWorthNow: 110000, netWorthYearAgo: 104000, requiredMonthlyContribution: null, annualReturnRate: 0.07
+    });
+    assert.equal(result.requiredAnnualGrowth, null);
+    assert.equal(result.pctOfPace, null);
+    assert.equal(result.status, null);
+  });
+
+  test('a required growth at or below zero (already ahead of target) is on track with any non-negative growth', () => {
+    const result = computeNetWorthPace({
+      netWorthNow: 110000, netWorthYearAgo: 104000, requiredMonthlyContribution: -50, annualReturnRate: 0
+    });
+    assert.ok(result.requiredAnnualGrowth <= 0);
+    assert.equal(result.pctOfPace, 100);
+    assert.equal(result.status, 'good');
+  });
+
+  test('a required growth at or below zero with shrinking net worth is still flagged as action', () => {
+    const result = computeNetWorthPace({
+      netWorthNow: 100000, netWorthYearAgo: 104000, requiredMonthlyContribution: -50, annualReturnRate: 0
+    });
+    assert.ok(result.requiredAnnualGrowth <= 0);
+    assert.equal(result.pctOfPace, 0);
+    assert.equal(result.status, 'action');
+  });
+
+  test('compounding at a real return rate is reflected in the required growth figure', () => {
+    const result = computeNetWorthPace({
+      netWorthNow: 110000, netWorthYearAgo: 100000, requiredMonthlyContribution: 500, annualReturnRate: 0.07
+    });
+    // requiredAnnualGrowth = projectFutureValue(110000, 500, 0.07, 12) - 110000
+    const expected = projectFutureValue({ presentValue: 110000, monthlyContribution: 500, annualReturnRate: 0.07, months: 12 }) - 110000;
+    assert.equal(result.requiredAnnualGrowth, expected);
+    assert.ok(result.requiredAnnualGrowth > 500 * 12); // compounding adds more than the flat contribution total
   });
 });
