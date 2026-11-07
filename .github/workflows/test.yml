@@ -44,10 +44,40 @@ jobs:
       # Build-only (no push) validation that the Dockerfile still produces a
       # working image — publish.yml only runs on pushes to main, so without
       # this, a broken Dockerfile wouldn't surface until after it's merged.
+      # load: true makes the built image available to the local Docker
+      # daemon so the smoke-test step below can actually run it.
       - name: Build image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: false
+          load: true
+          tags: actualbudget-sync:ci
           build-args: |
             GIT_COMMIT=${{ github.sha }}
+
+      # A successful build only confirms the image was assembled -- it
+      # says nothing about whether the container actually boots and
+      # serves traffic (a missing runtime file, a bad CMD, an unhandled
+      # exception during require() would all build fine and crash on
+      # start). Runs the real image with no configuration, the same way a
+      # brand-new install's first boot looks, and polls the same
+      # unauthenticated /healthz endpoint the Dockerfile's own
+      # HEALTHCHECK uses.
+      - name: Smoke-test the built image
+        run: |
+          docker run -d --name smoke-test -p 3000:3000 actualbudget-sync:ci
+          ok=false
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/healthz > /dev/null; then
+              ok=true
+              break
+            fi
+            sleep 1
+          done
+          docker logs smoke-test
+          docker rm -f smoke-test
+          if [ "$ok" != "true" ]; then
+            echo "Container did not become healthy within 30s"
+            exit 1
+          fi

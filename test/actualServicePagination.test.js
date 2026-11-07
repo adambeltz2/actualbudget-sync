@@ -56,6 +56,7 @@ function installFakeApi(totalRows) {
 describe('queryAllTransactions', () => {
   test('pages through every matching row instead of capping at a fixed limit', async () => {
     const getCallCount = installFakeApi(6530);
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 
@@ -66,6 +67,7 @@ describe('queryAllTransactions', () => {
 
   test('a dataset that divides evenly into pages still fetches everything (one extra empty page confirms the end)', async () => {
     const getCallCount = installFakeApi(2000);
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 
@@ -76,6 +78,7 @@ describe('queryAllTransactions', () => {
 
   test('resolves payee names on every page, not just the first', async () => {
     const getCallCount = installFakeApi(1500);
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
     void getCallCount;

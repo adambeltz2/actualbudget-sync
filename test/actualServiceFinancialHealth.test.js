@@ -60,6 +60,7 @@ describe('getFinancialHealthData', () => {
       incomeSpendByMonth[m] = { income: 2000, spend: 1000 + i };
     }
     installFakeApi({ availableMonths, incomeSpendByMonth });
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 
@@ -78,6 +79,7 @@ describe('getFinancialHealthData', () => {
       incomeSpendByMonth[m] = { income: 1000, spend: 500 };
     }
     installFakeApi({ availableMonths, incomeSpendByMonth });
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 
@@ -90,6 +92,7 @@ describe('getFinancialHealthData', () => {
 
   test('a brand-new install with no history at all does not throw or produce NaN', async () => {
     installFakeApi({ availableMonths: [], incomeSpendByMonth: {} });
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 
@@ -109,6 +112,7 @@ describe('getFinancialHealthHistory', () => {
       incomeSpendByMonth[m] = { income: 2000, spend: 1000 };
     }
     installFakeApi({ availableMonths, incomeSpendByMonth });
+    delete require.cache[require.resolve('../src/actualClient')];
     delete require.cache[require.resolve('../src/actualService')];
     const actualService = require('../src/actualService');
 

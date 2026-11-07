@@ -203,33 +203,9 @@
     </footer>
   </div>
 
+  <script src="/shared.js"></script>
   <script>
-    fetch('/api/version').then(r => r.json()).then(({ version, commit }) => {
-      document.getElementById('appVersion').innerText = version ? `v${version}${commit ? ` (${commit})` : ''}` : '';
-    }).catch(() => {});
-
     const ACCOUNT_PALETTE = ['#0EA894', '#4C8DAE', '#8B7FD1', '#E8A33D', '#9C7A54'];
-
-    // --- Theme ---
-    function applyTheme(isDark) {
-      document.documentElement.classList.toggle('dark', isDark);
-      document.getElementById('themeToggleBtn').innerText = isDark ? '☀️' : '🌙';
-    }
-    try {
-      const stored = localStorage.getItem('theme');
-      const isDark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-      applyTheme(isDark);
-    } catch (e) { /* localStorage may be unavailable; default light theme is fine */ }
-    document.getElementById('themeToggleBtn').addEventListener('click', () => {
-      const isDark = !document.documentElement.classList.contains('dark');
-      applyTheme(isDark);
-      try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch (e) { /* ignore */ }
-    });
-
-    // --- Error banner ---
-    const errorBanner = document.getElementById('errorBanner');
-    function showError(message) { errorBanner.innerText = message; errorBanner.hidden = false; }
-    function hideError() { errorBanner.hidden = true; }
 
     function escapeHtml(text) {
       const div = document.createElement('div');
@@ -408,11 +384,6 @@
       offset = offset + PAGE_SIZE;
       loadTransactions();
     });
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      window.location.href = '/login.html';
-    });
-
     (async function init() {
       let configRes;
       try {
