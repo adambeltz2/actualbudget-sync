@@ -29,7 +29,13 @@ function computeEmergencyFund({ liquidBalance, monthlyAvgSpend, targetMonths }) 
 // since a negative rate (spending more than earned) is meaningfully worse
 // than "half of target" and should read as 'action', not 'watch'.
 function computeSavingsRate({ income, spend, targetPct }) {
-  const ratePct = income > 0 ? ((income - spend) / income) * 100 : 0;
+  // Zero (or negative) income can't drive a real percentage -- but zero
+  // income with real spend (a gig worker between gigs, a retiree between
+  // draws) is the worst case this metric can describe, not a neutral one,
+  // so it's floored alongside a true 100%-overspent month rather than
+  // silently falling back to 0% and reading as "watch". Zero income with
+  // zero spend (nothing happened) stays genuinely neutral.
+  const ratePct = income > 0 ? ((income - spend) / income) * 100 : (spend > 0 ? -100 : 0);
   const status = ratePct >= targetPct ? 'good' : (ratePct >= 0 ? 'watch' : 'action');
   return {
     ratePct,

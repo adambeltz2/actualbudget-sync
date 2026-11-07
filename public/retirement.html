@@ -12,6 +12,7 @@
       --text: #1E2A32; --text-secondary: #33404A; --text-muted: #8A93A0;
       --accent: #0EA894; --accent-dark: #0C8E7D; --accent-soft: #E4F5F2;
       --positive: #1C8C74; --negative: #C4573F; --negative-soft: #FBECE8;
+      --warning: #B8791F; --warning-soft: #FBF1E2;
       --shadow: 0 1px 2px rgba(30,42,50,0.04), 0 8px 24px rgba(30,42,50,0.06);
     }
     html.dark {
@@ -19,6 +20,7 @@
       --text: #EDEFF0; --text-secondary: #C7CDD1; --text-muted: #7C8890;
       --accent: #14BFA8; --accent-dark: #0EA894; --accent-soft: #16302C;
       --positive: #2FBF9B; --negative: #E0806A; --negative-soft: #34211E;
+      --warning: #F0B24B; --warning-soft: #332817;
       --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px rgba(0,0,0,0.3);
     }
     * { box-sizing: border-box; }
@@ -50,6 +52,7 @@
     .pill { font-size: 11.5px; font-weight: 700; padding: 4px 11px; border-radius: 999px; white-space: nowrap; }
     .badge-under { color: var(--negative); background: var(--negative-soft); }
     .badge-ontrack { color: var(--positive); background: var(--accent-soft); }
+    .badge-watch { color: var(--warning); background: var(--warning-soft); }
     .statGrid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
     .scenarioGrid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 18px; }
     table.compare { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -204,6 +207,11 @@
             <tbody id="compareTableBody"></tbody>
           </table>
         </div>
+
+        <div class="label-caps" style="margin-bottom:10px;">Pace Check</div>
+        <div class="card">
+          <div id="paceCheckBody"></div>
+        </div>
       </div>
 
       <p class="field-hint" style="margin-top:4px;">This is a simple math projection from your own historical data, not financial advice, and doesn't account for inflation — contributions, interest, and your target balance are all in today's dollars. It doesn't touch the Dashboard's FIRE Number or its own settings.</p>
@@ -216,36 +224,8 @@
     </footer>
   </div>
 
+  <script src="/shared.js"></script>
   <script>
-    fetch('/api/version').then(r => r.json()).then(({ version, commit }) => {
-      document.getElementById('appVersion').innerText = version ? `v${version}${commit ? ` (${commit})` : ''}` : '';
-    }).catch(() => {});
-
-    // --- Theme ---
-    function applyTheme(isDark) {
-      document.documentElement.classList.toggle('dark', isDark);
-      document.getElementById('themeToggleBtn').innerText = isDark ? '☀️' : '🌙';
-    }
-    try {
-      const stored = localStorage.getItem('theme');
-      applyTheme(stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
-    } catch (e) { /* localStorage may be unavailable */ }
-    document.getElementById('themeToggleBtn').addEventListener('click', () => {
-      const isDark = !document.documentElement.classList.contains('dark');
-      applyTheme(isDark);
-      try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch (e) { /* ignore */ }
-    });
-
-    // --- Error banner ---
-    const errorBanner = document.getElementById('errorBanner');
-    function showError(message) { errorBanner.innerText = message; errorBanner.hidden = false; }
-    function hideError() { errorBanner.hidden = true; }
-
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      window.location.href = '/login.html';
-    });
-
     function formatCurrency(amount) {
       const text = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
       return amount < 0 ? `-$${text}` : `$${text}`;
@@ -317,6 +297,7 @@
         document.getElementById('statProjectedBalance').innerText = '—';
         document.getElementById('statContributions').innerText = '—';
         document.getElementById('statInterest').innerText = '—';
+        document.getElementById('paceCheckBody').innerHTML = '';
         if (balanceChart) { balanceChart.destroy(); balanceChart = null; }
         return;
       }
@@ -376,6 +357,34 @@
           <td class="field-hint">${onTrack ? 'yes' : 'no'}</td>
           <td><span class="pill ${onTrack ? 'badge-ontrack' : 'badge-under'}">${onTrack ? 'ON TRACK' : `SHORT BY ${formatCurrency(modeledShortfall)}`}</span></td>
         </tr>`;
+
+      renderPaceCheck(s.netWorthPace, s.targetAge);
+    }
+
+    // Independent of the contribution-based scenario above: compares how
+    // much net worth actually grew over the trailing 12 months against how
+    // much it needed to grow to stay on the required-contribution
+    // trajectory. Net worth already nets out contributions and market
+    // returns together, so this reads as on/off track regardless of
+    // whether the modeled or measured contribution figures above are
+    // themselves accurate -- useful specifically when some contributions
+    // (payroll-deducted retirement accounts, off-budget transfers) never
+    // show up as tracked transactions at all.
+    function renderPaceCheck(pace, targetAge) {
+      const body = document.getElementById('paceCheckBody');
+      if (!pace) {
+        body.innerHTML = `<p class="field-hint" style="margin:0;">Not enough balance history yet to check pace — this needs at least a year of tracked account data.</p>`;
+        return;
+      }
+      const statusClass = pace.status === 'good' ? 'badge-ontrack' : pace.status === 'watch' ? 'badge-watch' : 'badge-under';
+      const statusLabel = pace.status === 'good' ? 'ON TRACK' : pace.status === 'watch' ? 'WATCH' : 'BEHIND PACE';
+      const pctText = pace.pctOfPace === null ? '—' : `${Math.round(pace.pctOfPace)}% of required pace`;
+      body.innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; margin-bottom:10px;">
+          <div style="font-size:14.5px;">Your net worth grew <strong>${formatCurrency(pace.realizedGrowth)}</strong> over the last 12 months — you needed <strong>${formatCurrency(pace.requiredAnnualGrowth)}</strong> to stay on pace for age ${targetAge}.</div>
+          <span class="pill ${statusClass}">${statusLabel} — ${pctText}</span>
+        </div>
+        <p class="field-hint" style="margin:0;">Measured straight from your account balances — including contributions and market returns together — so it's accurate even if "actual pace" above misses payroll-deducted or off-budget contributions. Assumes today's account tags applied the whole year, the same approximation the Dashboard's Score Trend uses.</p>`;
     }
 
     function renderBalanceChart(yearlySeries) {

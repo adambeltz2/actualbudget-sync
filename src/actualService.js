@@ -1,11 +1,9 @@
-const fs = require('fs');
-const path = require('path');
 const api = require('@actual-app/api');
 const { q } = require('@actual-app/api');
 const { logger } = require('./logger');
 const {
   buildSpendingInsights, buildBalanceProjection, buildBudgetCalibration,
-  requiredMonthlyContribution, buildContributionSeries, projectFutureValue
+  requiredMonthlyContribution, buildContributionSeries, projectFutureValue, computeNetWorthPace
 } = require('./insights');
 const { computeEmergencyFund, computeSavingsRate, computeDebtLoad, computeOverallScore, buildRecommendations, computeNetWorthBreakdown } = require('./financialHealth');
 const { buildCategoryDeltas } = require('./trends');
@@ -16,102 +14,13 @@ const {
   computeSustainability, computeUnassignedSpend, computeCategoryGrid, computeYearOverYearTrends
 } = require('./budgetReview');
 const { parseTemplateNote, computeTemplateAmount, replaceTemplateInNote } = require('./budgetTemplates');
-
-const DATA_DIR = '/data';
-
-// Kept open across sync cycles instead of init()/shutdown() per run, so the
-// downloaded budget stays queryable between syncs (needed by the data
-// explorer/dashboard work planned in the backlog).
-let initialized = false;
-let currentFingerprint = null;
-
-function fingerprint(config) {
-  return `${config.actualUrl}|${config.syncId}|${config.actualPassword}`;
-}
-
-// @actual-app/api's init()/shutdown()/downloadBudget() aren't safe to call
-// concurrently against the same DATA_DIR — two dashboard tabs hitting
-// different /api/data/* routes, or a scheduled sync firing while a
-// dashboard load is in flight, could otherwise interleave a shutdown() with
-// another call's init()/download(). This serializes every such call through
-// one FIFO queue instead of locking per-call, so callers never race.
-let apiOpQueue = Promise.resolve();
-function withApiLock(fn) {
-  const result = apiOpQueue.then(fn, fn);
-  apiOpQueue = result.catch(() => {});
-  return result;
-}
-
-// @actual-app/api throws these when its local SQLite/JSON cache under
-// DATA_DIR is corrupted or stale relative to the server — e.g. metadata
-// left truncated by an interrupted write, or the server no longer
-// recognizing a cached fileId (the budget was reset/recreated server-side,
-// or the cache survived a Sync ID change). Previously this required an
-// operator to manually find and delete the right cache subfolder under
-// ./data; self-healing here means a bad local cache can't wedge the
-// scheduled sync indefinitely.
-const CORRUPTED_CACHE_SIGNATURES = [
-  'invalid fileId',
-  'Unexpected end of JSON input',
-  "reading 'prepare'",
-  'services are already running'
-];
-
-function isCorruptedCacheError(err) {
-  const message = String((err && err.message) || err);
-  return CORRUPTED_CACHE_SIGNATURES.some(sig => message.includes(sig));
-}
-
-// Wipes everything under dataDir except config.json — the rest is entirely
-// @actual-app/api's own per-budget cache, safe to discard and let it
-// re-download fresh.
-function purgeLocalCache(dataDir) {
-  let entries;
-  try {
-    entries = fs.readdirSync(dataDir);
-  } catch (err) {
-    return;
-  }
-  for (const entry of entries) {
-    if (entry === 'config.json') continue;
-    fs.rmSync(path.join(dataDir, entry), { recursive: true, force: true });
-  }
-}
-
-async function downloadWithSelfHeal(config) {
-  try {
-    await api.downloadBudget(config.syncId);
-  } catch (err) {
-    if (!isCorruptedCacheError(err)) throw err;
-    logger.warn(`Local Actual Budget cache appears corrupted (${err.message}); clearing it under ${DATA_DIR} and retrying once...`);
-    await api.shutdown().catch(() => {});
-    purgeLocalCache(DATA_DIR);
-    await api.init({ dataDir: DATA_DIR, serverURL: config.actualUrl, password: config.actualPassword });
-    await api.downloadBudget(config.syncId);
-  }
-}
-
-async function ensureReady(config) {
-  return withApiLock(async () => {
-    const fp = fingerprint(config);
-    if (initialized && fp === currentFingerprint) return;
-
-    if (initialized) {
-      logger.info('Actual Budget configuration changed; reinitializing data service...');
-      await shutdown();
-    }
-
-    await api.init({ dataDir: DATA_DIR, serverURL: config.actualUrl, password: config.actualPassword });
-    await downloadWithSelfHeal(config);
-    initialized = true;
-    currentFingerprint = fp;
-  });
-}
-
-async function refreshBudget(config) {
-  await ensureReady(config);
-  await withApiLock(() => downloadWithSelfHeal(config));
-}
+// Connection lifecycle (init/download/shutdown, the corrupted-cache
+// self-heal, the concurrent-call lock) lives in actualClient.js; every
+// function below builds on top of that same shared @actual-app/api
+// connection (same module, so the same live session either file calls
+// api.* on), but only cares that it's ready, not how it got that way.
+const actualClient = require('./actualClient');
+const { ensureReady, refreshBudget, runBankSync, shutdown, isReady, isCorruptedCacheError, purgeLocalCache } = actualClient;
 
 // Used by the dashboard's "Test Connection" button. Reuses ensureReady, so a
 // failed test only tears down the shared session temporarily — the next real
@@ -184,7 +93,15 @@ function buildTransactionFilters({ accountId, categoryId, startDate, endDate, se
   if (categoryIds.length) filters.push({ category: { $oneof: categoryIds } });
   if (startDate) filters.push({ date: { $gte: startDate } });
   if (endDate) filters.push({ date: { $lte: endDate } });
-  if (search) filters.push({ payee_name: { $like: `%${search}%` } });
+  // 'payee.name' (a dot-path into the joined payees table), not the bare
+  // 'payee_name' this previously used -- confirmed against the real AQL
+  // schema (transactions.payee is an id reference to payees, with no flat
+  // payee_name field of its own) and against Actual's own desktop client,
+  // which filters its transaction search the same way
+  // (packages/desktop-client/src/queries/index.ts). The old field name
+  // matched no column, so this filter was silently a no-op -- every
+  // search returned the unfiltered result set rather than erroring.
+  if (search) filters.push({ 'payee.name': { $like: `%${search}%` } });
   return filters;
 }
 
@@ -687,11 +604,21 @@ async function getRetirementModel({
   targetRetirementAge, modeledMonthlyContribution, fireAnnualExpenses, fireWithdrawalRatePct = 4, annualReturnRatePct = 7,
   birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
 } = {}) {
-  const { netWorth, annualExpenses, autoAnnualExpenses, currentAgeMonths, socialSecurity, fireNumber, pctReached, monthlyContribution } =
-    await computeFireInputs({
+  const [
+    { netWorth, annualExpenses, autoAnnualExpenses, currentAgeMonths, socialSecurity, fireNumber, pctReached, monthlyContribution },
+    netWorthHistory
+  ] = await Promise.all([
+    computeFireInputs({
       fireAnnualExpenses, fireWithdrawalRatePct, birthdate, ssClaimingChoice,
       ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
-    });
+    }),
+    // For the Pace Check below -- the oldest point in a trailing-12-month
+    // reconstruction approximates "net worth a year ago" closely enough for
+    // a year-over-year comparison, the same approximation getFinancialHealthHistory
+    // already makes elsewhere.
+    getMonthlyBalanceHistory({ months: 12 })
+  ]);
+  const netWorthYearAgo = netWorthHistory.length > 0 ? netWorthHistory[0].balance : null;
 
   const monthsToFI = monthsToReachFireTarget({
     currentBalance: netWorth, monthlyContribution, annualReturnRate: annualReturnRatePct / 100,
@@ -750,6 +677,17 @@ async function getRetirementModel({
     currentBalance: netWorth, monthlyContribution: modeled, annualReturnRate, totalMonths: monthsToTarget
   }).map(point => ({ ...point, age: (currentAgeMonths + point.months) / 12 }));
 
+  // Independent of any contribution assumption (measured or modeled):
+  // compares how much net worth actually grew over the trailing 12 months
+  // against how much it needed to grow to stay on the requiredMonthlyContribution
+  // trajectory. Net worth already nets out contributions and market returns
+  // together, so this sidesteps the whole "can we see payroll-deducted or
+  // off-budget contributions" problem the measured monthlyContribution above
+  // can't avoid.
+  const netWorthPace = netWorthYearAgo === null ? null : computeNetWorthPace({
+    netWorthNow: netWorth, netWorthYearAgo, requiredMonthlyContribution: required, annualReturnRate
+  });
+
   return {
     ...base,
     scenario: {
@@ -758,7 +696,7 @@ async function getRetirementModel({
       gap: required - monthlyContribution, onTrackAtActualPace: required <= monthlyContribution,
       modeledMonthlyContribution: modeled, projectedBalanceAtTarget, totalContributions, interestEarned,
       reachesTargetAtModeledPace: projectedBalanceAtTarget >= targetFireNumber,
-      currentPaceProjectedBalanceAtTarget, yearlySeries
+      currentPaceProjectedBalanceAtTarget, yearlySeries, netWorthPace
     }
   };
 }
@@ -1631,10 +1569,6 @@ async function getNetWorthHistory({ liabilityAccountIds = [], months = 12 } = {}
   });
 }
 
-async function runBankSync() {
-  return api.runBankSync();
-}
-
 // runBankSync() attempts every linked account but its public API only ever
 // throws using the *first* account's error, discarding the rest even though
 // @actual-app/api persists a bank_sync_status ('ok' or a failure reason) for
@@ -1648,17 +1582,6 @@ async function getBankSyncStatuses() {
     q('accounts').filter({ closed: false }).select(['id', 'name', 'bank_sync_status'])
   );
   return data;
-}
-
-async function shutdown() {
-  if (!initialized) return;
-  await api.shutdown();
-  initialized = false;
-  currentFingerprint = null;
-}
-
-function isReady() {
-  return initialized;
 }
 
 module.exports = {

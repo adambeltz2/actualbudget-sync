@@ -187,6 +187,38 @@ function requiredMonthlyContribution({ currentBalance, targetValue, annualReturn
   return (targetValue - currentBalance * growth) / ((growth - 1) / monthlyRate);
 }
 
+// "Is my actual net worth growing at the pace it needs to" -- independent
+// of any assumed monthly contribution. netWorthNow and netWorthYearAgo
+// already net out contributions AND market returns together (whatever
+// grew the balance, grew the balance), which is exactly what determines
+// whether a FIRE target gets hit -- a strong market can put someone ahead
+// of pace on modest contributions, a bad stretch can put them behind on
+// generous ones. requiredAnnualGrowth is "what this balance needed to
+// grow by this year to stay exactly on the trajectory implied by
+// requiredMonthlyContribution" -- projectFutureValue 12 months forward at
+// that contribution rate, minus today's balance. pctOfPace follows the
+// same 100%/50% on-track/watch/action thresholds used elsewhere in this
+// app (Emergency Fund, Savings Rate).
+function computeNetWorthPace({ netWorthNow, netWorthYearAgo, requiredMonthlyContribution: requiredMonthly, annualReturnRate }) {
+  const realizedGrowth = netWorthNow - netWorthYearAgo;
+  const requiredAnnualGrowth = requiredMonthly == null
+    ? null
+    : projectFutureValue({ presentValue: netWorthNow, monthlyContribution: requiredMonthly, annualReturnRate, months: 12 }) - netWorthNow;
+
+  if (requiredAnnualGrowth === null) {
+    return { realizedGrowth, requiredAnnualGrowth: null, pctOfPace: null, status: null };
+  }
+  // A required growth of $0 or less (already past target, or a shrinking
+  // required pace) means anything non-negative is automatically on track;
+  // avoids a divide-by-zero/negative-denominator ratio reading as "behind".
+  const pctOfPace = requiredAnnualGrowth > 0
+    ? (realizedGrowth / requiredAnnualGrowth) * 100
+    : (realizedGrowth >= 0 ? 100 : 0);
+  const status = pctOfPace >= 100 ? 'good' : (pctOfPace >= 50 ? 'watch' : 'action');
+
+  return { realizedGrowth, requiredAnnualGrowth, pctOfPace, status };
+}
+
 // A year-by-year breakdown of a single contribution scenario, from today out
 // to `totalMonths` — the data behind the Retirement Modeling page's bar
 // chart (contributions stacked under interest, per year) and its "Total
@@ -307,5 +339,5 @@ function buildBalanceProjection(monthlyBalances, investmentMonthlyBalances = [],
 module.exports = {
   linearRegression, projectFutureValue, classifySpendTrend, standardDeviation,
   buildSpendingInsights, buildBalanceProjection, monthsToReachTarget, buildBudgetCalibration,
-  requiredMonthlyContribution, buildContributionSeries
+  requiredMonthlyContribution, buildContributionSeries, computeNetWorthPace
 };
