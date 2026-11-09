@@ -74,6 +74,27 @@ describe('buildSummaryReportHtml', () => {
     assert.doesNotMatch(html, /<script>alert/);
   });
 
+  // Regression: a category funded mostly from a prior month's rollover (a
+  // sinking fund, or a household that allocates ahead and spends later)
+  // used to make the intro line's "total budget" count only this month's
+  // freshly-assigned dollars, while "spent" drew on budgeted + rollover
+  // together -- producing a nonsensical total like "$2,061 of your $360
+  // budget (573%)" even though nothing was actually overspent.
+  test('total budget/percent includes rolled-over balance, not just this month\'s fresh allocation', () => {
+    // Groceries: only $100 freshly budgeted this month, but $1,900 of
+    // rollover sitting in the category lets $2,000 be spent without going
+    // over -- available = remaining(1900) + spent(2000) = 3900.
+    const rolledOver = [
+      { categoryId: 'c1', name: 'Groceries', groupName: 'Food', budgeted: 100, spent: 2000, pctUsed: 51, remaining: 1900, overBudget: false }
+    ];
+    const { html } = buildSummaryReportHtml({ now: new Date(2026, 9, 18), budgetVsActual: rolledOver });
+    assert.match(html, /\$2,000\.00/); // spent
+    assert.match(html, /\$3,900\.00/); // total available (budgeted + rollover), not the naive $100
+    assert.doesNotMatch(html, /\$100\.00 total/);
+    assert.match(html, /\(51%\)/);
+    assert.doesNotMatch(html, /2000%/);
+  });
+
   describe('frequency: weekly', () => {
     test('subject names the trailing 7-day range, not the month', () => {
       const { subject } = buildSummaryReportHtml({ now: new Date(2026, 9, 18), budgetVsActual, frequency: 'weekly' });
