@@ -22,9 +22,23 @@ function buildSummaryReportHtml({
   publicUrl = '', now = new Date(), frequency = 'monthly'
 }) {
   const { dayOfMonth, daysInMonth, pctMonthElapsed, monthLabel } = computeMonthProgress(now);
-  const totalBudgeted = budgetVsActual.reduce((sum, cat) => sum + cat.budgeted, 0);
-  const totalSpent = budgetVsActual.reduce((sum, cat) => sum + cat.spent, 0);
-  const totalPctUsed = totalBudgeted > 0 ? Math.round((totalSpent / totalBudgeted) * 100) : 0;
+  // Reuses computeBudgetTotalRow (emailReport.js) -- the same "Total" row
+  // already rendered correctly at the bottom of the Budget Progress section
+  // below -- rather than recomputing a separate total here. The naive
+  // sum-of-budgeted this function used to compute only counts dollars
+  // freshly assigned *this* month, while totalSpent draws on that PLUS any
+  // rolled-over balance from prior months (a sinking fund funded ahead of
+  // time, a category that carries a surplus) -- so a household that does
+  // most of its allocating in a different month than it spends could see a
+  // nonsensical total ("$2,061 of your $360 budget, 573%") even though
+  // nothing was actually overspent. computeBudgetTotalRow's `available`
+  // (remaining + spent, i.e. this month's budget plus any carryover) is the
+  // same fix already applied per-category in actualService.js's
+  // computeBudgetStats.
+  const totalRow = computeBudgetTotalRow(budgetVsActual);
+  const totalBudgeted = totalRow.remaining + totalRow.spent;
+  const totalSpent = totalRow.spent;
+  const totalPctUsed = totalRow.pctUsed;
   const watchList = computeCategoriesToWatch(budgetVsActual, pctMonthElapsed);
   const isWeekly = frequency === 'weekly';
   const weekLabel = isWeekly ? weekRangeLabel(now) : null;
@@ -86,7 +100,7 @@ function buildSummaryReportHtml({
       <div style="font-size:11px; color:${MUTED}; margin-bottom:14px;"><span style="display:inline-block; width:10px; height:2px; background:#1E2A32; opacity:0.45; vertical-align:middle; margin-right:5px;"></span>marks ${pctMonthElapsed}% through the month. A category's pace tag compares its own spend to that line — not a verdict, since a bill paid in full early in the month will always read as "ahead of pace" here even when that's expected.</div>
       <div style="margin-bottom:24px;">`;
     groupBudgetCategoriesByParent(budgetVsActual).forEach(group => { html += renderBudgetGroup(group, pctMonthElapsed); });
-    html += `<div style="border-top:1px solid #F0EFEB; padding-top:12px; margin-top:4px;">${renderBudgetRow(computeBudgetTotalRow(budgetVsActual))}</div>`;
+    html += `<div style="border-top:1px solid #F0EFEB; padding-top:12px; margin-top:4px;">${renderBudgetRow(totalRow)}</div>`;
     html += `</div>`;
   }
 
