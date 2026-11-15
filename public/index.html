@@ -817,7 +817,7 @@
         <div class="card-soft" style="padding:11px 13px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
           <div style="display:flex; align-items:center; gap:9px; min-width:0;">
             <span style="width:8px; height:8px; border-radius:50%; background:${ACCOUNT_PALETTE[i % ACCOUNT_PALETTE.length]}; flex-shrink:0;"></span>
-            <span title="${a.name}" style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</span>
+            <span title="${escapeHtml(a.name)}" style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(a.name)}</span>
           </div>
           <span class="num" style="font-weight:700; font-size:13.5px; color:${a.balance < 0 ? 'var(--negative)' : 'var(--text)'}; flex-shrink:0;">${formatCurrency(a.balance)}</span>
         </div>`).join('') || `<p style="color:var(--text-muted); font-size:13px;">No accounts yet.</p>`;
@@ -1479,8 +1479,8 @@
       document.getElementById('metricModalList').innerHTML = data.transactions.map(t => `
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px solid var(--border);">
           <div style="min-width:0;">
-            <div style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t.payee_name || 'Unknown'}</div>
-            <div style="font-size:11.5px; color:var(--text-muted); margin-top:1px;">${t.date} · ${t.category} · ${t.account}</div>
+            <div style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(t.payee_name) || 'Unknown'}</div>
+            <div style="font-size:11.5px; color:var(--text-muted); margin-top:1px;">${escapeHtml(t.date)} · ${escapeHtml(t.category)} · ${escapeHtml(t.account)}</div>
           </div>
           <span class="num" style="font-weight:700; font-size:13.5px; color:${t.amount < 0 ? 'var(--negative)' : 'var(--positive)'}; flex-shrink:0;">${formatCurrency(t.amount)}</span>
         </div>`).join('') || `<p class="field-hint" style="margin:20px 0; text-align:center;">No matching transactions in this period.</p>`;

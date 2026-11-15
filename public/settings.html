@@ -460,6 +460,12 @@
 
   <script src="/shared.js"></script>
   <script>
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.innerText = text ?? '';
+      return div.innerHTML;
+    }
+
     function formatCurrency(amount) {
       const text = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       return amount < 0 ? `-$${text}` : `$${text}`;
@@ -747,7 +753,7 @@
         const current = classificationFor(a.id);
         const option = (value, label) => `<option value="${value}" ${current === value ? 'selected' : ''}>${label}</option>`;
         return `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px solid var(--border);">
-          <span title="${a.name}" style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0;">${a.name}</span>
+          <span title="${escapeHtml(a.name)}" style="font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0;">${escapeHtml(a.name)}</span>
           <span class="num" style="font-weight:700; font-size:13.5px; color:${a.balance < 0 ? 'var(--negative)' : 'var(--text)'}; flex-shrink:0;">${formatCurrency(a.balance)}</span>
           <select class="accountClassSelect" data-account-id="${a.id}" style="padding:5px 8px; font-size:12.5px; border-radius:6px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); flex-shrink:0;">
             ${option('', 'Unclassified')}
