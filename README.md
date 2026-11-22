@@ -209,6 +209,8 @@ The **Financial Independence** widget shows a gauge for what % of your "FIRE num
 
 Optionally factor **Social Security** into the FIRE Number under Settings: enter your birthdate and, from your SSA statement (ssa.gov/myaccount), whichever of the three claiming ages (62, Full Retirement Age, 70) you have monthly benefit estimates for, then pick which one to actually plan around. The FIRE Number is reduced by that benefit once you'd reach the chosen age — but not before it, since Social Security hasn't started yet and every expense until then still has to come from savings alone (a "bridge"). Leave it all blank to ignore Social Security entirely, exactly as before.
 
+With a birthdate on file, both the Dashboard widget and the Retirement Modeling page also show the age you'd actually be when FI is reached ("You'd be age 47 yr 3 mo"), not just how many years away it is — the same birthdate already used for the Social Security bridge above.
+
 Financial Health Check and Financial Independence both show a brief "rule of thumb" line next to each target (e.g. "3–6 months of essential expenses," "15–20% of income") — standard personal-finance benchmarks, not the app's own opinion, so the numbers are easier to judge without outside context.
 
 ## Retirement Modeling
