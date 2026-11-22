@@ -424,6 +424,7 @@
           <div style="flex:1; min-width:200px;">
             <div id="fireYearsText" class="num" style="font-size:18px; font-weight:800; margin-bottom:4px;">—</div>
             <div style="font-size:13px; color:var(--text-secondary); line-height:1.5;">to reach financial independence, at your current savings pace compounding at your Insights return rate.</div>
+            <div id="fireAgeAtFiText" style="font-size:13px; color:var(--text-secondary); line-height:1.5; margin-top:2px;" hidden></div>
           </div>
         </div>
 
@@ -1348,6 +1349,14 @@
         : data.yearsToFI === 0 && data.monthsRemainderToFI === 0
           ? 'You\'ve reached FIRE!'
           : `${data.yearsToFI} yr ${data.monthsRemainderToFI} mo`;
+
+      const ageAtFiText = document.getElementById('fireAgeAtFiText');
+      if (data.ageAtFI && !(data.yearsToFI === 0 && data.monthsRemainderToFI === 0)) {
+        ageAtFiText.innerText = `You'd be age ${data.ageAtFI.years}${data.ageAtFI.months > 0 ? ` yr ${data.ageAtFI.months} mo` : ''}.`;
+        ageAtFiText.hidden = false;
+      } else {
+        ageAtFiText.hidden = true;
+      }
 
       document.getElementById('fireNetWorth').innerText = formatCurrency(data.netWorth);
       document.getElementById('fireNumberValue').innerText = formatCurrency(data.fireNumber);

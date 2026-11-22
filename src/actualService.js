@@ -581,6 +581,12 @@ async function getFireProgress({
     fireWithdrawalRatePct, pctReached, monthlyContribution,
     yearsToFI: monthsToFI === null ? null : Math.floor(monthsToFI / 12),
     monthsRemainderToFI: monthsToFI === null ? null : monthsToFI % 12,
+    // The age you'd actually be when FI is reached, not just how long it
+    // takes from today -- needs a birthdate (to know today's age in months)
+    // AND a reachable target (monthsToFI isn't null) to mean anything.
+    ageAtFI: (currentAgeMonths !== null && monthsToFI !== null)
+      ? { years: Math.floor((currentAgeMonths + monthsToFI) / 12), months: (currentAgeMonths + monthsToFI) % 12 }
+      : null,
     socialSecurity: socialSecurity ? {
       claimAgeMonths: socialSecurity.claimAgeMonths,
       annualBenefit: socialSecurity.annualBenefit,
@@ -631,6 +637,11 @@ async function getRetirementModel({
     fireWithdrawalRatePct, pctReached, monthlyContribution,
     yearsToFI: monthsToFI === null ? null : Math.floor(monthsToFI / 12),
     monthsRemainderToFI: monthsToFI === null ? null : monthsToFI % 12,
+    // Same as getFireProgress's ageAtFI -- the age you'd actually be when FI
+    // is reached, not just how long it takes from today.
+    ageAtFI: (currentAgeMonths !== null && monthsToFI !== null)
+      ? { years: Math.floor((currentAgeMonths + monthsToFI) / 12), months: (currentAgeMonths + monthsToFI) % 12 }
+      : null,
     hasBirthdate: currentAgeMonths !== null,
     // The FIRE Number above is always computed at TODAY's age — with Social
     // Security configured, a target at a different (older) age can be a
