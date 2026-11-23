@@ -76,6 +76,33 @@ describe('computeFireTargetAtAge', () => {
     const target = computeFireTargetAtAge({ ageMonths: 800, annualExpenses: 40000, withdrawalRatePct: 4, socialSecurity });
     assert.equal(target, 0);
   });
+
+  describe('taxRatePct', () => {
+    test('defaults to 0 (no gross-up), unchanged from before this existed', () => {
+      const withoutArg = computeFireTargetAtAge({ ageMonths: 500, annualExpenses: 40000, withdrawalRatePct: 4, socialSecurity: null });
+      const explicitZero = computeFireTargetAtAge({ ageMonths: 500, annualExpenses: 40000, withdrawalRatePct: 4, socialSecurity: null, taxRatePct: 0 });
+      assert.equal(withoutArg, explicitZero);
+    });
+
+    test('grosses up the no-Social-Security target by 1 / (1 - taxRate)', () => {
+      const target = computeFireTargetAtAge({ ageMonths: 500, annualExpenses: 40000, withdrawalRatePct: 4, socialSecurity: null, taxRatePct: 20 });
+      assert.equal(target, (40000 / 0.8) * 25);
+    });
+
+    test('grosses up the bridge cost, and grosses up the SS-offset remainder (SS nets out of raw expenses first)', () => {
+      const socialSecurity = { claimAgeMonths: 744, annualBenefit: 18000 };
+      const target = computeFireTargetAtAge({ ageMonths: 744 - 60, annualExpenses: 40000, withdrawalRatePct: 4, socialSecurity, taxRatePct: 15 });
+      const expectedPostClaim = ((40000 - 18000) / 0.85) * 25;
+      const expectedBridge = (40000 / 0.85) * 5;
+      assert.ok(Math.abs(target - (expectedPostClaim + expectedBridge)) < 1e-6);
+    });
+
+    test('a higher tax rate always raises the target, holding everything else equal', () => {
+      const noTax = computeFireTargetAtAge({ ageMonths: 500, annualExpenses: 50000, withdrawalRatePct: 4, socialSecurity: null, taxRatePct: 0 });
+      const taxed = computeFireTargetAtAge({ ageMonths: 500, annualExpenses: 50000, withdrawalRatePct: 4, socialSecurity: null, taxRatePct: 25 });
+      assert.ok(taxed > noTax);
+    });
+  });
 });
 
 describe('monthsToReachFireTarget', () => {
@@ -99,5 +126,29 @@ describe('monthsToReachFireTarget', () => {
       annualExpenses: 40000, withdrawalRatePct: 4, currentAgeMonths: 790, socialSecurity: null
     });
     assert.ok(withSS < withoutSS, 'Social Security should shorten (or match) the time to reach FIRE, never lengthen it');
+  });
+
+  test('taxRatePct defaults to 0, unchanged from before it existed', () => {
+    const withoutArg = monthsToReachFireTarget({
+      currentBalance: 0, monthlyContribution: 1000, annualReturnRate: 0,
+      annualExpenses: 12000, withdrawalRatePct: 4, currentAgeMonths: null, socialSecurity: null
+    });
+    const explicitZero = monthsToReachFireTarget({
+      currentBalance: 0, monthlyContribution: 1000, annualReturnRate: 0,
+      annualExpenses: 12000, withdrawalRatePct: 4, currentAgeMonths: null, socialSecurity: null, taxRatePct: 0
+    });
+    assert.equal(withoutArg, explicitZero);
+  });
+
+  test('a higher tax rate raises the target, so it takes at least as long to reach it', () => {
+    const noTax = monthsToReachFireTarget({
+      currentBalance: 0, monthlyContribution: 1000, annualReturnRate: 0,
+      annualExpenses: 12000, withdrawalRatePct: 4, currentAgeMonths: null, socialSecurity: null, taxRatePct: 0
+    });
+    const taxed = monthsToReachFireTarget({
+      currentBalance: 0, monthlyContribution: 1000, annualReturnRate: 0,
+      annualExpenses: 12000, withdrawalRatePct: 4, currentAgeMonths: null, socialSecurity: null, taxRatePct: 20
+    });
+    assert.ok(taxed > noTax);
   });
 });

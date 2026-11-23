@@ -159,9 +159,15 @@
               <option value="10">10%</option>
             </select>
           </div>
+          <div>
+            <label class="field-label">Stop Contributing At Age</label>
+            <input type="number" id="contributionStopAge" min="1" max="120" placeholder="never">
+            <p class="field-hint" style="margin-top:4px;">Leave blank to keep contributing all the way to your target age.</p>
+          </div>
           <div style="display:flex; align-items:flex-end; gap:8px;">
             <button id="useRequiredBtn" type="button" class="btn btn-ghost" style="flex:1; justify-content:center;">Use Required Amount</button>
             <button id="resetContributionBtn" type="button" class="btn btn-ghost" style="flex:1; justify-content:center;">Reset to Actual</button>
+            <button id="stopNowBtn" type="button" class="btn btn-ghost" style="flex:1; justify-content:center;">Stop Contributing Now</button>
           </div>
         </div>
       </div>
@@ -190,6 +196,18 @@
 
           <div class="field-label" style="margin-bottom:12px;">Balance by Year</div>
           <div style="position:relative; height:260px;"><canvas id="balanceChart"></canvas></div>
+        </div>
+
+        <div class="label-caps" style="margin-bottom:10px;">On-Track Path</div>
+        <div class="card">
+          <div id="needHeadline" style="margin-bottom:16px;"></div>
+          <div style="max-height:320px; overflow-y:auto;">
+            <table class="compare">
+              <thead><tr><th>Age</th><th>Year</th><th>Need</th><th>Projected</th><th>Ahead / Behind</th></tr></thead>
+              <tbody id="needScheduleBody"></tbody>
+            </table>
+          </div>
+          <p class="field-hint" style="margin-top:10px;">Works backward from the FIRE Number at your target age to how much balance you need at each age along the way, given your modeled contribution pace (and stop age, if set) — check your actual balance against the row for your current age each year: behind means add that much now or spread it over the years left, ahead is your cushion.</p>
         </div>
 
         <div class="label-caps" style="margin-bottom:10px;">Compare Scenarios</div>
@@ -255,6 +273,24 @@
     document.getElementById('targetAge').addEventListener('change', loadModel);
     document.getElementById('modeledContribution').addEventListener('change', loadModel);
     document.getElementById('scenarioReturnRate').addEventListener('change', loadModel);
+    document.getElementById('contributionStopAge').addEventListener('change', loadModel);
+
+    // Whole-years-only approximation (matches the server's own ageInMonths
+    // precision closely enough for "stop now" -- the exact month doesn't
+    // change which year's contribution the model stops counting).
+    function currentAgeYears(birthdate) {
+      const birth = new Date(birthdate);
+      const now = new Date();
+      let years = now.getFullYear() - birth.getFullYear();
+      if (now.getMonth() < birth.getMonth() || (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) years -= 1;
+      return years;
+    }
+    let birthdateForStopNow = null;
+    document.getElementById('stopNowBtn').addEventListener('click', () => {
+      if (!birthdateForStopNow) return;
+      document.getElementById('contributionStopAge').value = currentAgeYears(birthdateForStopNow);
+      loadModel();
+    });
 
     let lastModel = null;
     let balanceChart = null;
@@ -307,6 +343,8 @@
         document.getElementById('statContributions').innerText = '—';
         document.getElementById('statInterest').innerText = '—';
         document.getElementById('paceCheckBody').innerHTML = '';
+        document.getElementById('needHeadline').innerHTML = '';
+        document.getElementById('needScheduleBody').innerHTML = '';
         if (balanceChart) { balanceChart.destroy(); balanceChart = null; }
         return;
       }
@@ -316,8 +354,11 @@
       const months = s.monthsToTarget % 12;
       const timeText = `${years} yr${years === 1 ? '' : 's'}${months > 0 ? ` ${months} mo` : ''}`;
       const onTrack = s.reachesTargetAtModeledPace;
+      const stopNote = s.contributionStopAge != null
+        ? ` <strong>stopping at age ${s.contributionStopAge}</strong> (growth only after that)`
+        : '';
       headline.innerHTML = `
-        <div style="font-size:14.5px;">To retire at age <strong>${s.targetAge}</strong> (in ${timeText}), this pace needs <strong>${formatCurrency(s.requiredMonthlyContribution)}/mo</strong> — you're modeling <strong>${formatCurrency(s.modeledMonthlyContribution)}/mo</strong>.</div>
+        <div style="font-size:14.5px;">To retire at age <strong>${s.targetAge}</strong> (in ${timeText}), this pace needs <strong>${formatCurrency(s.requiredMonthlyContribution)}/mo</strong> — you're modeling <strong>${formatCurrency(s.modeledMonthlyContribution)}/mo</strong>${stopNote}.</div>
         <span class="pill ${onTrack ? 'badge-ontrack' : 'badge-under'}">${onTrack ? 'ON TRACK' : 'SHORT OF TARGET'}</span>`;
 
       // The FIRE Number above (in "Where You Stand Today") is always computed
@@ -368,6 +409,42 @@
         </tr>`;
 
       renderPaceCheck(s.netWorthPace, s.targetAge);
+      renderNeedSchedule(s, data.netWorth);
+    }
+
+    // The year-by-year version of the single Required Monthly Contribution
+    // figure above: instead of one number, shows how much balance you
+    // needed at each age between now and the target, given the same modeled
+    // pace (and stop age, if set) -- so "how far behind/ahead am I" can be
+    // checked at any point along the way, not just compared once at the end.
+    function renderNeedSchedule(s, netWorth) {
+      const headline = document.getElementById('needHeadline');
+      const body = document.getElementById('needScheduleBody');
+      if (!s.needSchedule || s.needSchedule.length === 0) {
+        headline.innerHTML = '';
+        body.innerHTML = '';
+        return;
+      }
+
+      const ahead = s.aheadBehindToday >= 0;
+      headline.innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;">
+          <div style="font-size:14.5px;">You need <strong>${formatCurrency(s.needSchedule[0].need)}</strong> today to stay on pace — you have <strong>${formatCurrency(netWorth)}</strong>.</div>
+          <span class="pill ${ahead ? 'badge-ontrack' : 'badge-under'}">${ahead ? `AHEAD BY ${formatCurrency(s.aheadBehindToday)}` : `BEHIND BY ${formatCurrency(Math.abs(s.aheadBehindToday))}`}</span>
+        </div>`;
+
+      const thisYear = new Date().getFullYear();
+      body.innerHTML = s.needSchedule.map(point => {
+        const rowAhead = point.aheadBehind >= 0;
+        const year = thisYear + Math.round(point.months / 12);
+        return `<tr>
+          <td>${Math.round(point.age)}</td>
+          <td class="field-hint">${year}</td>
+          <td class="num">${formatCurrency(point.need)}</td>
+          <td class="num" style="font-weight:700;">${formatCurrency(point.projected)}</td>
+          <td class="num" style="color:${rowAhead ? 'var(--positive)' : 'var(--negative)'};">${rowAhead ? '+' : '−'}${formatCurrency(Math.abs(point.aheadBehind))}</td>
+        </tr>`;
+      }).join('');
     }
 
     // Independent of the contribution-based scenario above: compares how
@@ -436,10 +513,12 @@
       const targetAge = document.getElementById('targetAge').value;
       const scenarioReturnRatePct = document.getElementById('scenarioReturnRate').value;
       const modeledContribution = contributionTouched ? document.getElementById('modeledContribution').value : '';
+      const contributionStopAge = document.getElementById('contributionStopAge').value;
 
       const params = new URLSearchParams({ annualReturnRatePct: scenarioReturnRatePct });
       if (targetAge) params.set('targetRetirementAge', targetAge);
       if (modeledContribution !== '') params.set('modeledMonthlyContribution', modeledContribution);
+      if (contributionStopAge !== '') params.set('contributionStopAge', contributionStopAge);
 
       let res;
       try {
@@ -479,6 +558,8 @@
       document.getElementById('retirementBody').hidden = false;
       document.getElementById('targetAge').value = config.fireTargetRetirementAge || '';
       document.getElementById('scenarioReturnRate').value = config.insightsAnnualReturnPct ?? 7;
+      birthdateForStopNow = config.fireBirthdate || null;
+      document.getElementById('stopNowBtn').hidden = !birthdateForStopNow;
 
       await loadModel();
       if (lastModel && !lastModel.hasBirthdate) {

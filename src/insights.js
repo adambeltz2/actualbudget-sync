@@ -167,6 +167,23 @@ function buildBudgetCalibration(categoryTrends, budgetedByCategory, { windows = 
   return results;
 }
 
+// Same idea as projectFutureValue, but the monthly contribution stops after
+// contributionStopMonths (from today) instead of continuing for the whole
+// projection -- modeling "what if I stop contributing at some point before
+// the target" (a planned slowdown, retirement from a side income, hitting
+// an account cap) as a two-phase compound: contribute-and-grow up to the
+// stop point, then grow alone afterward. contributionStopMonths >= months
+// (including the default, Infinity) behaves identically to
+// projectFutureValue -- no change for every caller that doesn't pass it.
+function projectFutureValueWithStop({ presentValue, monthlyContribution, contributionStopMonths = Infinity, annualReturnRate, months }) {
+  const activeMonths = Math.min(Math.max(contributionStopMonths, 0), months);
+  if (activeMonths >= months) {
+    return projectFutureValue({ presentValue, monthlyContribution, annualReturnRate, months });
+  }
+  const atStop = projectFutureValue({ presentValue, monthlyContribution, annualReturnRate, months: activeMonths });
+  return projectFutureValue({ presentValue: atStop, monthlyContribution: 0, annualReturnRate, months: months - activeMonths });
+}
+
 // The inverse of projectFutureValue: given a target value to reach by a
 // certain number of months, solves algebraically for the monthly
 // contribution (PMT) that gets a present value there — rearranging
@@ -185,6 +202,62 @@ function requiredMonthlyContribution({ currentBalance, targetValue, annualReturn
   }
   const growth = (1 + monthlyRate) ** months;
   return (targetValue - currentBalance * growth) / ((growth - 1) / monthlyRate);
+}
+
+// A different inverse of the same FV formula: given a future target value
+// and a planned monthly contribution, solves for the present value (balance
+// needed right now) that reaches it -- the building block behind
+// buildNeedSchedule's year-by-year "Need" column below. Algebraically:
+// PV = (FV - PMT * ((1+r)^n - 1)/r) / (1+r)^n, i.e. projectFutureValue
+// solved for presentValue instead of futureValue.
+function presentValueNeeded({ futureValue, monthlyContribution, annualReturnRate, months }) {
+  const monthlyRate = annualReturnRate / 12;
+  if (monthlyRate === 0) return futureValue - monthlyContribution * months;
+  const growth = (1 + monthlyRate) ** months;
+  return (futureValue - monthlyContribution * ((growth - 1) / monthlyRate)) / growth;
+}
+
+// The year-by-year version of requiredMonthlyContribution: instead of one
+// number (the constant pace that gets you there), this works backward from
+// the target at the target month to "how much balance did I need to have at
+// each earlier checkpoint, given the planned contribution schedule between
+// now and then" -- the same question the single required-contribution
+// figure answers, just broken out per year so progress can be checked
+// against it at any point along the way, not just at the end.
+// contributionStopMonths (absolute months from today, same convention as
+// projectFutureValueWithStop/buildContributionSeries) lets this stay
+// consistent with a "stop contributing at some point" scenario: a gap that
+// straddles the stop point is split into a no-contribution tail (discounted
+// first) and a with-contribution head, mirroring projectFutureValueWithStop's
+// own two-phase logic just run backward.
+function buildNeedSchedule({
+  targetValue, monthlyContribution, annualReturnRate, totalMonths, stepMonths = 12, contributionStopMonths = Infinity
+}) {
+  const monthPoints = [];
+  for (let m = 0; m <= totalMonths; m += stepMonths) monthPoints.push(m);
+  if (monthPoints[monthPoints.length - 1] !== totalMonths) monthPoints.push(totalMonths);
+
+  const needs = new Array(monthPoints.length);
+  needs[monthPoints.length - 1] = targetValue;
+  for (let i = monthPoints.length - 2; i >= 0; i--) {
+    const gapStart = monthPoints[i];
+    const gapEnd = monthPoints[i + 1];
+    const monthsBetween = gapEnd - gapStart;
+    const activeMonths = Math.max(0, Math.min(gapEnd, contributionStopMonths) - gapStart);
+    const laterNeed = needs[i + 1];
+
+    if (activeMonths >= monthsBetween) {
+      needs[i] = presentValueNeeded({ futureValue: laterNeed, monthlyContribution, annualReturnRate, months: monthsBetween });
+    } else if (activeMonths <= 0) {
+      needs[i] = presentValueNeeded({ futureValue: laterNeed, monthlyContribution: 0, annualReturnRate, months: monthsBetween });
+    } else {
+      const afterStop = monthsBetween - activeMonths;
+      const neededAtStop = presentValueNeeded({ futureValue: laterNeed, monthlyContribution: 0, annualReturnRate, months: afterStop });
+      needs[i] = presentValueNeeded({ futureValue: neededAtStop, monthlyContribution, annualReturnRate, months: activeMonths });
+    }
+  }
+
+  return monthPoints.map((months, i) => ({ months, need: needs[i] }));
 }
 
 // "Is my actual net worth growing at the pace it needs to" -- independent
@@ -229,7 +302,9 @@ function computeNetWorthPace({ netWorthNow, netWorthYearAgo, requiredMonthlyCont
 //12-month mark. `interest` is a plug figure (balance minus starting balance
 // minus contributions) rather than separately compounded, since it has to
 // reconcile exactly with `balance` for the stacked chart to read correctly.
-function buildContributionSeries({ currentBalance, monthlyContribution, annualReturnRate, totalMonths, stepMonths = 12 }) {
+function buildContributionSeries({
+  currentBalance, monthlyContribution, annualReturnRate, totalMonths, stepMonths = 12, contributionStopMonths = Infinity
+}) {
   const monthPoints = [];
   for (let m = 0; m <= totalMonths; m += stepMonths) {
     monthPoints.push(m);
@@ -237,8 +312,8 @@ function buildContributionSeries({ currentBalance, monthlyContribution, annualRe
   if (monthPoints[monthPoints.length - 1] !== totalMonths) monthPoints.push(totalMonths);
 
   return monthPoints.map(months => {
-    const balance = projectFutureValue({ presentValue: currentBalance, monthlyContribution, annualReturnRate, months });
-    const contributions = monthlyContribution * months;
+    const balance = projectFutureValueWithStop({ presentValue: currentBalance, monthlyContribution, contributionStopMonths, annualReturnRate, months });
+    const contributions = monthlyContribution * Math.min(Math.max(contributionStopMonths, 0), months);
     const interest = balance - currentBalance - contributions;
     return { months, balance, contributions, interest };
   });
@@ -337,7 +412,7 @@ function buildBalanceProjection(monthlyBalances, investmentMonthlyBalances = [],
 }
 
 module.exports = {
-  linearRegression, projectFutureValue, classifySpendTrend, standardDeviation,
+  linearRegression, projectFutureValue, projectFutureValueWithStop, classifySpendTrend, standardDeviation,
   buildSpendingInsights, buildBalanceProjection, monthsToReachTarget, buildBudgetCalibration,
-  requiredMonthlyContribution, buildContributionSeries, computeNetWorthPace
+  requiredMonthlyContribution, presentValueNeeded, buildNeedSchedule, buildContributionSeries, computeNetWorthPace
 };

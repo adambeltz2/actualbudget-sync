@@ -35,7 +35,7 @@ function defaultConfig() {
     insightsAnnualReturnPct: 7,
     insightsLookback: '6',
     emergencyFundAccountIds: [], investmentAccountIds: [], liabilityAccountIds: [], financialHealthTargetMonths: 6, financialHealthTargetSavingsPct: 20,
-    fireAnnualExpenses: null, fireWithdrawalRatePct: 4,
+    fireAnnualExpenses: null, fireWithdrawalRatePct: 4, fireTaxRatePct: 0,
     // Conscious Spending Plan (Fixed Costs/Investments/Savings/Guilt-Free,
     // from I Will Teach You to Be Rich): categoryClassification maps each
     // budget category id to one of those four buckets, same
