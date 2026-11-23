@@ -41,6 +41,43 @@ describe('buildSummaryReportHtml', () => {
     assert.doesNotMatch(watchSection, /Gas/); // well under pace at day 18, should not appear here
   });
 
+  test('a category already over budget shows the actual overage, not a forward pace projection', () => {
+    // Note: Groceries also qualifies for the watch list in this fixture
+    // (ahead of pace, though not yet at its budget) and correctly keeps the
+    // "projected to hit" framing -- isolate Dining Out's own row rather
+    // than asserting across the whole section.
+    const { html } = buildSummaryReportHtml({ now: new Date(2026, 9, 18), budgetVsActual });
+    const diningOutStart = html.indexOf('Dining Out');
+    const diningOutRow = html.slice(diningOutStart, diningOutStart + 300);
+    // Dining Out: budgeted 300, spent 420, remaining -120 -- already over,
+    // not still "trending toward" some projected figure.
+    assert.match(diningOutRow, /already \$120\.00 over budget for the month/);
+    assert.doesNotMatch(diningOutRow, /projected to hit/);
+  });
+
+  test('a category that exactly used up its available budget (a lump-sum contribution, say) reads as complete, not projected to keep climbing', () => {
+    // A single planned transfer -- budgeted 360, spent exactly 360,
+    // remaining 0 -- is done for the month; extrapolating a straight-line
+    // pace past that point (as if more spending were still coming) has
+    // nothing behind it.
+    const lumpSum = [
+      { categoryId: 'c4', name: 'College Savings (529)', groupName: 'Savings', budgeted: 360, spent: 360, pctUsed: 100, remaining: 0, overBudget: false }
+    ];
+    const { html } = buildSummaryReportHtml({ now: new Date(2026, 9, 18), budgetVsActual: lumpSum });
+    assert.match(html, /already used in full for the month/);
+    assert.doesNotMatch(html, /projected to hit/);
+  });
+
+  test('a category still under its budget, but ahead of pace, keeps the forward pace projection', () => {
+    const aheadButNotDone = [
+      { categoryId: 'c5', name: 'Vacation', groupName: 'Fun', budgeted: 150, spent: 120, pctUsed: 80, remaining: 30, overBudget: false }
+    ];
+    const { html } = buildSummaryReportHtml({ now: new Date(2026, 9, 18), budgetVsActual: aheadButNotDone });
+    assert.match(html, /at this pace, projected to hit/);
+    assert.doesNotMatch(html, /already used in full/);
+    assert.doesNotMatch(html, /already .* over budget/);
+  });
+
   test('shows a positive message when nothing is ahead of pace', () => {
     const allUnderPace = budgetVsActual.map(c => ({ ...c, spent: 10, pctUsed: 3, remaining: c.budgeted - 10, overBudget: false }));
     const { html } = buildSummaryReportHtml({ now: new Date(2026, 9, 18), budgetVsActual: allUnderPace });

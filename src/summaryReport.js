@@ -73,15 +73,32 @@ function buildSummaryReportHtml({
   html += `<div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:${AMBER}; margin-bottom:10px;">⚠ Categories to Watch</div>
       <div style="margin-bottom:24px;">`;
   if (watchList.length > 0) {
-    html += watchList.map(c => `
+    html += watchList.map(c => {
+      // A category whose available funding (this month's budget plus any
+      // rollover -- remaining already nets that in, same convention as the
+      // overBudget fix elsewhere) is already fully used is *complete*, not
+      // "trending toward" some bigger number -- a fixed-amount category (a
+      // single planned contribution, a paid-in-full bill) reads as "ahead
+      // of pace" right up until it stops at exactly its budget, and a
+      // forward pace-projection past that point is pure extrapolation with
+      // nothing behind it. Only a category still short of its budget gets
+      // the "projected to hit $X" framing; one that's met or passed it
+      // gets a plain statement of where it actually landed instead.
+      const detail = c.remaining <= 0
+        ? (c.overBudget
+          ? `${formatCurrency(c.spent)} of ${formatCurrency(c.budgeted)} spent — already ${formatCurrency(Math.abs(c.remaining))} over budget for the month`
+          : `${formatCurrency(c.spent)} of ${formatCurrency(c.budgeted)} spent — already used in full for the month`)
+        : `${formatCurrency(c.spent)} of ${formatCurrency(c.budgeted)} spent — at this pace, projected to hit ${formatCurrency(c.projectedTotal)} by month end`;
+      return `
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FBF1E2; border-radius:8px; margin-bottom:8px;">
         <tr>
           <td style="padding:10px 12px;">
             <div style="font-size:13px; font-weight:700; color:#33404A;">${_.escape(c.name)}</div>
-            <div style="font-size:11.5px; color:${MUTED}; margin-top:2px;">${formatCurrency(c.spent)} of ${formatCurrency(c.budgeted)} spent — at this pace, projected to hit ${formatCurrency(c.projectedTotal)} by month end</div>
+            <div style="font-size:11.5px; color:${MUTED}; margin-top:2px;">${detail}</div>
           </td>
         </tr>
-      </table>`).join('');
+      </table>`;
+    }).join('');
   } else {
     html += `<p style="font-size:13px; color:${MUTED}; margin:0;">Nothing running ahead of pace right now — nice.</p>`;
   }
