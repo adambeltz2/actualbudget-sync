@@ -250,6 +250,129 @@ describe('simulateRetirement — sequence-of-returns stress test', () => {
   });
 });
 
+describe('simulateRetirement — tracked annualExpenses as the spend base', () => {
+  test('annualExpenses: 0 behaves identically to withdrawalRatePct mode (default, unchanged)', () => {
+    const withoutArg = simulateRetirement(baseOpts({ seed: 50 }));
+    const explicitZero = simulateRetirement(baseOpts({ seed: 50, annualExpenses: 0 }));
+    assert.deepEqual(withoutArg.bands, explicitZero.bands);
+    assert.equal(explicitZero.usesTrackedExpenses, false);
+  });
+
+  test('a higher annualExpenses spends down the balance faster (lower success)', () => {
+    const modest = simulateRetirement(baseOpts({ seed: 60, paths: 3000, annualExpenses: 30000 }));
+    const lavish = simulateRetirement(baseOpts({ seed: 60, paths: 3000, annualExpenses: 90000 }));
+    assert.equal(modest.usesTrackedExpenses, true);
+    assert.ok(lavish.successPct <= modest.successPct);
+  });
+
+  test('withdrawalRatePct is ignored once annualExpenses is set — changing it has no effect', () => {
+    const lowRate = simulateRetirement(baseOpts({ seed: 70, annualExpenses: 50000, withdrawalRatePct: 2.0 }));
+    const highRate = simulateRetirement(baseOpts({ seed: 70, annualExpenses: 50000, withdrawalRatePct: 6.0 }));
+    assert.deepEqual(lowRate.bands, highRate.bands);
+  });
+
+  test('the spend base is grown by inflation from today to retirement, not just from retirement', () => {
+    // Exact reconstruction: replay the same seeded RNG stream the
+    // implementation draws from (via the exported primitives), computing
+    // the expected year-by-year balance independently using the documented
+    // formula, and confirm simulateRetirement's single-path (paths: 1)
+    // output matches it exactly -- the only way to isolate "the spend base
+    // compounds inflation starting from today" from "it compounds inflation
+    // starting from retirement" without the comparison being swamped by
+    // portfolio-growth noise from varying the pre-retirement time span.
+    const seed = 7, currentAge = 40, retireAge = 60, endAge = 63;
+    const annualExpenses = 40000, inflationPct = 3.0, allocation = 'conservative', startBalance = 1000000;
+
+    const result = simulateRetirement(baseOpts({
+      seed, paths: 1, allocation, annualExpenses, inflationPct, currentAge, retireAge, endAge,
+      annualContribution: 0, startBalance
+    }));
+
+    const rng = mulberry32(seed);
+    const mix = ALLOCATIONS[allocation];
+    let balance = startBalance;
+    let spendBase = null;
+    const expected = [balance];
+    for (let age = currentAge + 1; age <= endAge; age++) {
+      const z = randomNormal(rng);
+      const r = mix.mean + mix.vol * z;
+      if (age <= retireAge) {
+        balance = balance * (1 + r);
+      } else {
+        if (spendBase === null) spendBase = annualExpenses * Math.pow(1 + inflationPct / 100, retireAge - currentAge);
+        const spendNeed = spendBase * Math.pow(1 + inflationPct / 100, age - retireAge);
+        balance = Math.max(balance * (1 + r) - spendNeed, 0);
+      }
+      expected.push(balance);
+    }
+
+    for (let i = 0; i < expected.length; i++) {
+      assert.ok(Math.abs(result.bands.p50[i] - expected[i]) < 0.01, `age index ${i}: expected ${expected[i]}, got ${result.bands.p50[i]}`);
+    }
+  });
+});
+
+describe('simulateRetirement — contributionStopAge', () => {
+  test('null (default) behaves identically to contributing all the way to retireAge', () => {
+    const withoutArg = simulateRetirement(baseOpts({ seed: 80 }));
+    const explicitNull = simulateRetirement(baseOpts({ seed: 80, contributionStopAge: null }));
+    assert.deepEqual(withoutArg.bands, explicitNull.bands);
+  });
+
+  test('set to retireAge is identical to the default (contributing the whole way)', () => {
+    const base = baseOpts({ seed: 81 });
+    const withoutArg = simulateRetirement(base);
+    const explicitRetireAge = simulateRetirement({ ...base, contributionStopAge: base.retireAge });
+    assert.deepEqual(withoutArg.bands, explicitRetireAge.bands);
+  });
+
+  test('stopping contributions early lowers the median balance at retirement', () => {
+    const keepGoing = simulateRetirement(baseOpts({ seed: 90, paths: 3000 }));
+    const stopNow = simulateRetirement(baseOpts({ seed: 90, paths: 3000, contributionStopAge: 42 }));
+    assert.ok(stopNow.medianBalanceAtRetirement < keepGoing.medianBalanceAtRetirement);
+  });
+
+  test('with annualContribution already 0, setting contributionStopAge has no further effect', () => {
+    const noContribution = simulateRetirement(baseOpts({ seed: 95, annualContribution: 0 }));
+    const noContributionStopped = simulateRetirement(baseOpts({ seed: 95, annualContribution: 0, contributionStopAge: 42 }));
+    assert.deepEqual(noContribution.bands, noContributionStopped.bands);
+  });
+});
+
+describe('simulateRetirement — taxRatePct', () => {
+  test('0 (default) leaves withdrawals untaxed, unchanged from before', () => {
+    const withoutArg = simulateRetirement(baseOpts({ seed: 100 }));
+    const explicitZero = simulateRetirement(baseOpts({ seed: 100, taxRatePct: 0 }));
+    assert.deepEqual(withoutArg.bands, explicitZero.bands);
+  });
+
+  test('a higher tax rate grosses up withdrawals, spending the balance down faster', () => {
+    const noTax = simulateRetirement(baseOpts({ seed: 110, paths: 3000, taxRatePct: 0 }));
+    const taxed = simulateRetirement(baseOpts({ seed: 110, paths: 3000, taxRatePct: 20 }));
+    assert.ok(taxed.successPct <= noTax.successPct);
+  });
+
+  test('tax is applied only to the portfolio-funded portion, after Social Security is netted out', () => {
+    const socialSecurity = { claimAgeMonths: 67 * 12, annualBenefit: 24000 };
+    // inflationPct: 0 keeps the spend base at exactly annualExpenses with no
+    // pre-retirement growth to account for, so Social Security's $24k fully
+    // covers the $20k need in every retirement year, leaving nothing for
+    // taxRatePct to act on.
+    const withSsNoTax = simulateRetirement(baseOpts({
+      seed: 120, paths: 1, allocation: 'conservative', retireAge: 67, annualContribution: 0, inflationPct: 0,
+      includeSocialSecurity: true, socialSecurity, annualExpenses: 20000, taxRatePct: 0
+    }));
+    const withSsTaxed = simulateRetirement(baseOpts({
+      seed: 120, paths: 1, allocation: 'conservative', retireAge: 67, annualContribution: 0, inflationPct: 0,
+      includeSocialSecurity: true, socialSecurity, annualExpenses: 20000, taxRatePct: 25
+    }));
+    // Spending need ($20k) is fully covered by Social Security ($24k) from
+    // age 67 on, so there's nothing left to tax -- both paths should be
+    // identical even with a 25% tax rate configured.
+    assert.deepEqual(withSsNoTax.bands, withSsTaxed.bands);
+  });
+});
+
 describe('ALLOCATIONS', () => {
   test('aggressive has both a higher mean and higher volatility than conservative', () => {
     assert.ok(ALLOCATIONS.aggressive.mean > ALLOCATIONS.conservative.mean);

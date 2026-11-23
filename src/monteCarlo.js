@@ -53,12 +53,33 @@ function percentileOf(sortedArr, p) {
  *   when `survivor` is set (modeling a longer joint-life horizon for a couple
  *   is the real mechanism here, not a rate penalty).
  * @param {number} [opts.annualContribution] - added to the balance once per
- *   year while age <= retireAge.
+ *   year while age <= retireAge (and age <= contributionStopAge, if set).
+ * @param {number|null} [opts.contributionStopAge] - last age that still
+ *   receives annualContribution; null (default) means "contribute all the
+ *   way to retireAge," i.e. no change from before this existed. Set below
+ *   retireAge to model stopping early (e.g. currentAge = stop contributing
+ *   today) while still working/retiring on the same schedule otherwise.
  * @param {'conservative'|'moderate'|'aggressive'} [opts.allocation]
  * @param {number} [opts.inflationPct] - annual inflation, applied to the
- *   retirement spending base every year past retirement.
+ *   retirement spending base every year past retirement (and, when
+ *   annualExpenses is used, between today and retirement too).
  * @param {number} [opts.withdrawalRatePct] - the fraction of the balance at
- *   retirement used as the first year's gross spending need.
+ *   retirement used as the first year's gross spending need. Ignored
+ *   whenever annualExpenses > 0 is provided instead.
+ * @param {number} [opts.annualExpenses] - today's-dollars real spending need
+ *   (e.g. actual trailing tracked spend, or a manual FIRE override) used as
+ *   the retirement spend base instead of withdrawalRatePct × balance, so
+ *   success/failure is measured against what you actually spend rather than
+ *   an arbitrary share of whatever balance the simulation happens to reach.
+ *   Grown by inflationPct from today out to retirement, then same as
+ *   withdrawalRatePct mode from there (continues growing with inflation,
+ *   can be reduced by a glidepath). 0 (default) keeps the withdrawalRatePct
+ *   behavior unchanged.
+ * @param {number} [opts.taxRatePct] - flat effective tax rate applied only
+ *   to the portion of each year's spending need actually funded by a
+ *   portfolio withdrawal (Social Security/pension are netted out first,
+ *   same order a flat-rate estimate like this can reasonably assume). 0
+ *   (default) leaves withdrawals untaxed, same as before this existed.
  * @param {boolean} [opts.includeSocialSecurity]
  * @param {{claimAgeMonths:number, annualBenefit:number}|null} [opts.socialSecurity] -
  *   resolved via socialSecurity.js's resolveSocialSecurityClaim, so benefits
@@ -79,9 +100,12 @@ function simulateRetirement(opts) {
   const {
     startBalance, currentAge, retireAge,
     annualContribution = 0,
+    contributionStopAge = null,
     allocation = 'moderate',
     inflationPct = 3.0,
     withdrawalRatePct = 3.8,
+    annualExpenses = 0,
+    taxRatePct = 0,
     includeSocialSecurity = false,
     socialSecurity = null,
     glidepath = false,
@@ -135,16 +159,22 @@ function simulateRetirement(opts) {
         const z = inStressWindow ? Math.min(randomNormal(rng), stressZCap) : randomNormal(rng);
         const r = mix.mean + mix.vol * z;
         if (age <= retireAge) {
-          balance = balance * (1 + r) + annualContribution;
+          const contributes = contributionStopAge === null || age <= contributionStopAge;
+          balance = balance * (1 + r) + (contributes ? annualContribution : 0);
         } else {
-          if (spendBase === null) spendBase = balance * (withdrawalRatePct / 100);
+          if (spendBase === null) {
+            spendBase = annualExpenses > 0
+              ? annualExpenses * Math.pow(1 + inflationPct / 100, retireAge - currentAge)
+              : balance * (withdrawalRatePct / 100);
+          }
           const yearsRetired = age - retireAge;
           const inflationFactor = Math.pow(1 + inflationPct / 100, yearsRetired);
           const smileFactor = !glidepath ? 1 : (yearsRetired <= 10 ? 1.15 : 0.85);
           const spendNeed = spendBase * inflationFactor * smileFactor;
           const ssIncome = ssStartAge !== null && age >= ssStartAge ? socialSecurity.annualBenefit : 0;
           const pensionIncome = pensionMonthly > 0 ? pensionMonthly * 12 : 0;
-          const netWithdrawal = Math.max(0, spendNeed - ssIncome - pensionIncome);
+          const portfolioNeed = Math.max(0, spendNeed - ssIncome - pensionIncome);
+          const netWithdrawal = taxRatePct > 0 ? portfolioNeed / (1 - taxRatePct / 100) : portfolioNeed;
           balance = balance * (1 + r) - netWithdrawal;
           if (age === expenseAge) balance -= oneTimeExpense;
         }
@@ -187,6 +217,7 @@ function simulateRetirement(opts) {
     p10EndingBalance: percentileOf(sortedEnding, 0.10),
     p90EndingBalance: percentileOf(sortedEnding, 0.90),
     safeWithdrawalAmount: medianBalanceAtRetirement * (withdrawalRatePct / 100),
+    usesTrackedExpenses: annualExpenses > 0,
     retireAge,
     endAge,
     ssStartAge,

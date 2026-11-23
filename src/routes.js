@@ -445,11 +445,14 @@ router.get('/api/data/fire-progress', async (req, res) => {
     const fireWithdrawalRatePct = req.query.fireWithdrawalRatePct !== undefined
       ? Math.min(Math.max(parseFloat(req.query.fireWithdrawalRatePct), 1), 20)
       : (config.fireWithdrawalRatePct ?? 4);
+    const fireTaxRatePct = req.query.fireTaxRatePct !== undefined
+      ? Math.min(Math.max(parseFloat(req.query.fireTaxRatePct) || 0, 0), 60)
+      : (config.fireTaxRatePct ?? 0);
     const targetRetirementAge = req.query.targetRetirementAge !== undefined
       ? parseFloat(req.query.targetRetirementAge) || null
       : (config.fireTargetRetirementAge || null);
     const progress = await actualService.getFireProgress({
-      fireAnnualExpenses, fireWithdrawalRatePct,
+      fireAnnualExpenses, fireWithdrawalRatePct, fireTaxRatePct,
       annualReturnRatePct: config.insightsAnnualReturnPct ?? 7,
       birthdate: config.fireBirthdate || null,
       ssClaimingChoice: config.ssClaimingChoice || null,
@@ -481,6 +484,9 @@ router.get('/api/data/retirement-model', async (req, res) => {
     const fireWithdrawalRatePct = req.query.fireWithdrawalRatePct !== undefined
       ? Math.min(Math.max(parseFloat(req.query.fireWithdrawalRatePct), 1), 20)
       : (config.fireWithdrawalRatePct ?? 4);
+    const fireTaxRatePct = req.query.fireTaxRatePct !== undefined
+      ? Math.min(Math.max(parseFloat(req.query.fireTaxRatePct) || 0, 0), 60)
+      : (config.fireTaxRatePct ?? 0);
     const annualReturnRatePct = req.query.annualReturnRatePct !== undefined
       ? Math.min(Math.max(parseFloat(req.query.annualReturnRatePct), -20), 30)
       : (config.insightsAnnualReturnPct ?? 7);
@@ -490,9 +496,13 @@ router.get('/api/data/retirement-model', async (req, res) => {
     const modeledMonthlyContribution = req.query.modeledMonthlyContribution !== undefined && req.query.modeledMonthlyContribution !== ''
       ? parseFloat(req.query.modeledMonthlyContribution)
       : null;
+    const contributionStopAge = req.query.contributionStopAge !== undefined && req.query.contributionStopAge !== ''
+      ? Math.min(Math.max(parseFloat(req.query.contributionStopAge), 0), 120)
+      : null;
     const model = await actualService.getRetirementModel({
       targetRetirementAge, modeledMonthlyContribution: Number.isFinite(modeledMonthlyContribution) ? modeledMonthlyContribution : null,
-      fireAnnualExpenses, fireWithdrawalRatePct, annualReturnRatePct,
+      contributionStopAge: Number.isFinite(contributionStopAge) ? contributionStopAge : null,
+      fireAnnualExpenses, fireWithdrawalRatePct, fireTaxRatePct, annualReturnRatePct,
       birthdate: config.fireBirthdate || null,
       ssClaimingChoice: config.ssClaimingChoice || null,
       ssAge62MonthlyBenefit: config.ssAge62MonthlyBenefit,
@@ -532,6 +542,12 @@ function parseMonteCarloParams(req, config) {
   const contributionIra = Math.max(0, parseFloat(req.query.contributionIra) || 0);
   const contributionOther = Math.max(0, parseFloat(req.query.contributionOther) || 0);
   const annualContribution = contribFieldsProvided ? (contribution401k + contributionIra + contributionOther) : null;
+  // Null (omitted) means "contribute all the way to retireAge," unchanged
+  // from before this existed. Clamped to a sane age range rather than
+  // trusting an arbitrary query value outright.
+  const contributionStopAge = req.query.contributionStopAge !== undefined && req.query.contributionStopAge !== ''
+    ? Math.min(Math.max(parseFloat(req.query.contributionStopAge), 0), 120)
+    : null;
   const glidepath = req.query.glidepath === 'true';
   const pensionMonthly = req.query.pensionMonthly !== undefined ? Math.max(0, parseFloat(req.query.pensionMonthly) || 0) : 0;
   const oneTimeExpense = req.query.oneTimeExpense !== undefined ? Math.max(0, parseFloat(req.query.oneTimeExpense) || 0) : 0;
@@ -544,10 +560,12 @@ function parseMonteCarloParams(req, config) {
     retireAge: Number.isFinite(retireAge) ? retireAge : 55,
     allocation, inflationPct, withdrawalRatePct, includeSocialSecurity,
     annualContribution: Number.isFinite(annualContribution) ? annualContribution : null,
+    contributionStopAge: Number.isFinite(contributionStopAge) ? contributionStopAge : null,
     contribution401k, contributionIra, contributionOther,
     glidepath, pensionMonthly, oneTimeExpense, survivor, paths,
     fireAnnualExpenses: config.fireAnnualExpenses || 0,
     fireWithdrawalRatePct: config.fireWithdrawalRatePct ?? 4,
+    fireTaxRatePct: config.fireTaxRatePct ?? 0,
     birthdate: config.fireBirthdate || null,
     ssClaimingChoice: config.ssClaimingChoice || null,
     ssAge62MonthlyBenefit: config.ssAge62MonthlyBenefit,

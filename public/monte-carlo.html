@@ -189,6 +189,11 @@
               <input type="number" id="contribOtherInput" min="0" step="500" value="0">
             </div>
             <p class="field-hint" id="contribTotalHint" style="margin-top:6px;"></p>
+            <div class="contribRow">
+              <label for="contributionStopAgeInput">Stop contributing at age</label>
+              <input type="number" id="contributionStopAgeInput" min="0" max="120" placeholder="never">
+            </div>
+            <p class="field-hint">Leave blank to keep contributing all the way to your retirement age.</p>
           </div>
           <div class="scenarioGroup">
             <div class="groupLabel">Investment mix</div>
@@ -345,7 +350,7 @@
     // --- Scenario state ---
     const state = {
       retireAge: 55, inflationPct: 3.0, includeSocialSecurity: true,
-      contribution401k: 20000, contributionIra: 0, contributionOther: 0,
+      contribution401k: 20000, contributionIra: 0, contributionOther: 0, contributionStopAge: null,
       allocation: 'moderate', glidepath: true,
       pensionMonthly: 0, oneTimeExpense: 0, survivor: false,
       withdrawalRatePct: 3.8
@@ -380,6 +385,7 @@
         oneTimeExpense: String(state.oneTimeExpense),
         survivor: String(state.survivor)
       });
+      if (state.contributionStopAge != null) params.set('contributionStopAge', String(state.contributionStopAge));
       Object.entries(overrides).forEach(([k, v]) => params.set(k, String(v)));
       return params;
     }
@@ -677,6 +683,11 @@
         loadProjection();
       });
       document.getElementById(id).addEventListener('input', updateContribHints);
+    });
+    document.getElementById('contributionStopAgeInput').addEventListener('change', () => {
+      const raw = document.getElementById('contributionStopAgeInput').value;
+      state.contributionStopAge = raw !== '' ? parseFloat(raw) : null;
+      loadProjection();
     });
     document.getElementById('allocGrid').addEventListener('click', e => {
       const btn = e.target.closest('.agePill');

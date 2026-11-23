@@ -42,15 +42,23 @@ function resolveSocialSecurityClaim({
 // with this app's existing "simple math from your own data, not a
 // guarantee" approach elsewhere), and only needs to cover the
 // benefit-reduced remainder forever after that.
-function computeFireTargetAtAge({ ageMonths, annualExpenses, withdrawalRatePct, socialSecurity }) {
-  const baseFireNumber = annualExpenses * (100 / withdrawalRatePct);
+//
+// taxRatePct (default 0, unchanged from before it existed) grosses up only
+// the portfolio-funded share of expenses -- Social Security is netted out
+// of annualExpenses FIRST, at face value, then whatever's left (the part
+// an actual portfolio withdrawal has to cover) is grossed up by
+// 1 / (1 - taxRatePct/100), same ordering a single flat effective rate can
+// reasonably approximate without modeling real tax brackets/account types.
+function computeFireTargetAtAge({ ageMonths, annualExpenses, withdrawalRatePct, socialSecurity, taxRatePct = 0 }) {
+  const grossUp = v => taxRatePct > 0 ? v / (1 - taxRatePct / 100) : v;
+  const baseFireNumber = grossUp(annualExpenses) * (100 / withdrawalRatePct);
   if (!socialSecurity) return baseFireNumber;
 
   const { claimAgeMonths, annualBenefit } = socialSecurity;
   const bridgeYears = Math.max(claimAgeMonths - ageMonths, 0) / 12;
-  const bridgeCost = annualExpenses * bridgeYears;
+  const bridgeCost = grossUp(annualExpenses) * bridgeYears;
   const postClaimAnnualExpenses = Math.max(annualExpenses - annualBenefit, 0);
-  const postClaimFireNumber = postClaimAnnualExpenses * (100 / withdrawalRatePct);
+  const postClaimFireNumber = grossUp(postClaimAnnualExpenses) * (100 / withdrawalRatePct);
   return postClaimFireNumber + bridgeCost;
 }
 
@@ -62,11 +70,11 @@ function computeFireTargetAtAge({ ageMonths, annualExpenses, withdrawalRatePct, 
 // moves, so this behaves identically to a plain fixed-target search.
 function monthsToReachFireTarget({
   currentBalance, monthlyContribution, annualReturnRate,
-  annualExpenses, withdrawalRatePct, currentAgeMonths, socialSecurity, maxMonths = 1200
+  annualExpenses, withdrawalRatePct, currentAgeMonths, socialSecurity, taxRatePct = 0, maxMonths = 1200
 }) {
   for (let m = 0; m <= maxMonths; m++) {
     const target = computeFireTargetAtAge({
-      ageMonths: (currentAgeMonths ?? 0) + m, annualExpenses, withdrawalRatePct, socialSecurity
+      ageMonths: (currentAgeMonths ?? 0) + m, annualExpenses, withdrawalRatePct, socialSecurity, taxRatePct
     });
     const projected = projectFutureValue({ presentValue: currentBalance, monthlyContribution, annualReturnRate, months: m });
     if (projected >= target) return m;

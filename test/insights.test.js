@@ -1,9 +1,9 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  linearRegression, projectFutureValue, classifySpendTrend, standardDeviation,
+  linearRegression, projectFutureValue, projectFutureValueWithStop, classifySpendTrend, standardDeviation,
   buildSpendingInsights, buildBalanceProjection, monthsToReachTarget, buildBudgetCalibration,
-  requiredMonthlyContribution, buildContributionSeries, computeNetWorthPace
+  requiredMonthlyContribution, presentValueNeeded, buildNeedSchedule, buildContributionSeries, computeNetWorthPace
 } = require('../src/insights');
 
 describe('linearRegression', () => {
@@ -258,6 +258,136 @@ describe('requiredMonthlyContribution', () => {
   });
 });
 
+describe('presentValueNeeded', () => {
+  test('is the inverse of projectFutureValue: feeding its output forward reaches the future value exactly', () => {
+    const futureValue = 1000000;
+    const monthlyContribution = 1500;
+    const annualReturnRate = 0.07;
+    const months = 180;
+    const pv = presentValueNeeded({ futureValue, monthlyContribution, annualReturnRate, months });
+    const projectedForward = projectFutureValue({ presentValue: pv, monthlyContribution, annualReturnRate, months });
+    assert.ok(Math.abs(projectedForward - futureValue) < 0.01);
+  });
+
+  test('a zero return rate falls back to simple subtraction', () => {
+    const pv = presentValueNeeded({ futureValue: 22000, monthlyContribution: 1000, annualReturnRate: 0, months: 12 });
+    assert.equal(pv, 10000);
+  });
+
+  test('zero contribution is pure discounting (growth-only, no PMT term)', () => {
+    const pv = presentValueNeeded({ futureValue: 100000, monthlyContribution: 0, annualReturnRate: 0.06, months: 60 });
+    const expected = 100000 / Math.pow(1.005, 60);
+    assert.ok(Math.abs(pv - expected) < 0.01);
+  });
+});
+
+describe('buildNeedSchedule', () => {
+  test('the last point always equals targetValue exactly', () => {
+    const schedule = buildNeedSchedule({ targetValue: 2000000, monthlyContribution: 2000, annualReturnRate: 0.07, totalMonths: 130 });
+    assert.equal(schedule[schedule.length - 1].need, 2000000);
+    assert.equal(schedule[schedule.length - 1].months, 130);
+  });
+
+  test('includes month 0 and steps by 12 in between, same shape as buildContributionSeries', () => {
+    const schedule = buildNeedSchedule({ targetValue: 500000, monthlyContribution: 500, annualReturnRate: 0.06, totalMonths: 36 });
+    assert.deepEqual(schedule.map(p => p.months), [0, 12, 24, 36]);
+  });
+
+  test('need decreases monotonically further from the target (earlier checkpoints need less, given growth + contributions ahead)', () => {
+    const schedule = buildNeedSchedule({ targetValue: 1000000, monthlyContribution: 1500, annualReturnRate: 0.07, totalMonths: 240 });
+    for (let i = 1; i < schedule.length; i++) {
+      assert.ok(schedule[i].need >= schedule[i - 1].need);
+    }
+  });
+
+  test('round-trips with buildContributionSeries: projecting forward from each Need reaches the next Need exactly', () => {
+    const totalMonths = 72;
+    const monthlyContribution = 800;
+    const annualReturnRate = 0.065;
+    const targetValue = 400000;
+    const schedule = buildNeedSchedule({ targetValue, monthlyContribution, annualReturnRate, totalMonths });
+    for (let i = 0; i < schedule.length - 1; i++) {
+      const monthsBetween = schedule[i + 1].months - schedule[i].months;
+      const projectedForward = projectFutureValue({
+        presentValue: schedule[i].need, monthlyContribution, annualReturnRate, months: monthsBetween
+      });
+      assert.ok(Math.abs(projectedForward - schedule[i + 1].need) < 0.01);
+    }
+  });
+
+  test('a contribution stop inside a gap is honored: need is higher than the no-stop baseline', () => {
+    const noStop = buildNeedSchedule({ targetValue: 1000000, monthlyContribution: 1500, annualReturnRate: 0.07, totalMonths: 240 });
+    const withStop = buildNeedSchedule({
+      targetValue: 1000000, monthlyContribution: 1500, annualReturnRate: 0.07, totalMonths: 240, contributionStopMonths: 120
+    });
+    // Needing MORE balance at an early checkpoint once contributions stop
+    // partway makes sense: there's less future contribution left to help
+    // close the gap to the target, so more has to already be saved.
+    assert.ok(withStop[0].need > noStop[0].need);
+  });
+
+  test('contributionStopMonths: 0 matches a schedule built with monthlyContribution: 0 throughout', () => {
+    const stoppedImmediately = buildNeedSchedule({
+      targetValue: 600000, monthlyContribution: 1000, annualReturnRate: 0.05, totalMonths: 100, contributionStopMonths: 0
+    });
+    const neverContributed = buildNeedSchedule({
+      targetValue: 600000, monthlyContribution: 0, annualReturnRate: 0.05, totalMonths: 100
+    });
+    for (let i = 0; i < stoppedImmediately.length; i++) {
+      assert.ok(Math.abs(stoppedImmediately[i].need - neverContributed[i].need) < 1e-6);
+    }
+  });
+
+  test('a stop point that falls strictly inside one 12-month gap is still handled correctly (not just on step boundaries)', () => {
+    // contributionStopMonths: 17 lands inside the [12, 24] gap, not on a step.
+    const schedule = buildNeedSchedule({
+      targetValue: 300000, monthlyContribution: 600, annualReturnRate: 0.06, totalMonths: 36, contributionStopMonths: 17
+    });
+    // Cross-check the [12,24] gap manually: 5 months contributing (12->17),
+    // then 7 months with no contribution (17->24).
+    const need24 = schedule.find(p => p.months === 24).need;
+    const neededAt17 = presentValueNeeded({ futureValue: need24, monthlyContribution: 0, annualReturnRate: 0.06, months: 7 });
+    const expectedNeed12 = presentValueNeeded({ futureValue: neededAt17, monthlyContribution: 600, annualReturnRate: 0.06, months: 5 });
+    const actualNeed12 = schedule.find(p => p.months === 12).need;
+    assert.ok(Math.abs(actualNeed12 - expectedNeed12) < 0.01);
+  });
+});
+
+describe('projectFutureValueWithStop', () => {
+  test('defaults to Infinity (never stop) and matches projectFutureValue exactly', () => {
+    const withStop = projectFutureValueWithStop({ presentValue: 1000, monthlyContribution: 100, annualReturnRate: 0.07, months: 60 });
+    const plain = projectFutureValue({ presentValue: 1000, monthlyContribution: 100, annualReturnRate: 0.07, months: 60 });
+    assert.equal(withStop, plain);
+  });
+
+  test('contributionStopMonths >= months behaves identically to never stopping', () => {
+    const atHorizon = projectFutureValueWithStop({ presentValue: 1000, monthlyContribution: 100, contributionStopMonths: 60, annualReturnRate: 0.07, months: 60 });
+    const beyondHorizon = projectFutureValueWithStop({ presentValue: 1000, monthlyContribution: 100, contributionStopMonths: 1000, annualReturnRate: 0.07, months: 60 });
+    const plain = projectFutureValue({ presentValue: 1000, monthlyContribution: 100, annualReturnRate: 0.07, months: 60 });
+    assert.equal(atHorizon, plain);
+    assert.equal(beyondHorizon, plain);
+  });
+
+  test('contributionStopMonths: 0 is identical to never having contributed at all', () => {
+    const stoppedImmediately = projectFutureValueWithStop({ presentValue: 1000, monthlyContribution: 100, contributionStopMonths: 0, annualReturnRate: 0.07, months: 60 });
+    const neverContributed = projectFutureValue({ presentValue: 1000, monthlyContribution: 0, annualReturnRate: 0.07, months: 60 });
+    assert.ok(Math.abs(stoppedImmediately - neverContributed) < 1e-9);
+  });
+
+  test('stopping partway equals two chained projections (contribute then grow alone)', () => {
+    const result = projectFutureValueWithStop({ presentValue: 1000, monthlyContribution: 100, contributionStopMonths: 24, annualReturnRate: 0.06, months: 60 });
+    const atStop = projectFutureValue({ presentValue: 1000, monthlyContribution: 100, annualReturnRate: 0.06, months: 24 });
+    const expected = projectFutureValue({ presentValue: atStop, monthlyContribution: 0, annualReturnRate: 0.06, months: 36 });
+    assert.ok(Math.abs(result - expected) < 1e-9);
+  });
+
+  test('stopping earlier always yields a lower (or equal) balance than stopping later', () => {
+    const stopEarly = projectFutureValueWithStop({ presentValue: 1000, monthlyContribution: 100, contributionStopMonths: 12, annualReturnRate: 0.06, months: 60 });
+    const stopLate = projectFutureValueWithStop({ presentValue: 1000, monthlyContribution: 100, contributionStopMonths: 48, annualReturnRate: 0.06, months: 60 });
+    assert.ok(stopEarly < stopLate);
+  });
+});
+
 describe('buildContributionSeries', () => {
   test('always includes month 0 and the exact target month as endpoints', () => {
     const series = buildContributionSeries({ currentBalance: 1000, monthlyContribution: 100, annualReturnRate: 0.07, totalMonths: 130 });
@@ -282,6 +412,51 @@ describe('buildContributionSeries', () => {
     assert.equal(first.months, 0);
     assert.equal(first.contributions, 0);
     assert.equal(first.interest, 0);
+  });
+
+  describe('contributionStopMonths', () => {
+    test('defaults to Infinity (never stop), unchanged from before this existed', () => {
+      const withoutArg = buildContributionSeries({ currentBalance: 5000, monthlyContribution: 250, annualReturnRate: 0.06, totalMonths: 50 });
+      const explicitInfinity = buildContributionSeries({ currentBalance: 5000, monthlyContribution: 250, annualReturnRate: 0.06, totalMonths: 50, contributionStopMonths: Infinity });
+      assert.deepEqual(withoutArg, explicitInfinity);
+    });
+
+    test('contributions stop accumulating past the stop point, but balance keeps growing on what was already contributed', () => {
+      const series = buildContributionSeries({
+        currentBalance: 5000, monthlyContribution: 250, annualReturnRate: 0.06, totalMonths: 48, stepMonths: 12, contributionStopMonths: 24
+      });
+      const [m0, m12, m24, m36, m48] = series;
+      assert.equal(m24.contributions, 250 * 24);
+      // No more contributions added after the stop point.
+      assert.equal(m36.contributions, 250 * 24);
+      assert.equal(m48.contributions, 250 * 24);
+      // But balance still grows past month 24 (it isn't frozen).
+      assert.ok(m36.balance > m24.balance);
+      assert.ok(m48.balance > m36.balance);
+      assert.equal(m0.contributions, 0);
+      assert.ok(m12.contributions > 0 && m12.contributions < m24.contributions);
+    });
+
+    test('contributions/interest/balance still reconcile exactly with a stop point set', () => {
+      const series = buildContributionSeries({
+        currentBalance: 5000, monthlyContribution: 250, annualReturnRate: 0.06, totalMonths: 50, contributionStopMonths: 18
+      });
+      for (const point of series) {
+        assert.ok(Math.abs((5000 + point.contributions + point.interest) - point.balance) < 1e-6);
+      }
+    });
+
+    test('contributionStopMonths: 0 produces the same series as monthlyContribution: 0 outright', () => {
+      const stoppedImmediately = buildContributionSeries({
+        currentBalance: 10000, monthlyContribution: 400, annualReturnRate: 0.05, totalMonths: 36, contributionStopMonths: 0
+      });
+      const neverContributed = buildContributionSeries({
+        currentBalance: 10000, monthlyContribution: 0, annualReturnRate: 0.05, totalMonths: 36
+      });
+      for (let i = 0; i < stoppedImmediately.length; i++) {
+        assert.ok(Math.abs(stoppedImmediately[i].balance - neverContributed[i].balance) < 1e-6);
+      }
+    });
   });
 });
 
