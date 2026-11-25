@@ -27,6 +27,8 @@ function randomNormal(rng) {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
+const { computeFederalTax, solveGrossTraditionalWithdrawal, computeRMD } = require('./retirementTax');
+
 // Nominal mean/volatility by investment mix — more stocks means a higher
 // expected return but a wider spread of outcomes, same trade-off a real
 // advisor would describe.
@@ -80,6 +82,28 @@ function percentileOf(sortedArr, p) {
  *   portfolio withdrawal (Social Security/pension are netted out first,
  *   same order a flat-rate estimate like this can reasonably assume). 0
  *   (default) leaves withdrawals untaxed, same as before this existed.
+ *   Ignored for the traditional/Roth share once traditionalBalance or
+ *   rothBalance is set -- see those below.
+ * @param {number} [opts.traditionalBalance] - the slice of startBalance held
+ *   in traditional (pre-tax) accounts. When this or rothBalance is > 0, the
+ *   simulation tracks three buckets (traditional/Roth/everything else)
+ *   instead of one combined balance: new contributions split across them in
+ *   today's proportions (not re-projected forward -- the same "today's
+ *   numbers" approximation this app's other FIRE math already makes),
+ *   retirement withdrawals draw taxable/untagged first, then traditional
+ *   (through real marginal tax brackets via retirementTax.js, with a forced
+ *   Required Minimum Distribution once age reaches the SECURE 2.0 RMD age),
+ *   then Roth (untaxed) for whatever's still short. 0 (default, for both
+ *   this and rothBalance) keeps the single-balance/flat-taxRatePct behavior
+ *   above completely unchanged.
+ * @param {number} [opts.rothBalance] - the slice of startBalance held in Roth
+ *   accounts. See traditionalBalance.
+ * @param {string} [opts.filingStatus] - 'single' or 'marriedJointly', used
+ *   only for traditional-bucket bracket tax. Defaults to 'single'.
+ * @param {number|null} [opts.birthYear] - needed only to know the SECURE 2.0
+ *   RMD start age (73 for birth year <= 1959, 75 for 1960+). Required
+ *   whenever a traditional bucket is in use; RMDs are skipped (not an
+ *   error) if omitted, since a null birthYear can't resolve an RMD age.
  * @param {boolean} [opts.includeSocialSecurity]
  * @param {{claimAgeMonths:number, annualBenefit:number}|null} [opts.socialSecurity] -
  *   resolved via socialSecurity.js's resolveSocialSecurityClaim, so benefits
@@ -106,6 +130,10 @@ function simulateRetirement(opts) {
     withdrawalRatePct = 3.8,
     annualExpenses = 0,
     taxRatePct = 0,
+    traditionalBalance = 0,
+    rothBalance = 0,
+    filingStatus = 'single',
+    birthYear = null,
     includeSocialSecurity = false,
     socialSecurity = null,
     glidepath = false,
@@ -141,6 +169,18 @@ function simulateRetirement(opts) {
   const ages = [];
   for (let a = currentAge; a <= endAge; a++) ages.push(a);
 
+  // Buckets only activate when there's something to bucket -- the
+  // single-balance path below stays byte-identical to before this existed
+  // whenever both are 0 (the default).
+  const bucketsEnabled = traditionalBalance > 0 || rothBalance > 0;
+  const otherStartBalance = Math.max(0, startBalance - traditionalBalance - rothBalance);
+  // Contribution split and RMD timing both rely on today's proportions,
+  // not a reprojection of them -- same "today's numbers" approximation
+  // already used for the FIRE Number's own bucket-aware tax gross-up.
+  const traditionalShare = startBalance > 0 ? traditionalBalance / startBalance : 0;
+  const rothShare = startBalance > 0 ? rothBalance / startBalance : 0;
+  const otherShare = Math.max(0, 1 - traditionalShare - rothShare);
+
   const rng = seed != null ? mulberry32(seed) : Math.random;
   const samplesByAge = ages.map(() => new Array(paths));
   let successCount = 0;
@@ -149,6 +189,9 @@ function simulateRetirement(opts) {
 
   for (let p = 0; p < paths; p++) {
     let balance = startBalance;
+    let balanceTraditional = traditionalBalance;
+    let balanceRoth = rothBalance;
+    let balanceOther = otherStartBalance;
     let spendBase = null; // set once, the year retirement begins
 
     for (let i = 0; i < ages.length; i++) {
@@ -160,7 +203,15 @@ function simulateRetirement(opts) {
         const r = mix.mean + mix.vol * z;
         if (age <= retireAge) {
           const contributes = contributionStopAge === null || age <= contributionStopAge;
-          balance = balance * (1 + r) + (contributes ? annualContribution : 0);
+          const contributionAmount = contributes ? annualContribution : 0;
+          if (bucketsEnabled) {
+            balanceTraditional = balanceTraditional * (1 + r) + contributionAmount * traditionalShare;
+            balanceRoth = balanceRoth * (1 + r) + contributionAmount * rothShare;
+            balanceOther = balanceOther * (1 + r) + contributionAmount * otherShare;
+            balance = balanceTraditional + balanceRoth + balanceOther;
+          } else {
+            balance = balance * (1 + r) + contributionAmount;
+          }
         } else {
           if (spendBase === null) {
             spendBase = annualExpenses > 0
@@ -173,12 +224,56 @@ function simulateRetirement(opts) {
           const spendNeed = spendBase * inflationFactor * smileFactor;
           const ssIncome = ssStartAge !== null && age >= ssStartAge ? socialSecurity.annualBenefit : 0;
           const pensionIncome = pensionMonthly > 0 ? pensionMonthly * 12 : 0;
-          const portfolioNeed = Math.max(0, spendNeed - ssIncome - pensionIncome);
-          const netWithdrawal = taxRatePct > 0 ? portfolioNeed / (1 - taxRatePct / 100) : portfolioNeed;
-          balance = balance * (1 + r) - netWithdrawal;
-          if (age === expenseAge) balance -= oneTimeExpense;
+          const netNeeded = Math.max(0, spendNeed - ssIncome - pensionIncome);
+
+          if (bucketsEnabled) {
+            // RMD uses last year's ending traditional balance, same timing
+            // the real IRS calculation uses, so it's computed before this
+            // year's growth is applied.
+            const rmdAmount = computeRMD({ priorYearEndBalance: balanceTraditional, age, birthYear });
+
+            balanceOther *= (1 + r);
+            balanceTraditional *= (1 + r);
+            balanceRoth *= (1 + r);
+
+            // 1) Taxable/untagged covers spend first (tax-efficient
+            //    sequencing: let tax-advantaged balances keep growing).
+            const fromOther = Math.min(netNeeded, Math.max(balanceOther, 0));
+            balanceOther -= fromOther;
+            let remainingNet = netNeeded - fromOther;
+
+            // 2) Traditional: withdraw whichever is bigger, the forced RMD
+            //    or whatever's needed to cover the rest of spend -- a
+            //    bigger spend-driven withdrawal already satisfies the RMD
+            //    on its own, so there's no separate case to handle.
+            const neededGrossFromTraditional = solveGrossTraditionalWithdrawal({ netAmountNeeded: remainingNet, filingStatus });
+            const grossTraditionalWithdrawal = Math.max(rmdAmount, neededGrossFromTraditional);
+            const taxOnTraditional = computeFederalTax(grossTraditionalWithdrawal, filingStatus);
+            const netFromTraditional = grossTraditionalWithdrawal - taxOnTraditional;
+            balanceTraditional -= grossTraditionalWithdrawal;
+            const appliedFromTraditional = Math.min(netFromTraditional, remainingNet);
+            remainingNet -= appliedFromTraditional;
+            // A forced RMD bigger than what spend needed leaves already-taxed
+            // cash with nowhere else to go but the taxable bucket -- same
+            // real-world mechanic as an RMD you don't spend.
+            balanceOther += Math.max(0, netFromTraditional - appliedFromTraditional);
+
+            // 3) Roth absorbs whatever's still short (untaxed).
+            const fromRoth = Math.min(remainingNet, Math.max(balanceRoth, 0));
+            balanceRoth -= fromRoth;
+
+            if (age === expenseAge) balanceOther -= oneTimeExpense;
+            balanceOther = Math.max(balanceOther, 0);
+            balanceTraditional = Math.max(balanceTraditional, 0);
+            balanceRoth = Math.max(balanceRoth, 0);
+            balance = balanceOther + balanceTraditional + balanceRoth;
+          } else {
+            const netWithdrawal = taxRatePct > 0 ? netNeeded / (1 - taxRatePct / 100) : netNeeded;
+            balance = balance * (1 + r) - netWithdrawal;
+            if (age === expenseAge) balance -= oneTimeExpense;
+            balance = Math.max(balance, 0);
+          }
         }
-        balance = Math.max(balance, 0);
       }
       samplesByAge[i][p] = balance;
       if (age === retireAge) retirementBalanceSamples[p] = balance;
@@ -218,6 +313,7 @@ function simulateRetirement(opts) {
     p90EndingBalance: percentileOf(sortedEnding, 0.90),
     safeWithdrawalAmount: medianBalanceAtRetirement * (withdrawalRatePct / 100),
     usesTrackedExpenses: annualExpenses > 0,
+    usesBucketedTax: bucketsEnabled,
     retireAge,
     endAge,
     ssStartAge,

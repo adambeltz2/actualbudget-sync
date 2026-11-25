@@ -35,6 +35,13 @@ function defaultConfig() {
     insightsAnnualReturnPct: 7,
     insightsLookback: '6',
     emergencyFundAccountIds: [], investmentAccountIds: [], liabilityAccountIds: [], financialHealthTargetMonths: 6, financialHealthTargetSavingsPct: 20,
+    // Independent of the classification above -- an account's tax
+    // treatment for retirement-withdrawal modeling. Untagged accounts
+    // (the default for everyone, including before this existed) keep the
+    // simpler flat fireTaxRatePct treatment; a tagged traditional account's
+    // withdrawals (including RMDs) go through real marginal tax brackets
+    // instead, and a tagged Roth account's withdrawals are untaxed.
+    traditionalAccountIds: [], rothAccountIds: [], fireFilingStatus: 'single',
     fireAnnualExpenses: null, fireWithdrawalRatePct: 4, fireTaxRatePct: 0,
     // Conscious Spending Plan (Fixed Costs/Investments/Savings/Guilt-Free,
     // from I Will Teach You to Be Rich): categoryClassification maps each
