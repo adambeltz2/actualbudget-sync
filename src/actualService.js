@@ -495,11 +495,19 @@ async function getTrailingAverageIncomeSpend({ months = 12 } = {}) {
 
 async function computeFireInputs({
   fireAnnualExpenses, fireWithdrawalRatePct = 4, fireTaxRatePct = 0,
+  traditionalAccountIds = [], rothAccountIds = [], fireFilingStatus = 'single',
   birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
 } = {}) {
   const accounts = await getAccounts();
   const balances = await Promise.all(accounts.map(async a => ({ id: a.id, balance: await getAccountBalance(a.id) })));
   const netWorth = balances.reduce((sum, b) => sum + b.balance, 0);
+  // Independent of Financial Health's Investment tagging -- this is about
+  // tax TREATMENT (ordinary-income brackets + RMDs vs. tax-free vs. the
+  // legacy flat rate), not whether a balance counts toward the Net Worth
+  // Breakdown's "invested" bucket. An account can be both.
+  const traditionalBalance = balances.filter(b => traditionalAccountIds.includes(b.id)).reduce((sum, b) => sum + b.balance, 0);
+  const rothBalance = balances.filter(b => rothAccountIds.includes(b.id)).reduce((sum, b) => sum + b.balance, 0);
+  const taxBuckets = { traditionalBalance, rothBalance, netWorth, filingStatus: fireFilingStatus };
 
   const { avgMonthlyIncome, avgMonthlySpend } = await getTrailingAverageIncomeSpend({ months: 12 });
 
@@ -507,6 +515,7 @@ async function computeFireInputs({
   const annualExpenses = fireAnnualExpenses > 0 ? fireAnnualExpenses : autoAnnualExpenses;
 
   const currentAgeMonths = birthdate ? ageInMonths(birthdate) : null;
+  const birthYear = birthdate ? new Date(birthdate).getFullYear() : null;
   const socialSecurity = currentAgeMonths !== null
     ? resolveSocialSecurityClaim({
       claimingChoice: ssClaimingChoice,
@@ -517,28 +526,36 @@ async function computeFireInputs({
     : null;
 
   const fireNumber = computeFireTargetAtAge({
-    ageMonths: currentAgeMonths ?? 0, annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, socialSecurity, taxRatePct: fireTaxRatePct
+    ageMonths: currentAgeMonths ?? 0, annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, socialSecurity,
+    taxRatePct: fireTaxRatePct, taxBuckets
   });
   const pctReached = fireNumber > 0 ? Math.min((netWorth / fireNumber) * 100, 100) : 0;
   const monthlyContribution = avgMonthlyIncome - avgMonthlySpend;
 
-  return { netWorth, annualExpenses, autoAnnualExpenses, currentAgeMonths, socialSecurity, fireNumber, pctReached, monthlyContribution };
+  return {
+    netWorth, annualExpenses, autoAnnualExpenses, currentAgeMonths, birthYear, socialSecurity, fireNumber, pctReached, monthlyContribution,
+    traditionalBalance, rothBalance, fireFilingStatus
+  };
 }
 
 async function getFireProgress({
   fireAnnualExpenses, fireWithdrawalRatePct = 4, fireTaxRatePct = 0, annualReturnRatePct = 7,
+  traditionalAccountIds = [], rothAccountIds = [], fireFilingStatus = 'single',
   birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit,
   targetRetirementAge
 } = {}) {
-  const { netWorth, annualExpenses, autoAnnualExpenses, currentAgeMonths, socialSecurity, fireNumber, pctReached, monthlyContribution } =
-    await computeFireInputs({
-      fireAnnualExpenses, fireWithdrawalRatePct, fireTaxRatePct, birthdate, ssClaimingChoice,
-      ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
-    });
+  const {
+    netWorth, annualExpenses, autoAnnualExpenses, currentAgeMonths, socialSecurity, fireNumber, pctReached, monthlyContribution,
+    traditionalBalance, rothBalance
+  } = await computeFireInputs({
+    fireAnnualExpenses, fireWithdrawalRatePct, fireTaxRatePct, traditionalAccountIds, rothAccountIds, fireFilingStatus,
+    birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
+  });
+  const taxBuckets = { traditionalBalance, rothBalance, netWorth, filingStatus: fireFilingStatus };
 
   const monthsToFI = monthsToReachFireTarget({
     currentBalance: netWorth, monthlyContribution, annualReturnRate: annualReturnRatePct / 100,
-    annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, currentAgeMonths, socialSecurity, taxRatePct: fireTaxRatePct
+    annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, currentAgeMonths, socialSecurity, taxRatePct: fireTaxRatePct, taxBuckets
   });
 
   // "Actions needed to hit targets": rather than just projecting forward
@@ -558,7 +575,7 @@ async function getFireProgress({
       targetRetirement = { targetAge: targetRetirementAge, alreadyPassed: true };
     } else {
       const targetFireNumber = computeFireTargetAtAge({
-        ageMonths: targetAgeMonths, annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, socialSecurity, taxRatePct: fireTaxRatePct
+        ageMonths: targetAgeMonths, annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, socialSecurity, taxRatePct: fireTaxRatePct, taxBuckets
       });
       const required = requiredMonthlyContribution({
         currentBalance: netWorth, targetValue: targetFireNumber, annualReturnRate: annualReturnRatePct / 100, months: monthsToTarget
@@ -608,16 +625,20 @@ async function getFireProgress({
 // and comparison it doesn't render.
 async function getRetirementModel({
   targetRetirementAge, modeledMonthlyContribution, contributionStopAge, fireAnnualExpenses, fireWithdrawalRatePct = 4, fireTaxRatePct = 0,
+  traditionalAccountIds = [], rothAccountIds = [], fireFilingStatus = 'single',
   annualReturnRatePct = 7,
   birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
 } = {}) {
   const [
-    { netWorth, annualExpenses, autoAnnualExpenses, currentAgeMonths, socialSecurity, fireNumber, pctReached, monthlyContribution },
+    {
+      netWorth, annualExpenses, autoAnnualExpenses, currentAgeMonths, socialSecurity, fireNumber, pctReached, monthlyContribution,
+      traditionalBalance, rothBalance
+    },
     netWorthHistory
   ] = await Promise.all([
     computeFireInputs({
-      fireAnnualExpenses, fireWithdrawalRatePct, fireTaxRatePct, birthdate, ssClaimingChoice,
-      ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
+      fireAnnualExpenses, fireWithdrawalRatePct, fireTaxRatePct, traditionalAccountIds, rothAccountIds, fireFilingStatus,
+      birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
     }),
     // For the Pace Check below -- the oldest point in a trailing-12-month
     // reconstruction approximates "net worth a year ago" closely enough for
@@ -626,10 +647,11 @@ async function getRetirementModel({
     getMonthlyBalanceHistory({ months: 12 })
   ]);
   const netWorthYearAgo = netWorthHistory.length > 0 ? netWorthHistory[0].balance : null;
+  const taxBuckets = { traditionalBalance, rothBalance, netWorth, filingStatus: fireFilingStatus };
 
   const monthsToFI = monthsToReachFireTarget({
     currentBalance: netWorth, monthlyContribution, annualReturnRate: annualReturnRatePct / 100,
-    annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, currentAgeMonths, socialSecurity, taxRatePct: fireTaxRatePct
+    annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, currentAgeMonths, socialSecurity, taxRatePct: fireTaxRatePct, taxBuckets
   });
 
   const base = {
@@ -668,7 +690,7 @@ async function getRetirementModel({
 
   const annualReturnRate = annualReturnRatePct / 100;
   const targetFireNumber = computeFireTargetAtAge({
-    ageMonths: targetAgeMonths, annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, socialSecurity, taxRatePct: fireTaxRatePct
+    ageMonths: targetAgeMonths, annualExpenses, withdrawalRatePct: fireWithdrawalRatePct, socialSecurity, taxRatePct: fireTaxRatePct, taxBuckets
   });
   const required = requiredMonthlyContribution({
     currentBalance: netWorth, targetValue: targetFireNumber, annualReturnRate, months: monthsToTarget
@@ -753,12 +775,14 @@ async function getMonteCarloProjection({
   includeSocialSecurity = false, annualContribution = null, contributionStopAge = null,
   glidepath = false, pensionMonthly = 0, oneTimeExpense = 0, survivor = false, paths = 2000,
   fireAnnualExpenses, fireWithdrawalRatePct = 4, fireTaxRatePct = 0,
+  traditionalAccountIds = [], rothAccountIds = [], fireFilingStatus = 'single',
   birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
 } = {}) {
-  const { netWorth, annualExpenses, currentAgeMonths, socialSecurity, monthlyContribution } = await computeFireInputs({
-    fireAnnualExpenses, fireWithdrawalRatePct, birthdate, ssClaimingChoice,
-    ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
-  });
+  const { netWorth, annualExpenses, currentAgeMonths, birthYear, socialSecurity, monthlyContribution, traditionalBalance, rothBalance } =
+    await computeFireInputs({
+      fireAnnualExpenses, fireWithdrawalRatePct, traditionalAccountIds, rothAccountIds, fireFilingStatus,
+      birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
+    });
 
   if (currentAgeMonths === null) {
     return { hasBirthdate: false, netWorth, result: null };
@@ -773,7 +797,8 @@ async function getMonteCarloProjection({
   const sharedOpts = {
     startBalance: netWorth, currentAge, retireAge: resolvedRetireAge, annualContribution: resolvedContribution,
     contributionStopAge, allocation, inflationPct, includeSocialSecurity, socialSecurity, glidepath,
-    pensionMonthly, oneTimeExpense, survivor, taxRatePct: fireTaxRatePct
+    pensionMonthly, oneTimeExpense, survivor, taxRatePct: fireTaxRatePct,
+    traditionalBalance, rothBalance, filingStatus: fireFilingStatus, birthYear
   };
 
   // Your plan's spend need is driven by what you actually track spending
@@ -825,12 +850,14 @@ async function getMonteCarloCompare({
   annualContribution = null, contributionStopAge = null, glidepath = false, pensionMonthly = 0, oneTimeExpense = 0, survivor = false,
   paths = 1000,
   fireAnnualExpenses, fireWithdrawalRatePct = 4, fireTaxRatePct = 0,
+  traditionalAccountIds = [], rothAccountIds = [], fireFilingStatus = 'single',
   birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
 } = {}) {
-  const { netWorth, annualExpenses, currentAgeMonths, socialSecurity, monthlyContribution } = await computeFireInputs({
-    fireAnnualExpenses, fireWithdrawalRatePct, birthdate, ssClaimingChoice,
-    ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
-  });
+  const { netWorth, annualExpenses, currentAgeMonths, birthYear, socialSecurity, monthlyContribution, traditionalBalance, rothBalance } =
+    await computeFireInputs({
+      fireAnnualExpenses, fireWithdrawalRatePct, traditionalAccountIds, rothAccountIds, fireFilingStatus,
+      birthdate, ssClaimingChoice, ssAge62MonthlyBenefit, ssFraAgeYears, ssFraAgeMonths, ssFraMonthlyBenefit, ssAge70MonthlyBenefit
+    });
   if (currentAgeMonths === null) return { hasBirthdate: false, rows: [] };
 
   const currentAge = Math.floor(currentAgeMonths / 12);
@@ -840,7 +867,8 @@ async function getMonteCarloCompare({
     const runFor = includeSocialSecurity => simulateRetirement({
       startBalance: netWorth, currentAge, retireAge: age, annualContribution: resolvedContribution, contributionStopAge,
       allocation, inflationPct, annualExpenses, withdrawalRatePct, taxRatePct: fireTaxRatePct, includeSocialSecurity, socialSecurity,
-      glidepath, pensionMonthly, oneTimeExpense, survivor, paths
+      glidepath, pensionMonthly, oneTimeExpense, survivor, paths,
+      traditionalBalance, rothBalance, filingStatus: fireFilingStatus, birthYear
     }).successPct;
     return { age, withoutSS: runFor(false), withSS: socialSecurity ? runFor(true) : null };
   });

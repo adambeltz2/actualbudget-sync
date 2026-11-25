@@ -103,6 +103,49 @@ describe('computeFireTargetAtAge', () => {
       assert.ok(taxed > noTax);
     });
   });
+
+  describe('taxBuckets', () => {
+    test('omitted (null, the default) behaves identically to the flat-rate-only path', () => {
+      const withoutBuckets = computeFireTargetAtAge({ ageMonths: 500, annualExpenses: 50000, withdrawalRatePct: 4, socialSecurity: null, taxRatePct: 20 });
+      const explicitNull = computeFireTargetAtAge({ ageMonths: 500, annualExpenses: 50000, withdrawalRatePct: 4, socialSecurity: null, taxRatePct: 20, taxBuckets: null });
+      assert.equal(withoutBuckets, explicitNull);
+    });
+
+    test('an all-Roth household needs exactly the untaxed 25x target, even with a flat tax rate configured', () => {
+      const target = computeFireTargetAtAge({
+        ageMonths: 500, annualExpenses: 40000, withdrawalRatePct: 4, socialSecurity: null, taxRatePct: 20,
+        taxBuckets: { traditionalBalance: 0, rothBalance: 1000000, netWorth: 1000000, filingStatus: 'single' }
+      });
+      assert.ok(Math.abs(target - 40000 * 25) < 1);
+    });
+
+    test('an all-traditional household needs more than the flat-rate target once real brackets apply at a high enough spend', () => {
+      // At a large enough annualExpenses, real marginal brackets exceed a
+      // modest flat rate, so the bucket-aware target should come out higher.
+      const flatRateTarget = computeFireTargetAtAge({
+        ageMonths: 500, annualExpenses: 150000, withdrawalRatePct: 4, socialSecurity: null, taxRatePct: 15
+      });
+      const bucketTarget = computeFireTargetAtAge({
+        ageMonths: 500, annualExpenses: 150000, withdrawalRatePct: 4, socialSecurity: null, taxRatePct: 15,
+        taxBuckets: { traditionalBalance: 1000000, rothBalance: 0, netWorth: 1000000, filingStatus: 'single' }
+      });
+      assert.ok(bucketTarget > flatRateTarget);
+    });
+
+    test('taxBuckets also applies to the Social Security bridge and post-claim remainder', () => {
+      const socialSecurity = { claimAgeMonths: 744, annualBenefit: 18000 };
+      const taxBuckets = { traditionalBalance: 1000000, rothBalance: 0, netWorth: 1000000, filingStatus: 'single' };
+      const target = computeFireTargetAtAge({
+        ageMonths: 744 - 60, annualExpenses: 40000, withdrawalRatePct: 4, socialSecurity, taxBuckets
+      });
+      const noBucketsTarget = computeFireTargetAtAge({
+        ageMonths: 744 - 60, annualExpenses: 40000, withdrawalRatePct: 4, socialSecurity
+      });
+      // 100% traditional with real brackets should cost more than the
+      // untaxed baseline (no flat rate, no buckets).
+      assert.ok(target > noBucketsTarget);
+    });
+  });
 });
 
 describe('monthsToReachFireTarget', () => {

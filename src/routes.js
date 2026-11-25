@@ -448,11 +448,15 @@ router.get('/api/data/fire-progress', async (req, res) => {
     const fireTaxRatePct = req.query.fireTaxRatePct !== undefined
       ? Math.min(Math.max(parseFloat(req.query.fireTaxRatePct) || 0, 0), 60)
       : (config.fireTaxRatePct ?? 0);
+    const fireFilingStatus = req.query.fireFilingStatus === 'marriedJointly' ? 'marriedJointly'
+      : req.query.fireFilingStatus === 'single' ? 'single'
+      : (config.fireFilingStatus || 'single');
     const targetRetirementAge = req.query.targetRetirementAge !== undefined
       ? parseFloat(req.query.targetRetirementAge) || null
       : (config.fireTargetRetirementAge || null);
     const progress = await actualService.getFireProgress({
-      fireAnnualExpenses, fireWithdrawalRatePct, fireTaxRatePct,
+      fireAnnualExpenses, fireWithdrawalRatePct, fireTaxRatePct, fireFilingStatus,
+      traditionalAccountIds: config.traditionalAccountIds || [], rothAccountIds: config.rothAccountIds || [],
       annualReturnRatePct: config.insightsAnnualReturnPct ?? 7,
       birthdate: config.fireBirthdate || null,
       ssClaimingChoice: config.ssClaimingChoice || null,
@@ -487,6 +491,9 @@ router.get('/api/data/retirement-model', async (req, res) => {
     const fireTaxRatePct = req.query.fireTaxRatePct !== undefined
       ? Math.min(Math.max(parseFloat(req.query.fireTaxRatePct) || 0, 0), 60)
       : (config.fireTaxRatePct ?? 0);
+    const fireFilingStatus = req.query.fireFilingStatus === 'marriedJointly' ? 'marriedJointly'
+      : req.query.fireFilingStatus === 'single' ? 'single'
+      : (config.fireFilingStatus || 'single');
     const annualReturnRatePct = req.query.annualReturnRatePct !== undefined
       ? Math.min(Math.max(parseFloat(req.query.annualReturnRatePct), -20), 30)
       : (config.insightsAnnualReturnPct ?? 7);
@@ -502,7 +509,8 @@ router.get('/api/data/retirement-model', async (req, res) => {
     const model = await actualService.getRetirementModel({
       targetRetirementAge, modeledMonthlyContribution: Number.isFinite(modeledMonthlyContribution) ? modeledMonthlyContribution : null,
       contributionStopAge: Number.isFinite(contributionStopAge) ? contributionStopAge : null,
-      fireAnnualExpenses, fireWithdrawalRatePct, fireTaxRatePct, annualReturnRatePct,
+      fireAnnualExpenses, fireWithdrawalRatePct, fireTaxRatePct, fireFilingStatus, annualReturnRatePct,
+      traditionalAccountIds: config.traditionalAccountIds || [], rothAccountIds: config.rothAccountIds || [],
       birthdate: config.fireBirthdate || null,
       ssClaimingChoice: config.ssClaimingChoice || null,
       ssAge62MonthlyBenefit: config.ssAge62MonthlyBenefit,
@@ -566,6 +574,8 @@ function parseMonteCarloParams(req, config) {
     fireAnnualExpenses: config.fireAnnualExpenses || 0,
     fireWithdrawalRatePct: config.fireWithdrawalRatePct ?? 4,
     fireTaxRatePct: config.fireTaxRatePct ?? 0,
+    traditionalAccountIds: config.traditionalAccountIds || [], rothAccountIds: config.rothAccountIds || [],
+    fireFilingStatus: config.fireFilingStatus || 'single',
     birthdate: config.fireBirthdate || null,
     ssClaimingChoice: config.ssClaimingChoice || null,
     ssAge62MonthlyBenefit: config.ssAge62MonthlyBenefit,

@@ -1,4 +1,5 @@
 const { projectFutureValue } = require('./insights');
+const { grossUpAnnualNeed } = require('./retirementTax');
 
 // Whole months between a birthdate and an "as of" date (today, by default).
 // Whole-month precision matters here — Social Security's own eligibility
@@ -49,8 +50,18 @@ function resolveSocialSecurityClaim({
 // an actual portfolio withdrawal has to cover) is grossed up by
 // 1 / (1 - taxRatePct/100), same ordering a single flat effective rate can
 // reasonably approximate without modeling real tax brackets/account types.
-function computeFireTargetAtAge({ ageMonths, annualExpenses, withdrawalRatePct, socialSecurity, taxRatePct = 0 }) {
-  const grossUp = v => taxRatePct > 0 ? v / (1 - taxRatePct / 100) : v;
+//
+// taxBuckets (optional -- { traditionalBalance, rothBalance, netWorth,
+// filingStatus }) replaces that flat grossUp with retirementTax.js's
+// grossUpAnnualNeed: real marginal-bracket tax on the traditional-account
+// share of today's balances, no tax on the Roth share, and taxRatePct as
+// the fallback for everything else (taxable accounts, or simply
+// everything, if no account has been tagged at all). Omitting it falls
+// straight back to the flat-rate-only behavior above, unchanged.
+function computeFireTargetAtAge({ ageMonths, annualExpenses, withdrawalRatePct, socialSecurity, taxRatePct = 0, taxBuckets = null }) {
+  const grossUp = v => taxBuckets
+    ? grossUpAnnualNeed({ netAnnualNeed: v, ...taxBuckets, flatTaxRatePct: taxRatePct })
+    : (taxRatePct > 0 ? v / (1 - taxRatePct / 100) : v);
   const baseFireNumber = grossUp(annualExpenses) * (100 / withdrawalRatePct);
   if (!socialSecurity) return baseFireNumber;
 
@@ -70,11 +81,11 @@ function computeFireTargetAtAge({ ageMonths, annualExpenses, withdrawalRatePct, 
 // moves, so this behaves identically to a plain fixed-target search.
 function monthsToReachFireTarget({
   currentBalance, monthlyContribution, annualReturnRate,
-  annualExpenses, withdrawalRatePct, currentAgeMonths, socialSecurity, taxRatePct = 0, maxMonths = 1200
+  annualExpenses, withdrawalRatePct, currentAgeMonths, socialSecurity, taxRatePct = 0, taxBuckets = null, maxMonths = 1200
 }) {
   for (let m = 0; m <= maxMonths; m++) {
     const target = computeFireTargetAtAge({
-      ageMonths: (currentAgeMonths ?? 0) + m, annualExpenses, withdrawalRatePct, socialSecurity, taxRatePct
+      ageMonths: (currentAgeMonths ?? 0) + m, annualExpenses, withdrawalRatePct, socialSecurity, taxRatePct, taxBuckets
     });
     const projected = projectFutureValue({ presentValue: currentBalance, monthlyContribution, annualReturnRate, months: m });
     if (projected >= target) return m;
