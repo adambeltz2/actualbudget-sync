@@ -118,6 +118,29 @@ function computeRMD({ priorYearEndBalance, age, birthYear }) {
   return priorYearEndBalance / rmdDivisor(age);
 }
 
+// Splits a total balance into traditional/Roth/"everything else" shares
+// that always sum to exactly 1 -- even when tagged account balances alone
+// add up to MORE than totalBalance, which can genuinely happen: net worth
+// nets out debt (a mortgage, a credit card), but these tags are asset-only,
+// so a household with any untagged debt can have a tagged traditional+Roth
+// total bigger than its net worth. Clamping each share independently to
+// [0,1] isn't enough in that case (two shares can each be under 1 and still
+// sum past it) -- scaling both down proportionally keeps their relative
+// split intact while guaranteeing they never claim more than 100% of
+// whatever's being divided (a withdrawal need, a contribution).
+function computeBucketShares({ traditionalBalance = 0, rothBalance = 0, totalBalance = 0 }) {
+  if (!(totalBalance > 0)) return { traditionalShare: 0, rothShare: 0, otherShare: 1 };
+  let traditionalShare = Math.max(0, traditionalBalance / totalBalance);
+  let rothShare = Math.max(0, rothBalance / totalBalance);
+  const taggedShare = traditionalShare + rothShare;
+  if (taggedShare > 1) {
+    traditionalShare /= taggedShare;
+    rothShare /= taggedShare;
+  }
+  const otherShare = Math.max(0, 1 - traditionalShare - rothShare);
+  return { traditionalShare, rothShare, otherShare };
+}
+
 // Splits a target NET annual spending amount across three account-tax
 // buckets, proportional to TODAY's tagged balances (a steady-state
 // approximation -- the real proportion will drift between now and
@@ -135,9 +158,7 @@ function grossUpAnnualNeed({ netAnnualNeed, traditionalBalance = 0, rothBalance 
     return flatTaxRatePct > 0 ? netAnnualNeed / (1 - flatTaxRatePct / 100) : netAnnualNeed;
   }
 
-  const traditionalShare = Math.max(0, Math.min(1, traditionalBalance / netWorth));
-  const rothShare = Math.max(0, Math.min(1, rothBalance / netWorth));
-  const otherShare = Math.max(0, 1 - traditionalShare - rothShare);
+  const { traditionalShare, rothShare, otherShare } = computeBucketShares({ traditionalBalance, rothBalance, totalBalance: netWorth });
 
   const netFromTraditional = netAnnualNeed * traditionalShare;
   const netFromRoth = netAnnualNeed * rothShare;
@@ -151,5 +172,5 @@ function grossUpAnnualNeed({ netAnnualNeed, traditionalBalance = 0, rothBalance 
 
 module.exports = {
   FEDERAL_BRACKETS, STANDARD_DEDUCTION, computeFederalTax, solveGrossTraditionalWithdrawal,
-  UNIFORM_LIFETIME_DIVISORS, rmdStartAge, rmdDivisor, computeRMD, grossUpAnnualNeed
+  UNIFORM_LIFETIME_DIVISORS, rmdStartAge, rmdDivisor, computeRMD, computeBucketShares, grossUpAnnualNeed
 };

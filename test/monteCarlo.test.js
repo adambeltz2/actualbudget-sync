@@ -387,6 +387,32 @@ describe('simulateRetirement — traditional/Roth buckets + RMDs', () => {
     assert.equal(result.usesBucketedTax, true);
   });
 
+  test('tagged traditional+Roth bigger than startBalance (untagged debt elsewhere) never inflates the starting balance (regression)', () => {
+    // 70k traditional + 60k Roth tagged (130k) but startBalance (net worth)
+    // is only 100k -- 30k of untagged debt sits elsewhere. Before the fix,
+    // the "other" bucket floored its negative remainder to 0 instead of
+    // carrying the debt, so the three buckets summed to 130k at the start
+    // of path 0 -- 30k more than the real net worth.
+    const result = simulateRetirement(baseOpts({
+      seed: 300, paths: 1, allocation: 'conservative', annualContribution: 0,
+      startBalance: 100000, traditionalBalance: 70000, rothBalance: 60000,
+      currentAge: 50, retireAge: 51, endAge: 52
+    }));
+    // Growth is applied starting year 1, so the age-50 (index 0) sample is
+    // exactly startBalance, untouched by any bucket math.
+    assert.equal(result.bands.p50[0], 100000);
+  });
+
+  test('that same debt scenario still produces a sane, finite trajectory through retirement', () => {
+    const result = simulateRetirement(baseOpts({
+      seed: 301, paths: 2000, allocation: 'conservative', annualContribution: 5000,
+      startBalance: 100000, traditionalBalance: 70000, rothBalance: 60000,
+      currentAge: 50, retireAge: 65, endAge: 90, annualExpenses: 20000, birthYear: 1950
+    }));
+    assert.ok(result.successPct >= 0 && result.successPct <= 100);
+    assert.ok(Number.isFinite(result.medianEndingBalance));
+  });
+
   test('a 100% Roth portfolio needs no tax at all -- outlasts an equivalent 100% traditional portfolio', () => {
     const allRoth = simulateRetirement(baseOpts({
       seed: 210, paths: 3000, allocation: 'conservative', annualContribution: 0,
