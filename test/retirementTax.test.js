@@ -2,7 +2,7 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   computeFederalTax, solveGrossTraditionalWithdrawal, rmdStartAge, rmdDivisor, computeRMD,
-  grossUpAnnualNeed, STANDARD_DEDUCTION, UNIFORM_LIFETIME_DIVISORS
+  computeBucketShares, grossUpAnnualNeed, STANDARD_DEDUCTION, UNIFORM_LIFETIME_DIVISORS
 } = require('../src/retirementTax');
 
 describe('computeFederalTax', () => {
@@ -152,7 +152,78 @@ describe('computeRMD', () => {
   });
 });
 
+describe('computeBucketShares', () => {
+  test('a zero or negative total balance gives all weight to "other" (same as no buckets)', () => {
+    assert.deepEqual(computeBucketShares({ traditionalBalance: 50000, rothBalance: 50000, totalBalance: 0 }),
+      { traditionalShare: 0, rothShare: 0, otherShare: 1 });
+  });
+
+  test('ordinary case: shares equal each balance\'s plain ratio and sum to 1', () => {
+    const { traditionalShare, rothShare, otherShare } = computeBucketShares({
+      traditionalBalance: 300000, rothBalance: 200000, totalBalance: 1000000
+    });
+    assert.ok(Math.abs(traditionalShare - 0.3) < 1e-9);
+    assert.ok(Math.abs(rothShare - 0.2) < 1e-9);
+    assert.ok(Math.abs(otherShare - 0.5) < 1e-9);
+    assert.ok(Math.abs((traditionalShare + rothShare + otherShare) - 1) < 1e-9);
+  });
+
+  test('a single tagged bucket bigger than the total (untagged debt drags net worth down) still sums to 1', () => {
+    // 100k traditional tagged, but net worth is only 90k because of 10k of
+    // untagged debt sitting elsewhere -- traditionalBalance/totalBalance
+    // alone would be 1.11, more than 100%.
+    const { traditionalShare, rothShare, otherShare } = computeBucketShares({
+      traditionalBalance: 100000, rothBalance: 0, totalBalance: 90000
+    });
+    assert.equal(traditionalShare, 1);
+    assert.equal(rothShare, 0);
+    assert.equal(otherShare, 0);
+  });
+
+  test('two tagged buckets together bigger than the total: shares are scaled down proportionally, not just clamped', () => {
+    // 70k traditional + 60k Roth tagged (130k), but net worth is only 100k
+    // because of 30k of untagged debt -- each individual ratio (0.7, 0.6)
+    // is under 1 on its own, so clamping each alone wouldn't catch this;
+    // their sum (1.3) is what has to be caught and rescaled.
+    const { traditionalShare, rothShare, otherShare } = computeBucketShares({
+      traditionalBalance: 70000, rothBalance: 60000, totalBalance: 100000
+    });
+    assert.ok(Math.abs(traditionalShare - (0.7 / 1.3)) < 1e-9);
+    assert.ok(Math.abs(rothShare - (0.6 / 1.3)) < 1e-9);
+    assert.equal(otherShare, 0);
+    assert.ok(Math.abs((traditionalShare + rothShare + otherShare) - 1) < 1e-9);
+  });
+
+  test('negative tagged balances (shouldn\'t happen in practice, but) floor to 0 rather than going negative', () => {
+    const { traditionalShare, rothShare } = computeBucketShares({
+      traditionalBalance: -5000, rothBalance: 50000, totalBalance: 100000
+    });
+    assert.equal(traditionalShare, 0);
+    assert.ok(Math.abs(rothShare - 0.5) < 1e-9);
+  });
+});
+
 describe('grossUpAnnualNeed', () => {
+  test('with untagged debt dragging net worth below the tagged total, the gross-up no longer overstates the need (regression)', () => {
+    // Same scenario as computeBucketShares' proportional-scaling test above,
+    // fed through the full gross-up: before the fix, each share was clamped
+    // to [0,1] independently, so their sum (1.3) silently over-allocated
+    // more than 100% of the need across the two tagged buckets.
+    const result = grossUpAnnualNeed({
+      netAnnualNeed: 40000, traditionalBalance: 70000, rothBalance: 60000, netWorth: 100000, filingStatus: 'single'
+    });
+    const traditionalPortion = 40000 * (70000 / 130000);
+    const rothPortion = 40000 * (60000 / 130000);
+    const expected = solveGrossTraditionalWithdrawal({ netAmountNeeded: traditionalPortion, filingStatus: 'single' }) + rothPortion;
+    assert.ok(Math.abs(result - expected) < 0.01);
+    // The old, buggy behavior independently clamped each share to 1,
+    // leaving their sum at 1.3 -- which taxed/grossed-up 30% more need
+    // than was actually asked for. Confirm this comes out meaningfully
+    // lower than that.
+    assert.ok(result < 40000 * 1.3);
+  });
+
+
   test('with no netWorth data at all, falls back to the flat rate exactly as before bucket tagging existed', () => {
     const withoutRate = grossUpAnnualNeed({ netAnnualNeed: 40000 });
     assert.equal(withoutRate, 40000);

@@ -27,7 +27,7 @@ function randomNormal(rng) {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-const { computeFederalTax, solveGrossTraditionalWithdrawal, computeRMD } = require('./retirementTax');
+const { computeFederalTax, solveGrossTraditionalWithdrawal, computeRMD, computeBucketShares } = require('./retirementTax');
 
 // Nominal mean/volatility by investment mix — more stocks means a higher
 // expected return but a wider spread of outcomes, same trade-off a real
@@ -173,13 +173,19 @@ function simulateRetirement(opts) {
   // single-balance path below stays byte-identical to before this existed
   // whenever both are 0 (the default).
   const bucketsEnabled = traditionalBalance > 0 || rothBalance > 0;
-  const otherStartBalance = Math.max(0, startBalance - traditionalBalance - rothBalance);
-  // Contribution split and RMD timing both rely on today's proportions,
-  // not a reprojection of them -- same "today's numbers" approximation
-  // already used for the FIRE Number's own bucket-aware tax gross-up.
-  const traditionalShare = startBalance > 0 ? traditionalBalance / startBalance : 0;
-  const rothShare = startBalance > 0 ? rothBalance / startBalance : 0;
-  const otherShare = Math.max(0, 1 - traditionalShare - rothShare);
+  // Shares (not a plain ratio) because a household with untagged debt (a
+  // mortgage, a credit card) can have a tagged traditional+Roth total
+  // bigger than startBalance itself -- computeBucketShares scales both
+  // down proportionally in that case so they can't claim more than 100%
+  // of a contribution or withdrawal between them. otherStartBalance is
+  // deliberately NOT floored at 0: it's startBalance's own remainder after
+  // the tagged buckets, which can be legitimately negative (that same
+  // untagged debt), and flooring it would make the three buckets sum to
+  // more than startBalance from the very first year.
+  const { traditionalShare, rothShare, otherShare } = computeBucketShares({
+    traditionalBalance, rothBalance, totalBalance: startBalance
+  });
+  const otherStartBalance = startBalance - traditionalBalance - rothBalance;
 
   const rng = seed != null ? mulberry32(seed) : Math.random;
   const samplesByAge = ages.map(() => new Array(paths));
